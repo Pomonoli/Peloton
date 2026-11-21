@@ -18,7 +18,7 @@
 		</div>
 	</header>
 
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40">
+	<section class="rounded-lg border border-zinc-800 bg-panel">
 		<header
 			class="border-b border-zinc-800 px-5 py-3 text-xs uppercase tracking-wide text-zinc-500"
 		>
@@ -37,7 +37,7 @@
 					<div>
 						<div class="font-medium">{c.displayName}</div>
 						<div class="text-xs text-zinc-500 max-md:break-all">{c.issuerURL}</div>
-						<div class="mt-0.5 font-mono text-[10px] text-zinc-600">id: {c.id}</div>
+						<div class="mt-0.5 font-mono text-[10px] text-quiet">id: {c.id}</div>
 					</div>
 					<div class="font-mono text-xs text-zinc-500 max-md:break-all">{c.clientID}</div>
 					<div class="flex items-center gap-1 text-[10px] uppercase max-md:flex-wrap">

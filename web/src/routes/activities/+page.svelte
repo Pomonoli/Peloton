@@ -242,9 +242,7 @@
 	<ActivityFilterBar {filter} facets={feed?.facets ?? null} />
 
 	{#if items.length === 0 && !loading}
-		<div
-			class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-400"
-		>
+		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
 			{filter.active ? 'No activities match this filter.' : m.activities_empty()}
 		</div>
 	{:else}
@@ -253,7 +251,7 @@
 				<li>
 					<a
 						href={`/activities/${activity.id}`}
-						class="flex items-center gap-5 rounded-lg border border-zinc-800 bg-zinc-900/40 px-5 py-4 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
+						class="flex items-center gap-5 rounded-lg border border-zinc-800 bg-panel px-5 py-4 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
 					>
 						<div
 							class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300"
@@ -329,14 +327,14 @@
 				</button>
 				{#each pageList as p, i (i)}
 					{#if p === '…'}
-						<span class="px-2 text-sm text-zinc-600">…</span>
+						<span class="px-2 text-sm text-quiet">…</span>
 					{:else}
 						<button
 							type="button"
 							onclick={() => goToPage(p)}
 							aria-current={p === pageNum ? 'page' : undefined}
 							class="min-w-9 rounded px-2.5 py-1.5 text-sm tabular-nums {p === pageNum
-								? 'bg-accent-500 font-medium text-zinc-950'
+								? 'bg-accent-500 font-medium text-on-accent'
 								: 'text-zinc-300 hover:bg-zinc-800'}"
 						>
 							{p}

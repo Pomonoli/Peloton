@@ -90,7 +90,8 @@
 			<button
 				onclick={toggleKudos}
 				disabled={busy}
-				class={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${hasKudos ? 'bg-orange-600 text-white' : 'border border-zinc-700 text-zinc-300 hover:border-orange-600'} disabled:opacity-50`}
+				aria-pressed={hasKudos}
+				class={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium ${hasKudos ? 'border-accent-500 bg-accent-500/15 text-accent-300' : 'border-zinc-700 text-zinc-300 hover:border-accent-500'} disabled:opacity-50`}
 			>
 				<span>👏</span>
 				<span>{hasKudos ? 'Given' : 'Kudos'}</span>
@@ -118,7 +119,7 @@
 					<p class="whitespace-pre-line text-zinc-200">{c.body}</p>
 					<button
 						onclick={() => deleteComment(c.id)}
-						class="mt-1 text-xs text-zinc-600 hover:text-red-400">Delete</button
+						class="mt-1 text-xs text-quiet hover:text-red-400">Delete</button
 					>
 				</div>
 			{/each}
@@ -137,7 +138,7 @@
 			<button
 				onclick={postComment}
 				disabled={busy || !draft.trim()}
-				class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+				class="rounded bg-accent-500 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 				>Post</button
 			>
 		</div>

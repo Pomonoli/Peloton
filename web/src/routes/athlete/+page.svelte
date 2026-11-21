@@ -146,9 +146,7 @@
 		</p>
 	</header>
 
-	<div
-		class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"
-	>
+	<div class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-panel p-4">
 		<div class="text-sm text-zinc-300">
 			Changed your values? Recompute TSS + the training-load history with the new numbers.
 		</div>
@@ -156,7 +154,7 @@
 			type="button"
 			onclick={recalculate}
 			disabled={recalcBusy}
-			class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+			class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 		>
 			{recalcBusy ? 'Recalculating…' : 'Recalculate training load'}
 		</button>
@@ -176,7 +174,7 @@
 			{#each specs as spec (spec.key)}
 				{@const why = WHY[spec.key]}
 				{@const dr = draft[spec.key]}
-				<section class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+				<section class="rounded-xl border border-zinc-800 bg-panel p-4">
 					<div class="mb-1 flex items-baseline justify-between">
 						<h2 class="text-sm font-medium text-zinc-200">{spec.label}</h2>
 						<span class="text-xs text-zinc-500">{spec.unit}</span>
@@ -189,7 +187,7 @@
 					{/if}
 
 					{#if (byKey[spec.key] ?? []).length === 0}
-						<p class="mb-3 text-xs text-zinc-600">No entries yet.</p>
+						<p class="mb-3 text-xs text-quiet">No entries yet.</p>
 					{:else}
 						<ul class="mb-3 divide-y divide-zinc-800 rounded border border-zinc-800">
 							{#each byKey[spec.key] ?? [] as e (e.id)}
@@ -202,7 +200,7 @@
 										<button
 											type="button"
 											onclick={() => remove(e.id)}
-											class="text-zinc-600 hover:text-red-400"
+											class="text-quiet hover:text-red-400"
 											aria-label="Delete"
 											title="Delete">✕</button
 										>

@@ -2,6 +2,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import uPlot, { type AlignedData, type Options } from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
+	import { appearance, appearanceColor } from '#lib/appearance.js';
+	import { m } from '#lib/paraglide/messages.js';
 
 	interface Series {
 		label: string;
@@ -80,22 +82,24 @@
 			scales,
 			axes: [
 				{
-					stroke: '#71717a',
-					grid: { stroke: '#27272a' },
+					stroke: appearanceColor('--plot-axis'),
+					grid: { stroke: appearanceColor('--plot-grid') },
 					values: (_u, splits) => splits.map((s) => formatSeconds(s))
 				}
 			],
 			series: [
-				{ label: 'Zeit' },
-				...ordered.map((s, i) => ({
-					label: s.unit ? `${s.label} (${s.unit})` : s.label,
-					stroke: s.color,
-					width: s.fill ? 1 : 1.5,
-					// hex + alpha → translucent area fill for the mountain look.
-					...(s.fill ? { fill: s.color + '2e' } : {}),
-					scale: `y${i}`,
-					points: { show: false }
-				}))
+				{ label: m.detail_label_time() },
+				...ordered.map((s, i) => {
+					const stroke = appearanceColor(s.color.slice(4, -1));
+					return {
+						label: s.unit ? `${s.label} (${s.unit})` : s.label,
+						stroke,
+						width: s.fill ? 1 : 1.5,
+						...(s.fill ? { fill: stroke + '2e' } : {}),
+						scale: `y${i}`,
+						points: { show: false }
+					};
+				})
 			],
 			hooks: {
 				// Toggle the reset button whenever the x-scale changes (drag-zoom
@@ -152,7 +156,8 @@
 	});
 
 	$effect(() => {
-		// Rebuild when offsets or series identity changes.
+		// Rebuild on data or appearance changes because canvas colors are resolved at draw time.
+		void $appearance.mode;
 		void offsets;
 		void series;
 		build();

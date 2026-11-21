@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BrandMark from '#lib/components/BrandMark.svelte';
 	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -76,15 +77,9 @@
 </script>
 
 <div class="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center">
-	<div class="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 shadow-xl">
+	<div class="rounded-2xl border border-zinc-800 bg-panel p-6 shadow-xl">
 		<div class="mb-5 flex items-center gap-3">
-			<span
-				class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-accent-600 text-zinc-950"
-			>
-				<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none"
-					><path d="M3 19h18L14.5 7l-3 5-2-3L3 19z" fill="currentColor" /></svg
-				>
-			</span>
+			<BrandMark class="h-10 w-10" />
 			<div>
 				<div class="text-xs uppercase tracking-widest text-accent-400">Authorize</div>
 				<h1 class="text-lg font-semibold tracking-tight">Connect an application</h1>
@@ -161,7 +156,7 @@
 					type="button"
 					onclick={() => decide(true)}
 					disabled={submitting}
-					class="flex-1 rounded-lg bg-accent-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+					class="flex-1 rounded-lg bg-accent-500 px-4 py-2.5 text-sm font-semibold text-on-accent hover:bg-accent-600 disabled:opacity-50"
 				>
 					{submitting ? 'Authorizing…' : 'Allow access'}
 				</button>

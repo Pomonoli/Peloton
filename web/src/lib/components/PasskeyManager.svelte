@@ -79,7 +79,7 @@
 	}
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 	<div class="mb-1 flex items-center justify-between">
 		<h2 class="text-sm font-medium text-zinc-300">Passkeys</h2>
 		{#if supported}
@@ -114,21 +114,21 @@
 		/>
 		Require a passkey after password sign-in
 		{#if passkeys.length === 0 && !secondFactor}
-			<span class="text-zinc-600">(add a passkey first)</span>
+			<span class="text-quiet">(add a passkey first)</span>
 		{/if}
 	</label>
 
 	{#if !supported}
-		<p class="text-xs text-zinc-600">This browser doesn’t support passkeys.</p>
+		<p class="text-xs text-quiet">This browser doesn’t support passkeys.</p>
 	{:else if passkeys.length === 0}
-		<p class="text-xs text-zinc-600">No passkeys yet.</p>
+		<p class="text-xs text-quiet">No passkeys yet.</p>
 	{:else}
 		<ul class="divide-y divide-zinc-800 rounded border border-zinc-800">
 			{#each passkeys as p (p.id)}
 				<li class="flex items-center justify-between gap-4 px-3 py-2 text-xs max-md:flex-wrap">
 					<div>
 						<span class="font-medium text-zinc-200">{p.name}</span>
-						<div class="mt-0.5 text-zinc-600">
+						<div class="mt-0.5 text-quiet">
 							added {formatDate(p.created_at)}
 							{#if p.last_used_at}· last used {formatDate(p.last_used_at)}{:else}· never used{/if}
 						</div>

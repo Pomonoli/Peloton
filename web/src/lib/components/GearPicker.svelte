@@ -20,7 +20,7 @@
 	{id}
 	bind:value
 	{disabled}
-	class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm disabled:opacity-50"
+	class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm disabled:opacity-50"
 >
 	<option value="">{m.gear_picker_none()}</option>
 	{#each options.matching as g (g.id)}

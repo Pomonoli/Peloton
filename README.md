@@ -138,15 +138,16 @@ docs/                            architecture.md, run-local.md, worker-pooling-v
 
 ## Run it
 
-Local dev runs the **supporting services in docker compose** and the **binaries
-on the host with live-reload** — four shells:
+Local development runs the **supporting services in Docker Compose** under
+`peloton-dev` and the **server and web app on the host**. See
+[docs/run-local.md](docs/run-local.md) for the toolchain and ports.
 
 ```sh
 make dev-up                  # postgres + nats + minio + mailpit (compose)
 cp dev.env.example dev.env   # once
+make web-deps                 # once, with the Buf plugins on PATH
 make dev-server              # shell 2: Go server   (rebuilds on save)
-make dev-worker              # shell 3: Strava worker (rebuilds on save)
-make dev-web                 # shell 4: SvelteKit dev server (vite HMR)
+make dev-web                 # shell 3: SvelteKit dev server (Vite HMR)
 # → http://localhost:5173  (web)   ·   http://localhost:8080  (API)
 ```
 

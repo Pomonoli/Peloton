@@ -159,7 +159,7 @@
 	onMount(load);
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/40">
+<section class="rounded-lg border border-zinc-800 bg-panel">
 	<header class="border-b border-zinc-800 px-5 py-3">
 		<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">Worker onboarding</h2>
 		<p class="mt-1 text-xs text-zinc-500">
@@ -175,7 +175,7 @@
 				Connected workers
 			</h3>
 			{#if workers.length === 0}
-				<p class="text-xs text-zinc-600">No workers connected right now.</p>
+				<p class="text-xs text-quiet">No workers connected right now.</p>
 			{:else}
 				<ul class="divide-y divide-zinc-800 rounded border border-zinc-800">
 					{#each workers as w (w.instance_id)}
@@ -215,12 +215,12 @@
 											{w.package}
 										</div>
 									{/if}
-									<div class="mt-0.5 text-zinc-600">
+									<div class="mt-0.5 text-quiet">
 										{w.instance_id} · last seen {fmt(w.last_seen)}
 									</div>
 									{#if w.commit || w.build_date || w.go_version}
 										<div
-											class="mt-0.5 text-zinc-700"
+											class="mt-0.5 text-quiet"
 											title="Build info — informational, may differ across pooled instances"
 										>
 											build{w.commit ? ` ${w.commit}` : ''}{w.build_date
@@ -233,7 +233,7 @@
 											class="mt-1 flex flex-wrap items-center gap-1"
 											title="Data types this provider supplies (read/push/backfill)"
 										>
-											<span class="text-zinc-600">provides</span>
+											<span class="text-quiet">provides</span>
 											{#each readableTypes(w) as t (t)}
 												<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">
 													{t}{#if w.capabilities?.[t]?.push}<span
@@ -282,7 +282,7 @@
 			<h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
 				Enrollment tokens
 			</h3>
-			<p class="mb-3 text-xs text-zinc-600">
+			<p class="mb-3 text-xs text-quiet">
 				One-time tokens that admit a new worker. The token is shown once on creation; a worker keeps
 				its connection after the token expires, but can no longer reconnect or renew its credentials
 				once the enrollment lapses or is revoked.
@@ -344,7 +344,7 @@
 					type="button"
 					disabled={creating || !enrollmentRequest(name, provider, expiresDays, note)}
 					onclick={create}
-					class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+					class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 				>
 					{creating ? 'Creating…' : 'Create enrollment'}
 				</button>
@@ -402,7 +402,7 @@
 									>
 								{/if}
 								{#if e.note}<span class="ml-2 text-zinc-500">{e.note}</span>{/if}
-								<div class="mt-0.5 text-zinc-600">expires {fmt(e.expires_at)} · {e.id}</div>
+								<div class="mt-0.5 text-quiet">expires {fmt(e.expires_at)} · {e.id}</div>
 							</div>
 							<div class="flex shrink-0 gap-2">
 								{#if !e.is_revoked && !e.reenroll_required}

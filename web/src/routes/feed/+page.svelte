@@ -68,7 +68,7 @@
 
 	<div class="space-y-3">
 		{#each items as a (a.id)}
-			<article class="rounded-lg border bg-zinc-900/40 border border-zinc-800 p-4 shadow-sm">
+			<article class="rounded-lg border bg-panel border border-zinc-800 p-4 shadow-sm">
 				<div class="mb-2 flex items-center gap-2 text-sm text-zinc-400">
 					<a href={`/u/${a.owner?.username}`} class="font-medium text-zinc-100 hover:underline">
 						{a.owner?.display_name || a.owner?.username}

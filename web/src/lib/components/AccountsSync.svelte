@@ -454,7 +454,7 @@
 </script>
 
 {#if shown.length > 0}
-	<section class={connectionId ? '' : 'rounded-lg border border-zinc-800 bg-zinc-900/40 p-4'}>
+	<section class={connectionId ? '' : 'rounded-lg border border-zinc-800 bg-panel p-4'}>
 		{#if !connectionId}
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Connected accounts</h2>
 		{/if}
@@ -560,7 +560,7 @@
 					{#if importOpen[a.id]}
 						<!-- Single-activity import: provider activity ID → import queue. -->
 						<div
-							class="mt-2 flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900/60 p-2 text-xs max-md:flex-wrap"
+							class="mt-2 flex items-center gap-2 rounded border border-zinc-800 bg-panel p-2 text-xs max-md:flex-wrap"
 						>
 							<input
 								bind:value={importExtId[a.id]}
@@ -572,7 +572,7 @@
 								type="button"
 								disabled={busy[a.id] || !(importExtId[a.id] ?? '').trim()}
 								onclick={() => importOne(a.id)}
-								class="rounded bg-accent-500 px-3 py-1.5 font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+								class="rounded bg-accent-500 px-3 py-1.5 font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 							>
 								{busy[a.id] ? 'Queueing…' : 'Import'}
 							</button>
@@ -611,7 +611,7 @@
 										>
 											{b.short.used}/{b.short.limit}
 										</span>
-										<span class="text-zinc-600">·15min</span>
+										<span class="text-quiet">·15min</span>
 									{/if}
 									{#if b.daily}
 										<span
@@ -619,7 +619,7 @@
 										>
 											{b.daily.used}/{b.daily.limit}
 										</span>
-										<span class="text-zinc-600">·day</span>
+										<span class="text-quiet">·day</span>
 									{/if}
 								</dd>
 							</div>
@@ -694,7 +694,7 @@
 													>
 												{/if}
 											</span>
-											<span class="shrink-0 text-zinc-600">{formatDate(ev.occurred_at)}</span>
+											<span class="shrink-0 text-quiet">{formatDate(ev.occurred_at)}</span>
 										</li>
 									{/each}
 								</ul>
@@ -834,7 +834,7 @@
 								class="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200 focus:border-accent-400 focus:outline-none"
 							/>
 							<span class="text-zinc-400">minutes</span>
-							<span class="text-zinc-600">
+							<span class="text-quiet">
 								(0 = instance default{defaultPollLabel ? `: ${defaultPollLabel}` : ''})
 							</span>
 							{#if savedCfg[a.id]}<span class="text-emerald-400">saved</span>{/if}
@@ -869,7 +869,7 @@
 										<option value={a.assigned_worker}>{a.assigned_worker} (offline)</option>
 									{/if}
 								</select>
-								<span class="text-zinc-600"
+								<span class="text-quiet"
 									>Imports and re-fetches for this connection run on this worker.</span
 								>
 							</div>
@@ -901,7 +901,7 @@
 					{#if pv}
 						{@const p = pv}
 						<div
-							class="mt-3 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300"
+							class="mt-3 rounded border border-zinc-800 bg-panel px-3 py-2 text-xs text-zinc-300"
 						>
 							Found <b>{p.complete === false ? '≥' : ''}{p.total}</b> activities — <b>{p.new}</b>
 							new,
@@ -916,7 +916,7 @@
 									type="button"
 									disabled={busy[a.id]}
 									onclick={() => start(a.id, true)}
-									class="rounded bg-accent-500 px-3 py-1 font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50 max-md:py-2"
+									class="rounded bg-accent-500 px-3 py-1 font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50 max-md:py-2"
 								>
 									Import {p.new} new
 								</button>

@@ -78,7 +78,7 @@
 		{/if}
 
 		<div
-			class="grid grid-cols-3 gap-4 rounded-lg border bg-zinc-900/40 border border-zinc-800 p-4 shadow-sm max-md:grid-cols-2"
+			class="grid grid-cols-3 gap-4 rounded-lg border bg-panel border border-zinc-800 p-4 shadow-sm max-md:grid-cols-2"
 		>
 			<div>
 				<div class="text-xs text-zinc-400">Distance</div>

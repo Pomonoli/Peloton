@@ -336,6 +336,30 @@ func str(m map[string]any, k string) string {
 	return s
 }
 
+func TestAPI_IdenticalUploadsBelongToEachUser(t *testing.T) {
+	env := newITestEnv(t)
+	alice := env.user("upload-alice", domain.UserRoleUser)
+	bob := env.user("upload-bob", domain.UserRoleUser)
+	ride := gpxRide(time.Date(2026, 5, 3, 7, 0, 0, 0, time.UTC))
+	aliceUpload := alice.upload("ride.gpx", ride)
+	bobUpload := bob.upload("ride.gpx", ride)
+	if str(bobUpload, "activity_id") == str(aliceUpload, "activity_id") ||
+		str(bobUpload, "source_id") == str(aliceUpload, "source_id") {
+		t.Fatal("identical files from different users must produce separate activities and sources")
+	}
+	for _, owner := range []struct {
+		client *itestClient
+		upload map[string]any
+	}{{alice, aliceUpload}, {bob, bobUpload}} {
+		activityID := str(owner.upload, "activity_id")
+		owner.client.rpc("/cairn.v1.ActivityService/GetActivity", map[string]any{"id": activityID}, http.StatusOK)
+		repeat := owner.client.upload("ride-copy.gpx", ride)
+		if str(repeat, "activity_id") != activityID || str(repeat, "source_id") != str(owner.upload, "source_id") {
+			t.Error("an owner re-uploading the same file should reuse their activity and source")
+		}
+	}
+}
+
 func TestAPI_EndToEnd(t *testing.T) {
 	env := newITestEnv(t)
 	adm := env.user("itadmin", domain.UserRoleAdmin)

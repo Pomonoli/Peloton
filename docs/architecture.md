@@ -163,7 +163,7 @@ Cairn:
 
 | Subscriber | Idempotency mechanism |
 |---|---|
-| Ingest router (`cairn.results.fetch_source.>`) | Stage-1 dedup over `(provider, account_id, ext_id)`. Double push → `handleReimport`. |
+| Ingest router (`cairn.results.fetch_source.>`) | Stage-1 dedup over `(user_id, provider, account_id, ext_id)`. Double push → `handleReimport`. |
 | Best-effort compute | `DELETE for source ... INSERT new` pattern in one tx. |
 | Segment match | same `DELETE then INSERT` pattern; rank recompute idempotent. |
 | Training load | `external_id = "computed:<date>"` + partial-unique-index UPSERT. |

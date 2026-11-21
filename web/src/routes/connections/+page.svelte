@@ -221,13 +221,13 @@
 		<button
 			type="button"
 			onclick={() => (showAdd = !showAdd)}
-			class="shrink-0 rounded bg-accent-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400"
+			class="shrink-0 rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600"
 		>
 			{showAdd ? 'Cancel' : '+ Add connection'}
 		</button>
 	</header>
 
-	<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-xs text-zinc-400">
+	<div class="rounded-lg border border-zinc-800 bg-panel p-3 text-xs text-zinc-400">
 		Connecting needs a connector (worker) for the provider onboarded on this instance.
 		{#if data.isAdmin}
 			<a href="/admin" class="text-accent-400 hover:text-accent-300">Onboard connectors →</a>
@@ -345,7 +345,7 @@
 					(!formProviderOAuth && !form.client_secret) ||
 					(!formProviderOAuth && poolsFor(form.provider).length > 1 && !form.worker)}
 				onclick={addConnection}
-				class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+				class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{busy ? 'Saving…' : 'Create connection'}
 			</button>
@@ -357,7 +357,7 @@
 	{/if}
 
 	{#each connections as c (c.id)}
-		<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+		<div class="rounded-lg border border-zinc-800 bg-panel p-5">
 			<div class="flex items-center justify-between gap-4 max-md:flex-col max-md:items-start">
 				<div>
 					<div class="text-base font-medium">
@@ -387,7 +387,7 @@
 					{#if c.oauth}
 						<a
 							href={connectHref(c)}
-							class="rounded bg-accent-500 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-accent-400"
+							class="rounded bg-accent-500 px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-600"
 						>
 							{connectedIds.has(c.id) ? 'Reconnect' : m.connections_connect_account()}
 						</a>
@@ -435,7 +435,7 @@
 							type="button"
 							disabled={busy}
 							onclick={() => saveEdit(c.id)}
-							class="rounded bg-accent-500 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+							class="rounded bg-accent-500 px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 						>
 							Save
 						</button>

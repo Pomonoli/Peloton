@@ -7,6 +7,7 @@
 	import { setPrefs } from '#lib/prefs.svelte.js';
 	import { formatDate } from '#lib/format.js';
 	import LoadingBar from '#lib/components/LoadingBar.svelte';
+	import BrandMark from '#lib/components/BrandMark.svelte';
 
 	let { children, data } = $props();
 
@@ -164,14 +165,8 @@
 
 {#snippet brand()}
 	<a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
-		<svg viewBox="0 0 64 64" class="h-7 w-7 shrink-0" aria-hidden="true">
-			<rect width="64" height="64" rx="14" fill="#1f2937" />
-			<rect x="13" y="45" width="38" height="11" rx="5.5" fill="#d6d3d1" />
-			<rect x="17.5" y="33.5" width="29" height="10" rx="5" fill="#a8a29e" />
-			<rect x="19.5" y="23" width="24" height="9" rx="4.5" fill="#cfcbc4" />
-			<rect x="24" y="13.5" width="16" height="8" rx="4" fill="#2dd4bf" />
-		</svg>
-		<span class="text-accent-400">{APP_NAME}</span>
+		<BrandMark />
+		<span class="text-accent-300">{APP_NAME}</span>
 	</a>
 {/snippet}
 
@@ -186,11 +181,10 @@
 			{@const active = isActive(item.href)}
 			<a
 				href={item.href}
-				class="flex items-center gap-2.5 rounded px-3 py-1.5 text-sm transition-colors"
-				class:bg-zinc-800={active}
-				class:text-zinc-100={active}
-				class:text-zinc-400={!active}
-				class:hover:text-zinc-100={!active}
+				aria-current={active ? 'page' : undefined}
+				class="flex items-center gap-2.5 rounded px-3 py-1.5 text-sm transition-colors {active
+					? 'bg-accent-500/14 text-accent-300'
+					: 'text-zinc-400 hover:text-zinc-100'}"
 			>
 				<svg
 					class="h-[18px] w-[18px] shrink-0"
@@ -207,7 +201,7 @@
 				<span class="truncate">{item.label}</span>
 				{#if item.badge}
 					<span
-						class="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-semibold text-zinc-950"
+						class="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-semibold text-on-accent"
 					>
 						{item.badge > 9 ? '9+' : item.badge}
 					</span>
@@ -277,7 +271,7 @@
 			<div class="fixed inset-0 z-40 md:hidden">
 				<button
 					type="button"
-					class="absolute inset-0 cursor-default bg-zinc-950/60"
+					class="absolute inset-0 cursor-default bg-scrim/60"
 					aria-label="Close menu"
 					onclick={() => (mobileNavOpen = false)}
 				></button>
@@ -358,7 +352,7 @@
 					</svg>
 					{#if unread > 0}
 						<span
-							class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-semibold text-zinc-950"
+							class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-semibold text-on-accent"
 						>
 							{unread > 9 ? '9+' : unread}
 						</span>
@@ -418,7 +412,7 @@
 				<a href="https://github.com/opencairn-org/cairn-core" class="hover:underline">Cairn</a>
 			</span>
 			{#if buildLabel}
-				<span class="font-mono text-[10px] text-zinc-600" title="Build info">{buildLabel}</span>
+				<span class="font-mono text-[10px] text-quiet" title="Build info">{buildLabel}</span>
 			{/if}
 		</footer>
 	</div>

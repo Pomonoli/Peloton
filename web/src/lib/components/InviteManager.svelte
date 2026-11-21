@@ -70,7 +70,7 @@
 	};
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/40">
+<section class="rounded-lg border border-zinc-800 bg-panel">
 	<header class="border-b border-zinc-800 px-5 py-3">
 		<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">Invites</h2>
 		<p class="mt-1 text-xs text-zinc-500">
@@ -117,7 +117,7 @@
 				type="button"
 				disabled={creating}
 				onclick={create}
-				class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+				class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{creating ? 'Creating…' : 'Create invite'}
 			</button>
@@ -161,7 +161,7 @@
 							>
 							<span class="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-400">{i.role}</span>
 							{#if i.email}<span class="ml-2 text-zinc-500">{i.email}</span>{/if}
-							<div class="mt-0.5 text-zinc-600">
+							<div class="mt-0.5 text-quiet">
 								created {formatDate(i.created_at)}{#if i.expires_at}
 									· expires {formatDate(i.expires_at)}{/if}
 							</div>

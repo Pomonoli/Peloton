@@ -44,7 +44,7 @@
 		</div>
 	</header>
 
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40">
+	<section class="rounded-lg border border-zinc-800 bg-panel">
 		<header class="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
 			<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">{m.stat_users()}</h2>
 			<span class="text-xs text-zinc-500">{data.users.length}</span>

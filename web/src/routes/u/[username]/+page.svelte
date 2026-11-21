@@ -135,7 +135,7 @@
 						<button
 							onclick={toggleFollow}
 							disabled={busy}
-							class={`rounded-full px-4 py-2 text-sm font-medium ${profile.is_following ? 'border bg-zinc-900/40 border border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-accent-500 text-zinc-950 hover:bg-accent-400'} disabled:opacity-50`}
+							class={`rounded-full px-4 py-2 text-sm font-medium ${profile.is_following ? 'border bg-panel border border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-accent-500 text-on-accent hover:bg-accent-600'} disabled:opacity-50`}
 						>
 							{profile.is_following ? 'Following' : 'Follow'}
 						</button>
@@ -147,14 +147,14 @@
 						<button
 							onclick={blockUser}
 							title="Block"
-							class="text-zinc-500 hover:text-red-500 max-md:p-2">⊘</button
+							class="text-zinc-500 hover:text-red-400 max-md:p-2">⊘</button
 						>
 					</div>
 				{/if}
 			{:else if !data.user}
 				<a
 					href="/login"
-					class="rounded-full bg-accent-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400"
+					class="rounded-full bg-accent-500 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-600"
 					>Sign in to follow</a
 				>
 			{/if}
@@ -170,7 +170,7 @@
 			{#each profile.activities as a (a.id)}
 				<a
 					href={`/a/${a.id}`}
-					class="block rounded-lg border bg-zinc-900/40 border border-zinc-800 p-4 shadow-sm hover:opacity-90"
+					class="block rounded-lg border bg-panel border border-zinc-800 p-4 shadow-sm hover:opacity-90"
 				>
 					<div class="flex items-center gap-3">
 						<SportIcon type={a.type} size={24} />

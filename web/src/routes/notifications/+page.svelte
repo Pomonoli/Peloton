@@ -62,7 +62,7 @@
 			case 'info':
 				return 'text-sky-300 border-sky-700/50 bg-sky-950/30';
 		}
-		return 'text-zinc-300 border-zinc-700 bg-zinc-900/40';
+		return 'text-zinc-300 border-zinc-700 bg-panel';
 	}
 </script>
 

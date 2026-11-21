@@ -216,10 +216,9 @@ type SourceReader interface {
 	// which excludes them).
 	ListAllSourcesForActivity(ctx context.Context, id domain.ActivityID) ([]domain.ActivitySource, error)
 
-	// FindSourceByExternalID resolves a source's identity: exact match on
-	// (provider, external_account_id, external_id). Returns domain.ErrNotFound
-	// when no such source exists. Same-activity GROUPING is the matcher's job,
-	// not this lookup's.
+	// FindSourceByExternalID resolves a source within a linked account by
+	// (provider, external_account_id, external_id). It returns domain.ErrNotFound
+	// when the account is nil or no such source exists.
 	FindSourceByExternalID(
 		ctx context.Context,
 		provider string,

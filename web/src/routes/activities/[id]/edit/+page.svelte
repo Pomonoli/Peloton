@@ -223,7 +223,7 @@
 			<input
 				id="title"
 				bind:value={title}
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 			/>
 		</div>
 
@@ -235,8 +235,7 @@
 				id="desc"
 				bind:value={description}
 				rows="3"
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
-			></textarea>
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"></textarea>
 		</div>
 
 		<div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
@@ -246,7 +245,7 @@
 					id="type"
 					bind:value={type}
 					onchange={onTypeChange}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm capitalize"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm capitalize"
 				>
 					{#each ACTIVITY_TYPES as t (t)}
 						<option value={t}>{t}</option>
@@ -261,7 +260,7 @@
 					id="disc"
 					bind:value={discipline}
 					disabled={disciplineOptions.length === 0}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm capitalize disabled:opacity-50"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm capitalize disabled:opacity-50"
 				>
 					<option value="">— none —</option>
 					{#each disciplineOptions as d (d)}
@@ -279,7 +278,7 @@
 				id="subtype"
 				bind:value={customSubtype}
 				placeholder="e.g. Brick, Recovery"
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 			/>
 		</div>
 
@@ -312,7 +311,7 @@
 						min="0"
 						step="0.01"
 						bind:value={distanceKm}
-						class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+						class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 					/>
 				</div>
 				<div>
@@ -322,7 +321,7 @@
 						type="number"
 						min="0"
 						bind:value={elevationGainM}
-						class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+						class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 					/>
 				</div>
 				<div>
@@ -333,11 +332,11 @@
 						min="0"
 						step="0.1"
 						bind:value={movingMin}
-						class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+						class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 					/>
 				</div>
 			</div>
-			<p class="mt-1.5 text-[11px] text-zinc-600">
+			<p class="mt-1.5 text-[11px] text-quiet">
 				Leave blank to use the value merged from your sources. Editing distance or moving time
 				re-derives average pace/speed.
 			</p>
@@ -349,14 +348,14 @@
 				id="tags"
 				bind:value={tagsText}
 				placeholder="comma, separated"
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 			/>
 		</div>
 
 		<div>
 			<label class="block text-xs uppercase tracking-wide text-zinc-500" for="gear"
 				>{m.gear_title()}
-				<span class="normal-case tracking-normal text-zinc-600"
+				<span class="normal-case tracking-normal text-quiet"
 					>· {init.gearSetBy === 'user' ? m.gear_set_by_user() : m.gear_set_by_merge()}</span
 				></label
 			>
@@ -375,7 +374,7 @@
 			<select
 				id="privacy"
 				bind:value={privacy}
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm capitalize"
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm capitalize"
 			>
 				<option value="private">Private</option>
 				<option value="followers">Followers</option>
@@ -393,7 +392,7 @@
 			<button
 				type="submit"
 				disabled={saving}
-				class="rounded bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50"
+				class="rounded bg-accent-600 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-500 disabled:opacity-50"
 			>
 				{saving ? 'Saving…' : 'Save'}
 			</button>
@@ -406,7 +405,7 @@
 
 	<!-- Source data from another activity (e.g. borrow a route you rode without
 	     your watch). Creates a derived source pinned to the chosen fields. -->
-	<section class="max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+	<section class="max-w-2xl rounded-xl border border-zinc-800 bg-panel p-5">
 		<h2 class="text-lg font-semibold">Source data from another activity</h2>
 		<p class="mt-1 text-sm text-zinc-500">
 			Borrow the route or metrics from one of your other activities. The route is rebased to this
@@ -422,7 +421,7 @@
 				<select
 					id="donor"
 					bind:value={donorId}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 				>
 					<option value="">— choose an activity —</option>
 					{#each donors as d (d.id)}

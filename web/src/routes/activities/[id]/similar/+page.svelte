@@ -109,7 +109,7 @@
 	{:else if payload && payload.summary.count > 1}
 		<dl class="grid grid-cols-2 gap-4 sm:grid-cols-4">
 			{#each [{ label: 'Times on this route', value: String(payload.summary.count) }, { label: 'This effort ranks', value: `#${payload.summary.current_rank} of ${payload.summary.count}` }, { label: 'Your best', value: formatDuration(payload.summary.best_moving_s) }, { label: 'This effort', value: formatDuration(payload.summary.current_moving_s) }] as c (c.label)}
-				<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+				<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 					<dt class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</dt>
 					<dd class="mt-1 text-xl font-semibold tabular-nums">{c.value}</dd>
 				</div>
@@ -165,7 +165,7 @@
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">All efforts</h2>
 			<div class="overflow-x-auto rounded-lg border border-zinc-800">
 				<table class="w-full text-sm">
-					<thead class="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-3 py-2 text-left font-medium">Date</th>
 							<th class="px-3 py-2 text-right font-medium">Distance</th>

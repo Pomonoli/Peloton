@@ -906,12 +906,36 @@ func (r *ActivityRepo) ExistingExternalIDs(ctx context.Context, provider string,
 	return out, rows.Err()
 }
 
-// FindSourceByExternalID implements dedup stage 1.
+// FindSourceByExternalID resolves the identity of a source in a linked account.
 func (r *ActivityRepo) FindSourceByExternalID(
 	ctx context.Context,
 	provider string,
 	externalAccountID *domain.ExternalAccountID,
 	externalID string,
+) (domain.ActivitySource, error) {
+	if externalAccountID == nil {
+		return domain.ActivitySource{}, domain.ErrNotFound
+	}
+	return r.findSourceByExternalID(ctx, provider, externalAccountID, externalID, nil)
+}
+
+// FindOwnedSourceByExternalID resolves an ingest identity within its owner's sources.
+func (r *ActivityRepo) FindOwnedSourceByExternalID(
+	ctx context.Context,
+	userID domain.UserID,
+	provider string,
+	externalAccountID *domain.ExternalAccountID,
+	externalID string,
+) (domain.ActivitySource, error) {
+	return r.findSourceByExternalID(ctx, provider, externalAccountID, externalID, userID.UUID())
+}
+
+func (r *ActivityRepo) findSourceByExternalID(
+	ctx context.Context,
+	provider string,
+	externalAccountID *domain.ExternalAccountID,
+	externalID string,
+	owner any,
 ) (domain.ActivitySource, error) {
 	db := dbtx(ctx, r.pool)
 
@@ -920,19 +944,18 @@ func (r *ActivityRepo) FindSourceByExternalID(
 		accountParam = externalAccountID.UUID()
 	}
 
-	// External_account_id may be NULL for manual uploads — the UNIQUE
-	// constraint in migration 5 treats NULL as distinct in Postgres, but
-	// dedup must treat (provider, NULL, external_id) as a single bucket
-	// per user. We disambiguate via IS NOT DISTINCT FROM.
+	// A NULL account identifies an upload or other local source. The owner
+	// scopes its external ID because multiple users can import the same file.
 	row := db.QueryRow(ctx,
 		`SELECT `+sourceColumns+`
 		   FROM activity_sources
 		  WHERE provider = $1
 		    AND external_account_id IS NOT DISTINCT FROM $2
 		    AND external_id = $3
+		    AND ($4::uuid IS NULL OR user_id = $4)
 		    AND status != 'detached'
 		  LIMIT 1`,
-		provider, accountParam, externalID,
+		provider, accountParam, externalID, owner,
 	)
 	s, err := scanSourceRow(row)
 	if errors.Is(err, pgx.ErrNoRows) {

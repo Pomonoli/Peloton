@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import LocaleSwitcher from '#lib/components/LocaleSwitcher.svelte';
 	import { locales } from '#lib/paraglide/runtime.js';
+	import { appearance, setAppearance } from '#lib/appearance.js';
 	import PasskeyManager from '#lib/components/PasskeyManager.svelte';
 	import TokenManager from '#lib/components/TokenManager.svelte';
 	import AuthorizedApps from '#lib/components/AuthorizedApps.svelte';
@@ -188,6 +189,11 @@
 	}
 
 	const sampleIso = '2026-06-02T14:30:00Z';
+	const appearanceOptions = [
+		{ value: 'system', label: m.settings_appearance_system() },
+		{ value: 'light', label: m.settings_appearance_light() },
+		{ value: 'dark', label: m.settings_appearance_dark() }
+	] as const;
 </script>
 
 <div class="space-y-8">
@@ -196,7 +202,7 @@
 		<p class="mt-1 text-sm text-zinc-400">{m.settings_intro()}</p>
 	</header>
 
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 		<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_account_section()}</h2>
 		<dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-[160px_1fr]">
 			<dt class="text-zinc-500">{m.settings_field_display_name()}</dt>
@@ -230,8 +236,36 @@
 		{/if}
 	</section>
 
+	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+		<h2 class="mb-1 text-sm font-medium text-zinc-300">{m.settings_appearance()}</h2>
+		<p id="appearance-description" class="mb-3 text-xs text-zinc-500">
+			{m.settings_appearance_description()}
+		</p>
+		<fieldset class="inline-flex gap-0.5 rounded-lg border border-zinc-800 bg-zinc-950 p-1">
+			<legend class="sr-only">{m.settings_appearance()}</legend>
+			{#each appearanceOptions as option (option.value)}
+				<label class="cursor-pointer">
+					<input
+						type="radio"
+						name="appearance"
+						value={option.value}
+						checked={$appearance.preference === option.value}
+						aria-describedby="appearance-description"
+						onchange={() => setAppearance(option.value)}
+						class="peer sr-only"
+					/>
+					<span
+						class="block rounded-md px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 peer-checked:bg-accent-500/15 peer-checked:font-medium peer-checked:text-accent-300 peer-focus-visible:outline-2 peer-focus-visible:-outline-offset-2 peer-focus-visible:outline-accent-500"
+					>
+						{option.label}
+					</span>
+				</label>
+			{/each}
+		</fieldset>
+	</section>
+
 	{#if notifPrefs.length > 0}
-		<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 			<h2 class="mb-1 text-sm font-medium text-zinc-300">Notification emails</h2>
 			<p class="mb-4 text-xs text-zinc-500">
 				The in-app feed always shows everything. Choose which also email you{#if !emailChannelAvailable}<span
@@ -267,7 +301,7 @@
 	{/if}
 
 	{#if quietLoaded}
-		<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 			<div class="mb-1 flex items-center gap-3">
 				<h2 class="text-sm font-medium text-zinc-300">Quiet hours</h2>
 				{#if quietSaved}<span class="text-xs text-emerald-400">saved</span>{/if}
@@ -344,7 +378,7 @@
 		</section>
 	{/if}
 
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 		<div class="mb-4 flex items-center gap-3">
 			<h2 class="text-sm font-medium text-zinc-300">Format &amp; units</h2>
 			{#if saved}<span class="text-xs text-emerald-400">saved</span>{/if}
@@ -402,7 +436,7 @@
 	</section>
 
 	{#if locales.length > 1}
-		<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 			<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_language_section()}</h2>
 			<LocaleSwitcher />
 		</section>

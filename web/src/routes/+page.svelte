@@ -126,7 +126,7 @@
 {:else}
 	<div class="space-y-6">
 		<!-- Top header: welcome + summary strip -->
-		<header class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+		<header class="rounded-xl border border-zinc-800 bg-panel p-5">
 			<div class="flex flex-wrap items-end justify-between gap-4">
 				<div>
 					<h1 class="text-2xl font-semibold tracking-tight">
@@ -148,14 +148,13 @@
 		</header>
 
 		{#snippet weekBlock(label: string, w: WeekStat | undefined, href: string)}
-			<section class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+			<section class="rounded-xl border border-zinc-800 bg-panel p-4">
 				<a
 					{href}
 					class="group mb-3 flex items-center justify-between text-xs font-medium uppercase tracking-wide text-zinc-500 hover:text-zinc-300"
 				>
 					<h2>{label}</h2>
-					<span
-						class="text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-400"
+					<span class="text-quiet transition group-hover:translate-x-0.5 group-hover:text-zinc-400"
 						>→</span
 					>
 				</a>
@@ -196,7 +195,7 @@
 				{@render weekBlock('This week', ov?.this_week, weekHref(0))}
 				{@render weekBlock('Last week', ov?.last_week, weekHref(1))}
 
-				<nav class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 text-sm">
+				<nav class="rounded-xl border border-zinc-800 bg-panel p-4 text-sm">
 					<h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Explore</h2>
 					<div class="space-y-0.5">
 						<a href="/analysis" class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
@@ -240,7 +239,7 @@
 				{#if shown.length > 0}
 					<div class="space-y-3">
 						{#each shown as a (a.source + ':' + a.id)}
-							<article class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 shadow-sm">
+							<article class="rounded-lg border border-zinc-800 bg-panel p-4 shadow-sm">
 								<div class="mb-2 flex items-center gap-2 text-sm text-zinc-400">
 									<span class="font-medium text-zinc-100"
 										>{a.owner?.display_name || a.owner?.username}</span
@@ -350,13 +349,13 @@
 					</div>
 				{:else if feed.length > 0}
 					<div
-						class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-400"
+						class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
 					>
 						No activities match the selected filters.
 					</div>
 				{:else}
 					<div
-						class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-400"
+						class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
 					>
 						Nothing in your feed yet. Follow other athletes — or a remote handle over federation —
 						to see their activities here.

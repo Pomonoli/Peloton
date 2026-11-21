@@ -43,7 +43,7 @@
 	{#if series.length > 0}
 		<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
 			{#each series as s (s.label)}
-				<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+				<div class="rounded-lg border border-zinc-800 bg-panel p-3">
 					<div class="mb-1 text-xs font-medium uppercase tracking-wide" style:color={s.color}>
 						{s.label}{s.unit ? ` (${s.unit})` : ''}
 					</div>

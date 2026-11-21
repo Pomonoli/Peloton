@@ -3,6 +3,7 @@
 	import { Map as MapLibreMap, Marker, NavigationControl, type LngLatLike } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { basemapStyle } from '#lib/basemap.js';
+	import { appearance, appearanceColor } from '#lib/appearance.js';
 
 	// A small click-to-pick map: clicking drops a marker and reports the
 	// coordinates via onPick. Used to set a privacy-zone centre without typing
@@ -15,19 +16,24 @@
 
 	let container: HTMLDivElement;
 	let map: MapLibreMap | undefined;
+	let currentStyle: ReturnType<typeof basemapStyle>;
 	let marker: Marker | undefined;
 
 	function place(lngLat: LngLatLike) {
 		if (!map) return;
-		if (!marker) marker = new Marker({ color: '#ef4444' }).setLngLat(lngLat).addTo(map);
+		if (!marker)
+			marker = new Marker({ color: appearanceColor('--accent-primary') })
+				.setLngLat(lngLat)
+				.addTo(map);
 		else marker.setLngLat(lngLat);
 	}
 
 	onMount(() => {
 		const hasInitial = typeof lat === 'number' && typeof lng === 'number';
+		currentStyle = basemapStyle($appearance.mode);
 		map = new MapLibreMap({
 			container,
-			style: basemapStyle(),
+			style: currentStyle,
 			center: hasInitial ? [lng as number, lat as number] : [0, 25],
 			zoom: hasInitial ? 13 : 1,
 			attributionControl: { compact: true }
@@ -39,6 +45,21 @@
 			place(e.lngLat);
 			onPick(e.lngLat.lat, e.lngLat.lng);
 		});
+	});
+
+	$effect(() => {
+		const next = basemapStyle($appearance.mode);
+		if (!map) return;
+		if (next !== currentStyle) {
+			currentStyle = next;
+			map.setStyle(next, { diff: false });
+		}
+		if (marker) {
+			const position = marker.getLngLat();
+			marker.remove();
+			marker = undefined;
+			place(position);
+		}
 	});
 
 	onDestroy(() => map?.remove());

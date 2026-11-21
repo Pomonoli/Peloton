@@ -142,7 +142,7 @@
 	</div>
 
 	{#if !loaded}
-		<p class="text-sm text-zinc-600">Loading…</p>
+		<p class="text-sm text-quiet">Loading…</p>
 	{:else if !anyData}
 		<p class="text-sm text-zinc-500">
 			No health data yet. Connect a provider that supplies health data and run "Import health" from
@@ -153,7 +153,7 @@
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 				{#each metrics as m (m.type)}
 					{#if m.series.length}
-						<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+						<div class="rounded-lg border border-zinc-800 bg-panel p-3">
 							<div class="flex items-baseline justify-between">
 								<span class="text-xs uppercase tracking-wide text-zinc-500">{m.label}</span>
 								{#if m.latest}<span class="text-lg font-semibold text-zinc-100"
@@ -164,12 +164,12 @@
 								<path
 									d={sparkPath(m.series.map((p) => p.value))}
 									fill="none"
-									stroke="#38bdf8"
+									stroke="var(--plot-speed)"
 									stroke-width="1"
 									vector-effect="non-scaling-stroke"
 								/>
 							</svg>
-							<div class="mt-1 text-right text-[10px] text-zinc-600">
+							<div class="mt-1 text-right text-[10px] text-quiet">
 								{m.series.length} days{#if m.latest?.provider}
 									· {m.latest.provider}{/if}
 							</div>
@@ -194,7 +194,7 @@
 							type="button"
 							onclick={() => select(sm.key)}
 							aria-expanded={selected === sm.key}
-							class="rounded-lg border bg-zinc-900/40 p-3 text-left transition-colors hover:border-zinc-600 {selected ===
+							class="rounded-lg border bg-panel p-3 text-left transition-colors hover:border-zinc-600 {selected ===
 							sm.key
 								? 'border-accent-500/60'
 								: 'border-zinc-800'}"
@@ -221,13 +221,13 @@
 									<path
 										d={sparkPath(trend)}
 										fill="none"
-										stroke="#38bdf8"
+										stroke="var(--plot-speed)"
 										stroke-width="1"
 										vector-effect="non-scaling-stroke"
 									/>
 								</svg>
 							{/if}
-							<div class="mt-1 text-right text-[10px] text-zinc-600">
+							<div class="mt-1 text-right text-[10px] text-quiet">
 								{when(sm, false)} · {sm.provider || 'manual'}
 							</div>
 						</button>
@@ -247,7 +247,7 @@
 							>
 						</div>
 						{#if history == null}
-							<p class="text-xs text-zinc-600">Loading…</p>
+							<p class="text-xs text-quiet">Loading…</p>
 						{:else if history.length === 0}
 							<p class="text-xs text-zinc-500">No entries.</p>
 						{:else}

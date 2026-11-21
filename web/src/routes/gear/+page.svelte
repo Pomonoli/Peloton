@@ -166,7 +166,7 @@
 	const optionLabel = (g: GearView) =>
 		gearLabel(g) + (g.retired ? ` ${m.gear_retired_suffix()}` : '');
 
-	const field = 'mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm';
+	const field = 'mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm';
 	const select = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300';
 	const btn =
 		'rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50';
@@ -177,7 +177,7 @@
 
 {#snippet gearForm()}
 	<form
-		class="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5"
+		class="space-y-4 rounded-xl border border-zinc-800 bg-panel p-5"
 		onsubmit={(e) => {
 			e.preventDefault();
 			submitForm();
@@ -214,12 +214,7 @@
 				<label class="block text-xs uppercase tracking-wide text-zinc-500" for="g-purchase"
 					>{m.gear_field_purchase()}</label
 				>
-				<input
-					id="g-purchase"
-					type="date"
-					bind:value={form.purchaseDate}
-					class="{field} [color-scheme:dark]"
-				/>
+				<input id="g-purchase" type="date" bind:value={form.purchaseDate} class={field} />
 			</div>
 			<div>
 				<label class="block text-xs uppercase tracking-wide text-zinc-500" for="g-notes"
@@ -261,7 +256,7 @@
 			<p class="mt-1 text-sm text-amber-200/70">{m.gear_pending_intro()}</p>
 			<ul class="mt-4 space-y-3">
 				{#each openPending as r (refKey(r))}
-					<li class="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+					<li class="rounded-lg border border-zinc-800 bg-panel p-4">
 						<div class="flex flex-wrap items-center gap-2 text-sm">
 							<span class="{badge} bg-zinc-800 text-zinc-300">{r.provider}</span>
 							<span class="font-medium">{r.providerName || r.externalId}</span>
@@ -322,7 +317,7 @@
 		{:else}
 			<ul class="mt-3 space-y-3">
 				{#each active as g (g.id)}
-					<li class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+					<li class="rounded-lg border border-zinc-800 bg-panel p-4">
 						{#if editingId === g.id}
 							{@render gearForm()}
 						{:else}
@@ -403,7 +398,7 @@
 	</div>
 
 	{#if data.gear.length > 0}
-		<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+		<div class="rounded-xl border border-zinc-800 bg-panel p-5">
 			<h2 class="text-lg font-semibold">{m.gear_section_defaults()}</h2>
 			<p class="mt-1 text-sm text-zinc-500">{m.gear_defaults_intro()}</p>
 			<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -442,9 +437,7 @@
 									count: g.activityCount
 								})}</span
 							>
-							{#if g.retiredAt}<span class="text-zinc-600">
-									· {formatDateOnly(g.retiredAt)}</span
-								>{/if}
+							{#if g.retiredAt}<span class="text-quiet"> · {formatDateOnly(g.retiredAt)}</span>{/if}
 						</span>
 						<span class="flex gap-2">
 							<button type="button" class={btn} disabled={busy} onclick={() => setRetired(g, false)}
@@ -460,5 +453,5 @@
 		</details>
 	{/if}
 
-	<p class="text-xs text-zinc-600">{m.gear_sync_hint()}</p>
+	<p class="text-xs text-quiet">{m.gear_sync_hint()}</p>
 </section>

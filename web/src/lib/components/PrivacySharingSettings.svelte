@@ -151,7 +151,7 @@
 
 	<!-- Public profile -->
 	<div
-		class="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 max-md:gap-3"
+		class="flex items-center justify-between rounded-lg border border-zinc-800 bg-panel p-4 max-md:gap-3"
 	>
 		<div>
 			<div class="font-medium">Public profile</div>
@@ -172,7 +172,7 @@
 	</div>
 
 	<!-- Visibility policy -->
-	<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+	<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 		<div class="mb-1 font-medium">Who sees which data</div>
 		<p class="mb-3 text-sm text-zinc-400">
 			For each audience, tick the data they may see. Unticked fields are hidden; an audience with
@@ -208,7 +208,7 @@
 			<button
 				onclick={savePolicy}
 				disabled={saving || !policyLoaded}
-				class="rounded bg-accent-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+				class="rounded bg-accent-500 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{saving ? 'Saving…' : 'Save visibility'}
 			</button>
@@ -217,7 +217,7 @@
 	</div>
 
 	<!-- Privacy zones -->
-	<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+	<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 		<div class="mb-1 font-medium">Privacy zones</div>
 		<p class="mb-3 text-sm text-zinc-400">
 			Around each point, your start/finish coordinates <em>and</em> the resolved place name are hidden

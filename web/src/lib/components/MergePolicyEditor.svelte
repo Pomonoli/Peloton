@@ -77,7 +77,7 @@
 	}
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+<section class="rounded-lg border border-zinc-800 bg-panel p-4">
 	<h2 class="text-sm font-semibold text-zinc-200">Merge priority</h2>
 	<p class="mt-1 text-xs text-zinc-500">
 		When several providers report the same activity, the first provider in the list that has a value
@@ -106,7 +106,7 @@
 			<button
 				type="button"
 				onclick={save}
-				class="rounded bg-accent-600 px-3 py-1 text-xs font-medium text-white hover:bg-accent-500 max-md:py-2"
+				class="rounded bg-accent-600 px-3 py-1 text-xs font-medium text-on-accent hover:bg-accent-500 max-md:py-2"
 			>
 				Save merge priority
 			</button>
@@ -114,6 +114,6 @@
 			{#if error}<span class="text-xs text-red-400">{error}</span>{/if}
 		</div>
 	{:else}
-		<p class="mt-3 text-xs text-zinc-600">Loading…</p>
+		<p class="mt-3 text-xs text-quiet">Loading…</p>
 	{/if}
 </section>

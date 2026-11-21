@@ -49,7 +49,7 @@
 	const fmt = (s: string) => new Date(s).toLocaleString(intlLocale());
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 	<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">Providers</h2>
 	<p class="mt-1 text-xs text-zinc-500">
 		How each provider is connected, as its worker declared it, bound to the package that declared it
@@ -57,7 +57,7 @@
 	</p>
 	{#if error}<p class="mt-2 text-xs text-red-400">{error}</p>{/if}
 	{#if providers.length === 0}
-		<p class="mt-3 text-xs text-zinc-600">No provider declared yet.</p>
+		<p class="mt-3 text-xs text-quiet">No provider declared yet.</p>
 	{:else}
 		<ul class="mt-3 divide-y divide-zinc-800 rounded border border-zinc-800 text-xs">
 			{#each providers as p (p.provider)}
@@ -70,7 +70,7 @@
 						<span class="text-zinc-500">seeded, not bound yet</span>
 					{/if}
 					<span class="text-zinc-500">{p.auth_method}</span>
-					<span class="text-zinc-600" title={fmt(p.updated_at)}>updated {fmt(p.updated_at)}</span>
+					<span class="text-quiet" title={fmt(p.updated_at)}>updated {fmt(p.updated_at)}</span>
 					<button
 						type="button"
 						disabled={busy === p.provider}

@@ -103,33 +103,37 @@
 
 <div class="mx-auto max-w-2xl px-4 py-6">
 	{#if error}
-		<div class="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">{error}</div>
+		<div
+			class="rounded-lg border border-dashed border-zinc-800 p-8 text-center text-sm text-zinc-500"
+		>
+			{error}
+		</div>
 	{:else if club}
 		<header class="mb-6 flex items-start justify-between max-md:flex-wrap max-md:gap-3">
 			<div>
 				<h1 class="text-2xl font-semibold">{club.name}</h1>
-				<div class="text-sm text-gray-500">
+				<div class="text-sm text-zinc-500">
 					{club.member_count}
 					{club.member_count === 1 ? 'member' : 'members'} · {club.is_public ? 'Public' : 'Private'}
 				</div>
-				{#if club.description}<p class="mt-2 max-w-prose text-sm text-gray-700">
+				{#if club.description}<p class="mt-2 max-w-prose text-sm text-zinc-300">
 						{club.description}
 					</p>{/if}
 			</div>
 			{#if club.my_role === 'owner'}
-				<span class="rounded-full border px-4 py-2 text-sm text-gray-500">Owner</span>
+				<span class="rounded-full border px-4 py-2 text-sm text-zinc-500">Owner</span>
 			{:else if club.is_member}
 				<button
 					onclick={leave}
 					disabled={busy}
-					class="rounded-full border bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+					class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
 					>Leave</button
 				>
 			{:else if club.is_public}
 				<button
 					onclick={join}
 					disabled={busy}
-					class="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+					class="rounded-full bg-accent-500 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 					>Join</button
 				>
 			{/if}
@@ -137,15 +141,15 @@
 
 		<div class="grid gap-6 md:grid-cols-[1fr_200px]">
 			<div>
-				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Club feed</h2>
-				{#if feed.length === 0}<p class="text-sm text-gray-500">No activities yet.</p>{/if}
+				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Club feed</h2>
+				{#if feed.length === 0}<p class="text-sm text-zinc-500">No activities yet.</p>{/if}
 				<div class="space-y-3">
 					{#each feed as a (a.id)}
-						<div class="rounded-lg border bg-white p-4 shadow-sm">
-							<div class="mb-1 flex items-center gap-2 text-xs text-gray-500">
+						<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4 shadow-sm">
+							<div class="mb-1 flex items-center gap-2 text-xs text-zinc-500">
 								<a
 									href={`/u/${a.owner?.username}`}
-									class="font-medium text-gray-700 hover:underline"
+									class="font-medium text-zinc-300 hover:underline"
 									>{a.owner?.display_name || a.owner?.username}</a
 								>
 								<span>· {formatRelativeDate(a.start_time)}</span>
@@ -164,19 +168,19 @@
 			</div>
 
 			<aside>
-				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Members</h2>
+				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Members</h2>
 				<ul class="space-y-1 text-sm">
 					{#each members as m (m.id)}
 						<li>
 							<a href={`/u/${m.username}`} class="hover:underline">{m.display_name || m.username}</a
 							>
-							{#if m.role === 'owner'}<span class="ml-1 text-xs text-gray-400">(owner)</span>{/if}
+							{#if m.role === 'owner'}<span class="ml-1 text-xs text-zinc-400">(owner)</span>{/if}
 						</li>
 					{/each}
 				</ul>
 			</aside>
 		</div>
 	{:else}
-		<p class="text-sm text-gray-500">Loading…</p>
+		<p class="text-sm text-zinc-500">Loading…</p>
 	{/if}
 </div>

@@ -60,11 +60,12 @@ __pycache__/
 *.pyc
 buf.gen.local.yaml
 
-# --- AI assistant local files (never commit) ---
+# --- AI assistant local files ---
 .claude/
 CLAUDE.md
 CLAUDE.local.md
 AGENTS.md
+!/AGENTS.md
 .cursor/
 .cursorrules
 .windsurf/

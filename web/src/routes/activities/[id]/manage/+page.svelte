@@ -345,7 +345,7 @@
 	{/if}
 
 	<!-- Export -->
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Export</h2>
 		<p class="mb-4 text-xs text-zinc-500">
 			Download the merged activity as a standard file, generated from data stored in {APP_NAME} (works
@@ -369,7 +369,7 @@
 		<div class="flex flex-wrap gap-3">
 			{#if gpxDisabled}
 				<span
-					class="cursor-not-allowed rounded border border-zinc-800 px-3 py-1.5 text-xs text-zinc-600"
+					class="cursor-not-allowed rounded border border-zinc-800 px-3 py-1.5 text-xs text-quiet"
 					title="GPX needs the GPS track"
 				>
 					Download GPX
@@ -398,7 +398,7 @@
 	</section>
 
 	<!-- Share links -->
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Share</h2>
 		<p class="mb-4 text-xs text-zinc-500">
 			Create an unguessable read-only link. Anyone with the link sees this activity projected
@@ -436,13 +436,13 @@
 				</li>
 			{/each}
 			{#if shareLinks.length === 0}
-				<li class="text-xs text-zinc-600">No active share links.</li>
+				<li class="text-xs text-quiet">No active share links.</li>
 			{/if}
 		</ul>
 	</section>
 
 	<!-- Maintenance actions -->
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Maintenance</h2>
 		<p class="mb-4 text-xs text-zinc-500">
 			These re-run the internal calculations in {APP_NAME} from the data already stored — they don't contact
@@ -500,7 +500,7 @@
 			<ul class="flex flex-wrap gap-2">
 				{#each payload.provenance as p (p.field)}
 					<li
-						class="rounded border border-zinc-800 bg-zinc-900/40 px-2 py-1 text-xs"
+						class="rounded border border-zinc-800 bg-panel px-2 py-1 text-xs"
 						title={`${p.field_label} from ${p.provider || 'unknown'} (${p.decided_by})`}
 					>
 						<span class="text-zinc-400">{p.field_label}</span>
@@ -522,7 +522,7 @@
 		{#if payload && payload.sources.length > 0}
 			<ul class="space-y-4">
 				{#each payload.sources as s (s.id)}
-					<li class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+					<li class="rounded-lg border border-zinc-800 bg-panel p-4">
 						<div class="flex flex-wrap items-center justify-between gap-2">
 							<div class="flex items-center gap-2">
 								<span class="font-medium text-zinc-200">{s.provider}</span>
@@ -600,7 +600,7 @@
 									</button>
 								{:else if s.status !== 'detached'}
 									<span
-										class="inline-flex items-center gap-1 text-xs text-zinc-600"
+										class="inline-flex items-center gap-1 text-xs text-quiet"
 										title={s.has_blob
 											? `Re-parse needs a ${s.provider} worker online that reads dataset v${s.dataset_version || '?'} with parser ${s.parser_version || '?'} or newer.`
 											: 'No archived original to re-parse — re-fetch from the provider to create one.'}

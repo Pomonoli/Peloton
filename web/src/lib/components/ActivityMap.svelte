@@ -3,6 +3,7 @@
 	import { Map as MapLibreMap, LngLatBounds, type GeoJSONSource } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { basemapStyle } from '#lib/basemap.js';
+	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { formatDistance, formatElevation } from '#lib/format.js';
 	import type { TrackPoint } from '../../routes/activities/[id]/+layout';
@@ -29,6 +30,7 @@
 
 	let container: HTMLDivElement;
 	let map: MapLibreMap | undefined;
+	let currentStyle: ReturnType<typeof basemapStyle>;
 	let mapLoaded = $state(false);
 
 	let hoverPoint = $state<TrackPoint | null>(null);
@@ -101,15 +103,17 @@
 		const center = coordinates[Math.floor(coordinates.length / 2)];
 		if (!first || !last || !center) return;
 
+		currentStyle = basemapStyle($appearance.mode);
 		map = new MapLibreMap({
 			container,
-			style: basemapStyle(),
+			style: currentStyle,
 			center,
 			zoom: 12,
 			attributionControl: { compact: true }
 		});
 
-		map.on('load', () => {
+		let fitted = false;
+		map.on('style.load', () => {
 			if (!map) return;
 
 			map.addSource('route', {
@@ -126,7 +130,7 @@
 				type: 'line',
 				source: 'route',
 				paint: {
-					'line-color': '#0a0a0a',
+					'line-color': appearanceColor('--map-casing'),
 					'line-width': 6,
 					'line-opacity': 0.7
 				},
@@ -137,7 +141,7 @@
 				id: 'route-line',
 				type: 'line',
 				source: 'route',
-				paint: { 'line-color': '#2dd4bf', 'line-width': 3 },
+				paint: { 'line-color': appearanceColor('--accent-primary'), 'line-width': 3 },
 				layout: { 'line-cap': 'round', 'line-join': 'round' }
 			});
 
@@ -167,8 +171,14 @@
 				source: 'endpoints',
 				paint: {
 					'circle-radius': 6,
-					'circle-color': ['match', ['get', 'kind'], 'start', '#22c55e', '#ef4444'],
-					'circle-stroke-color': '#ffffff',
+					'circle-color': [
+						'match',
+						['get', 'kind'],
+						'start',
+						appearanceColor('--map-start'),
+						appearanceColor('--map-finish')
+					],
+					'circle-stroke-color': appearanceColor('--map-marker'),
 					'circle-stroke-width': 2
 				}
 			});
@@ -184,45 +194,69 @@
 				source: 'hover-point',
 				paint: {
 					'circle-radius': 6,
-					'circle-color': '#ffffff',
-					'circle-stroke-color': '#2dd4bf',
+					'circle-color': appearanceColor('--map-marker'),
+					'circle-stroke-color': appearanceColor('--accent-primary'),
 					'circle-stroke-width': 3
 				}
 			});
 
-			// Fit bounds to the full track with some padding.
-			const bounds = coordinates.reduce(
-				(b, c) => b.extend(c),
-				new LngLatBounds(coordinates[0], coordinates[0])
-			);
-			map.fitBounds(bounds, { padding: 32, duration: 0 });
+			if (!fitted) {
+				const bounds = coordinates.reduce((b, c) => b.extend(c), new LngLatBounds(first, first));
+				map.fitBounds(bounds, { padding: 32, duration: 0 });
+				fitted = true;
+			}
 
 			mapLoaded = true;
 			// Apply any hoverT that arrived before load.
 			if (hoverT != null) setMarker(nearestByTime(hoverT));
+		});
 
-			if (track.length > 0) {
-				map.on('mousemove', (e) => {
-					const p = nearestByLngLat(e.lngLat.lng, e.lngLat.lat);
-					if (!p) return;
-					// Only snap when the cursor is reasonably near the route (avoid a
-					// marker jumping to the line when hovering empty map).
-					const sp = map!.project([p.lon, p.lat]);
-					const dist = Math.hypot(sp.x - e.point.x, sp.y - e.point.y);
-					if (dist > 40) {
-						setMarker(null);
-						onHover?.(null);
-						return;
-					}
-					setMarker(p);
-					onHover?.(p.t);
-				});
-				map.on('mouseout', () => {
+		if (track.length > 0) {
+			map.on('mousemove', (e) => {
+				const p = nearestByLngLat(e.lngLat.lng, e.lngLat.lat);
+				if (!p) return;
+				// Only snap when the cursor is reasonably near the route (avoid a
+				// marker jumping to the line when hovering empty map).
+				const sp = map!.project([p.lon, p.lat]);
+				const dist = Math.hypot(sp.x - e.point.x, sp.y - e.point.y);
+				if (dist > 40) {
 					setMarker(null);
 					onHover?.(null);
-				});
-			}
-		});
+					return;
+				}
+				setMarker(p);
+				onHover?.(p.t);
+			});
+			map.on('mouseout', () => {
+				setMarker(null);
+				onHover?.(null);
+			});
+		}
+	});
+
+	$effect(() => {
+		const next = basemapStyle($appearance.mode);
+		if (!map) return;
+		if (next !== currentStyle) {
+			currentStyle = next;
+			mapLoaded = false;
+			map.setStyle(next, { diff: false });
+		} else if (map.getLayer('route-line')) {
+			map.setPaintProperty('route-line', 'line-color', appearanceColor('--accent-primary'));
+			map.setPaintProperty('route-casing', 'line-color', appearanceColor('--map-casing'));
+			map.setPaintProperty(
+				'hover-point',
+				'circle-stroke-color',
+				appearanceColor('--accent-primary')
+			);
+			map.setPaintProperty('endpoint-markers', 'circle-color', [
+				'match',
+				['get', 'kind'],
+				'start',
+				appearanceColor('--map-start'),
+				appearanceColor('--map-finish')
+			]);
+		}
 	});
 
 	$effect(() => {

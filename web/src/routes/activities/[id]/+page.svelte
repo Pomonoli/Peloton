@@ -304,7 +304,7 @@
 						<a href="/gear" class="text-zinc-300 hover:text-accent-300"
 							>{a.gearName || m.gear_title()}</a
 						>
-						<span class="text-zinc-600">
+						<span class="text-quiet">
 							· {a.gearSetBy === 'user' ? m.gear_set_by_user() : m.gear_set_by_merge()}</span
 						>
 					</p>
@@ -329,7 +329,7 @@
 							>{/if}
 					</div>
 				{/if}
-				<p class="mt-0.5 text-xs text-zinc-600">{a.timezone} · {sourcesLabel}</p>
+				<p class="mt-0.5 text-xs text-quiet">{a.timezone} · {sourcesLabel}</p>
 			</div>
 		</div>
 	</header>
@@ -339,7 +339,7 @@
 		class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800 sm:grid-cols-4"
 	>
 		{#each [{ label: m.detail_stat_distance(), value: formatDistance(a.summary.distanceM ?? null) }, { label: m.detail_stat_moving(), value: formatDuration(a.movingDurationS) }, { label: primaryPace.label, value: primaryPace.value }, { label: m.detail_stat_elevation(), value: formatElevation(a.summary.elevationGainM ?? null) }] as c (c.label)}
-			<div class="bg-zinc-900/60 p-4">
+			<div class="bg-panel p-4">
 				<dt class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</dt>
 				<dd class="mt-1.5 text-2xl font-semibold tabular-nums">{c.value}</dd>
 			</div>
@@ -370,7 +370,7 @@
 	<!-- Secondary stats: only those that carry a value. -->
 	{#if secondaryStats.length > 0}
 		<dl
-			class="grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 sm:grid-cols-3 lg:grid-cols-4"
+			class="grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-zinc-800 bg-panel p-5 sm:grid-cols-3 lg:grid-cols-4"
 		>
 			{#each secondaryStats as s (s.label)}
 				<div class="flex items-baseline justify-between gap-2 border-b border-zinc-800/60 pb-1.5">
@@ -439,7 +439,7 @@
 				{/each}
 			</div>
 		{:else}
-			<p class="text-sm text-zinc-600">No photos yet.</p>
+			<p class="text-sm text-quiet">No photos yet.</p>
 		{/if}
 	</section>
 
@@ -498,11 +498,11 @@
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">Best Efforts</h2>
 			<div class="overflow-hidden rounded-lg border border-zinc-800">
 				<table class="w-full text-sm">
-					<thead class="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-4 py-2 text-left">Metric</th>
-							<th class="px-4 py-2 text-left">Fenster</th>
-							<th class="px-4 py-2 text-right">Wert</th>
+							<th class="px-4 py-2 text-left">Window</th>
+							<th class="px-4 py-2 text-right">Value</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-zinc-800">
@@ -526,11 +526,11 @@
 	{#if laps.length > 1}
 		<section>
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">
-				Laps <span class="text-zinc-600">({laps.length})</span>
+				Laps <span class="text-quiet">({laps.length})</span>
 			</h2>
 			<div class="overflow-x-auto rounded-xl border border-zinc-800">
 				<table class="w-full text-sm">
-					<thead class="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-4 py-2 text-left font-medium">Lap</th>
 							<th class="px-4 py-2 text-right font-medium">Distance</th>
@@ -575,9 +575,7 @@
 		{@const dc = zones.decoupling}
 		<section>
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Aerobic decoupling</h2>
-			<div
-				class="flex flex-wrap items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"
-			>
+			<div class="flex flex-wrap items-center gap-4 rounded-xl border border-zinc-800 bg-panel p-4">
 				<div
 					class="text-3xl font-semibold tabular-nums {dc.coupled
 						? 'text-emerald-400'
@@ -603,7 +601,7 @@
 				{#each [{ key: 'hr', title: 'Heart rate', set: zones?.hr, unit: 'bpm' }, { key: 'power', title: 'Power', set: zones?.power, unit: 'W' }] as col (col.key)}
 					{#if col.set && col.set.total_seconds > 0}
 						{@const zset = col.set}
-						<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+						<div class="rounded-xl border border-zinc-800 bg-panel p-4">
 							<div class="mb-2 flex items-baseline justify-between">
 								<h3 class="text-sm font-medium text-zinc-200">{col.title}</h3>
 								<span class="text-xs text-zinc-500">
@@ -666,7 +664,7 @@
 	{#if segmentEfforts.length > 0}
 		<section>
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">
-				Segments <span class="text-zinc-600">({segmentEfforts.length})</span>
+				Segments <span class="text-quiet">({segmentEfforts.length})</span>
 			</h2>
 			<div class="max-h-[28rem] overflow-y-auto rounded-lg border border-zinc-800">
 				{#if hasElevation}
@@ -679,7 +677,7 @@
 					</div>
 				{/if}
 				<table class="w-full text-sm">
-					<thead class="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-4 py-2 text-left">Segment</th>
 							<th class="hidden px-4 py-2 text-right sm:table-cell">{m.col_distance()}</th>
@@ -782,7 +780,7 @@
 									>update available</span
 								>
 							{/if}
-							<div class="mt-0.5 truncate text-xs text-zinc-600">
+							<div class="mt-0.5 truncate text-xs text-quiet">
 								{s.externalId ? `#${s.externalId} · ` : ''}imported {formatDate(
 									s.importedAt
 								)}{s.statusReason ? ` · ${humanizeStatus(s.statusReason)}` : ''}

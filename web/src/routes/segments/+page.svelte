@@ -87,7 +87,7 @@
 	{#if stats}
 		<dl class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
 			{#each [{ label: 'Segments', value: stats.segments }, { label: 'Efforts', value: stats.efforts }, { label: 'PRs', value: stats.prs }, { label: 'Course records', value: stats.crs }, { label: 'External', value: stats.external }, { label: 'Native', value: stats.native }] as c (c.label)}
-				<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+				<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 					<dt class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</dt>
 					<dd class="mt-1 text-2xl font-semibold tabular-nums">
 						{c.value.toLocaleString(intlLocale())}
@@ -130,7 +130,7 @@
 					<li>
 						<a
 							href={`/segment/${s.id}`}
-							class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-zinc-900/60"
+							class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-panel"
 						>
 							<span
 								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300"

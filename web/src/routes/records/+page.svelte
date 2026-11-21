@@ -118,7 +118,7 @@
 	</p>
 
 	{#if !loaded}
-		<p class="text-sm text-zinc-600">Loading…</p>
+		<p class="text-sm text-quiet">Loading…</p>
 	{:else if error}
 		<p class="text-sm text-red-400">{error}</p>
 	{:else if records.length === 0}
@@ -140,7 +140,7 @@
 						{#each list as r (r.metric + r.window_kind + r.window_value)}
 							<a
 								href={`/activities/${r.activity_id}`}
-								class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 hover:border-accent-600"
+								class="rounded-lg border border-zinc-800 bg-panel p-3 hover:border-accent-600"
 							>
 								<div class="text-xs text-zinc-500">
 									{metricLabel(r.metric)} · {windowLabel(r.window_kind, r.window_value)}
@@ -148,7 +148,7 @@
 								<div class="mt-0.5 text-lg font-semibold text-zinc-100">
 									{formatValue(r.metric, r.achieved_value)}
 								</div>
-								<div class="mt-0.5 text-xs text-zinc-600">{formatDateOnly(r.timestamp)}</div>
+								<div class="mt-0.5 text-xs text-quiet">{formatDateOnly(r.timestamp)}</div>
 							</a>
 						{/each}
 					</div>

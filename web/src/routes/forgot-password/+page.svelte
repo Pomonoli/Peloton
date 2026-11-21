@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BrandMark from '#lib/components/BrandMark.svelte';
 	import { APP_NAME } from '$app/env/public';
 	let email = $state('');
 	let busy = $state(false);
@@ -29,7 +30,12 @@
 
 <div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center space-y-6">
 	<header class="text-center">
-		<div class="text-xs uppercase tracking-widest text-accent-400">{APP_NAME}</div>
+		<div
+			class="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-accent-300"
+		>
+			<BrandMark class="h-5 w-5" />
+			{APP_NAME}
+		</div>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Reset your password</h1>
 		<p class="mt-1 text-sm text-zinc-400">We'll email you a link to choose a new one.</p>
 	</header>
@@ -44,7 +50,7 @@
 			>Back to sign in</a
 		>
 	{:else}
-		<form onsubmit={submit} class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+		<form onsubmit={submit} class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
 			<label class="block">
 				<span class="text-xs text-zinc-400">Email</span>
 				<input
@@ -58,7 +64,7 @@
 			<button
 				type="submit"
 				disabled={busy || !email.trim()}
-				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{busy ? 'Sending…' : 'Send reset link'}
 			</button>

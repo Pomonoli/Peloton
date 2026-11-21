@@ -45,7 +45,7 @@
 	}
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 	<h2 class="mb-1 text-sm font-medium text-zinc-300">Authorized apps</h2>
 	<p class="mb-3 text-xs text-zinc-500">
 		Apps you signed into with this account (mobile clients, integrations). Revoking ends every token
@@ -59,7 +59,7 @@
 	{/if}
 
 	{#if loaded && apps.length === 0}
-		<p class="text-xs text-zinc-600">No apps are authorized.</p>
+		<p class="text-xs text-quiet">No apps are authorized.</p>
 	{:else if apps.length > 0}
 		<ul class="divide-y divide-zinc-800 rounded border border-zinc-800">
 			{#each apps as a (a.client_id)}
@@ -69,7 +69,7 @@
 						{#if a.software_id}
 							<span class="ml-2 text-zinc-500">{a.software_id} {a.software_version}</span>
 						{/if}
-						<div class="mt-0.5 text-zinc-600">
+						<div class="mt-0.5 text-quiet">
 							{a.scopes.join(', ') || 'no scopes'} · granted {formatDate(a.granted_at)} · {a.active_tokens}
 							active {a.active_tokens === 1 ? 'token' : 'tokens'}
 						</div>

@@ -30,17 +30,15 @@
 #
 #   cp dev.env.example dev.env   # connection strings + dev secrets
 #   make dev-server              # Go server  (live-reload)
-#   make dev-worker              # Strava worker
 #   make dev-web                 # SvelteKit dev server (vite HMR)
 #
 # The server creates the CAIRN_STORAGE_BUCKET on first boot — no bucket-init
 # service needed here.
 
-name: cairn-dev
+name: peloton-dev
 
 networks:
   cairn:
-    name: cairn-dev
     driver: bridge
 
 volumes:
@@ -114,7 +112,7 @@ services:
     # docker/nats.conf sets max_payload: 8MB (no CLI flag exists for it) — long
     # activity streams exceed the 1 MiB default JobResult size. It also enables
     # JetStream + monitoring on :8222.
-    command: ["-c", "/etc/nats/nats.conf", "--cluster_name", "cairn-dev"]
+    command: ["-c", "/etc/nats/nats.conf", "--cluster_name", "peloton-dev"]
     ports:
       - "127.0.0.1:4222:4222"  # client connections
       - "127.0.0.1:8222:8222"  # monitoring

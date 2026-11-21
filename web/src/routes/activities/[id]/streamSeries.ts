@@ -19,22 +19,27 @@ export function buildSeries(stream: ActivityStreamView | null): ChartSeries[] {
 		xs.push({
 			label: m.detail_label_heart_rate(),
 			values: stream.hr,
-			color: '#ef4444',
+			color: 'var(--plot-heart-rate)',
 			unit: 'bpm'
 		});
 	}
 	if (stream.power) {
-		xs.push({ label: 'Power', values: stream.power, color: '#ec7a45', unit: 'W' });
+		xs.push({ label: 'Power', values: stream.power, color: 'var(--plot-power)', unit: 'W' });
 	}
 	if (stream.cadence) {
-		xs.push({ label: 'Cadence', values: stream.cadence, color: '#10b981', unit: 'rpm' });
+		xs.push({
+			label: 'Cadence',
+			values: stream.cadence,
+			color: 'var(--plot-cadence)',
+			unit: 'rpm'
+		});
 	}
 	if (stream.speed) {
 		// m/s → km/h for a readable axis.
 		xs.push({
 			label: 'Speed',
 			values: stream.speed.map((v) => (v == null ? null : Math.round(v * 3.6 * 10) / 10)),
-			color: '#38bdf8',
+			color: 'var(--plot-speed)',
 			unit: 'km/h'
 		});
 	}
@@ -42,7 +47,7 @@ export function buildSeries(stream: ActivityStreamView | null): ChartSeries[] {
 		xs.push({
 			label: 'Elevation',
 			values: stream.altitude,
-			color: '#a78bfa',
+			color: 'var(--plot-elevation)',
 			unit: 'm',
 			fill: true
 		});

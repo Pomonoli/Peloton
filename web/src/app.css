@@ -1,31 +1,199 @@
 @import 'tailwindcss';
 
 @theme {
-	/* Cairn brand — slate ridgeline + summit teal accent. (Chart/series
-	   colors are defined per-component and intentionally NOT derived from
-	   this ramp — leave them as-is.) */
-	--color-accent-50: #f0fdfa;
-	--color-accent-100: #ccfbf1;
-	--color-accent-200: #99f6e4;
-	--color-accent-300: #5eead4;
-	--color-accent-400: #2dd4bf;
-	--color-accent-500: #14b8a6;
-	--color-accent-600: #0d9488;
-	--color-accent-700: #0f766e;
-	--color-accent-800: #115e59;
-	--color-accent-900: #134e4a;
-
 	--font-sans:
 		'Inter', 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	--font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-html,
-body {
-	height: 100%;
+/* Map the existing Tailwind utilities to shared appearance roles. */
+@theme inline {
+	--color-zinc-100: var(--text-strong);
+	--color-zinc-200: var(--text-primary);
+	--color-zinc-300: var(--text-secondary);
+	--color-zinc-400: var(--text-muted);
+	--color-zinc-500: var(--text-quiet);
+	--color-zinc-600: var(--line-control);
+	--color-zinc-700: var(--line-strong);
+	--color-zinc-800: var(--surface-muted);
+	--color-zinc-900: var(--surface-panel);
+	--color-zinc-950: var(--surface-page);
+	--color-panel: var(--surface-card);
+	--color-quiet: var(--text-quiet);
+	--color-scrim: var(--overlay-scrim);
+	--color-accent-200: var(--accent-text-strong);
+	--color-accent-300: var(--accent-text);
+	--color-accent-400: var(--accent-primary);
+	--color-accent-500: var(--accent-primary);
+	--color-accent-600: var(--accent-hover);
+	--color-on-accent: var(--accent-foreground);
+
+	--color-red-50: var(--danger-surface);
+	--color-red-200: var(--danger-text);
+	--color-red-300: var(--danger-text);
+	--color-red-400: var(--danger-strong);
+	--color-red-600: var(--danger-solid);
+	--color-red-700: var(--danger-border);
+	--color-red-900: var(--danger-wash);
+	--color-red-950: var(--danger-surface);
+	--color-amber-100: var(--warning-text);
+	--color-amber-200: var(--warning-text);
+	--color-amber-300: var(--warning-text);
+	--color-amber-400: var(--warning-strong);
+	--color-amber-700: var(--warning-border);
+	--color-amber-800: var(--warning-border);
+	--color-amber-900: var(--warning-wash);
+	--color-amber-950: var(--warning-surface);
+	--color-emerald-300: var(--success-text);
+	--color-emerald-400: var(--success-strong);
+	--color-emerald-600: var(--success-border);
+	--color-emerald-700: var(--success-border);
+	--color-emerald-800: var(--success-border);
+	--color-emerald-950: var(--success-surface);
+	--color-sky-300: var(--info-text);
+	--color-sky-400: var(--info-strong);
+	--color-sky-700: var(--info-border);
+	--color-sky-950: var(--info-surface);
+	--color-violet-300: var(--violet-text);
+	--color-orange-400: var(--orange-text);
+	--color-orange-600: var(--orange-solid);
 }
 
-body {
-	font-family: var(--font-sans);
-	font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+:root {
+	color-scheme: light dark;
+	--surface-page: light-dark(#f5f7fb, #09090b);
+	--surface-panel: light-dark(#ffffff, #18181b);
+	--surface-card: light-dark(#ffffff, rgb(24 24 27 / 0.4));
+	--surface-muted: light-dark(#dee5ef, #27272a);
+	--line-strong: light-dark(#8492aa, #3f3f46);
+	--line-control: light-dark(#74839b, #52525b);
+	--text-strong: light-dark(#172033, #f4f4f5);
+	--text-primary: light-dark(#263247, #e4e4e7);
+	--text-secondary: light-dark(#34425a, #d4d4d8);
+	--text-muted: light-dark(#4a5970, #a1a1aa);
+	--text-quiet: light-dark(#52617a, #9696a1);
+	--overlay-scrim: #09090b;
+	--panel-shadow: 0 1px 2px light-dark(rgb(24 39 75 / 0.06), transparent);
+
+	/* Literals also feed canvas and WebGL, which cannot resolve CSS variables. */
+	--accent-primary: #4263eb;
+	--accent-hover: #3553d2;
+	--accent-text: #314dbf;
+	--accent-text-strong: #243da7;
+	--accent-foreground: #fff;
+	--plot-axis: #52617a;
+	--plot-grid: #dce4ee;
+	--plot-cursor: #76859e;
+	--plot-heart-rate: #b91c3b;
+	--plot-power: #ac4418;
+	--plot-cadence: #08794e;
+	--plot-speed: var(--accent-primary);
+	--plot-elevation: #6e45c2;
+	--plot-fatigue: #b32b73;
+	--plot-form: #537511;
+	--map-casing: #fff;
+	--map-marker: #fff;
+	--map-start: #15803d;
+	--map-finish: #b91c3b;
+
+	--danger-text: light-dark(#9f1737, #fca5a5);
+	--danger-strong: light-dark(#b91c3b, #f87171);
+	--danger-solid: light-dark(#b91c3b, #dc2626);
+	--danger-border: light-dark(#b44454, #b91c1c);
+	--danger-wash: light-dark(#ffe3e8, #7f1d1d);
+	--danger-surface: light-dark(#fff0f3, #450a0a);
+	--warning-text: light-dark(#7a4209, #fcd34d);
+	--warning-strong: light-dark(#87510d, #fbbf24);
+	--warning-border: light-dark(#aa6c18, #b45309);
+	--warning-wash: light-dark(#ffedcc, #78350f);
+	--warning-surface: light-dark(#fff6e5, #451a03);
+	--success-text: light-dark(#086443, #6ee7b7);
+	--success-strong: light-dark(#076846, #34d399);
+	--success-border: light-dark(#3a8a69, #047857);
+	--success-surface: light-dark(#e6f8ef, #022c22);
+	--info-text: light-dark(#07567c, #7dd3fc);
+	--info-strong: light-dark(#075f8a, #38bdf8);
+	--info-border: light-dark(#397a9d, #0369a1);
+	--info-surface: light-dark(#e9f5fb, #082f49);
+	--violet-text: light-dark(#633ab0, #c4b5fd);
+	--orange-text: light-dark(#9d3a0b, #fb923c);
+	--orange-solid: light-dark(#a74416, #c2410c);
+}
+
+:root[data-theme='light'] {
+	color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--accent-primary: #7394ff;
+	--accent-hover: #95adff;
+	--accent-text: #aec2ff;
+	--accent-text-strong: #cad7ff;
+	--accent-foreground: #111a32;
+	--plot-axis: #a1a1aa;
+	--plot-grid: #303039;
+	--plot-cursor: #6b7285;
+	--plot-heart-rate: #fb7185;
+	--plot-power: #ec7a45;
+	--plot-cadence: #34d399;
+	--plot-elevation: #a78bfa;
+	--plot-fatigue: #f472b6;
+	--plot-form: #a3e635;
+	--map-casing: #101521;
+	--map-start: #22c55e;
+	--map-finish: #ef4444;
+}
+
+@layer base {
+	html,
+	body {
+		height: 100%;
+	}
+
+	body {
+		background: var(--surface-page);
+		color: var(--text-strong);
+		font-family: var(--font-sans);
+		font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+	}
+
+	:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+		outline: 2px solid var(--accent-primary);
+		outline-offset: 2px;
+	}
+}
+
+/* Card shadows stay effectively absent in the original dark layout. */
+.bg-panel {
+	box-shadow: var(--panel-shadow);
+}
+
+/* MapLibre and uPlot ship their own styles. Keep their controls readable on
+   either basemap and give chart cursors and selection visible contrast. */
+.maplibregl-map .maplibregl-ctrl-group,
+.maplibregl-map .maplibregl-ctrl.maplibregl-ctrl-attrib {
+	background: var(--surface-panel);
+	color: var(--text-primary);
+}
+
+.maplibregl-map .maplibregl-ctrl-attrib a {
+	color: var(--text-muted);
+}
+
+:root[data-theme='dark'] :is(.maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button) {
+	filter: invert(1);
+}
+
+.maplibregl-map .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button {
+	background-color: transparent;
+}
+
+.uplot .u-cursor-x,
+.uplot .u-cursor-y {
+	border-color: var(--plot-cursor);
+}
+
+.uplot .u-select {
+	background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
 }

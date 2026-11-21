@@ -126,13 +126,13 @@
 		</div>
 	{:else if payload && payload.count > 0}
 		<dl class="grid grid-cols-2 gap-4 sm:grid-cols-3">
-			<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 				<dt class="text-xs uppercase tracking-wide text-zinc-500">All-time best</dt>
 				<dd class="mt-1 text-2xl font-semibold tabular-nums text-emerald-300">
 					{fmtValue(payload.best, payload.metric)}
 				</dd>
 			</div>
-			<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 				<dt class="text-xs uppercase tracking-wide text-zinc-500">Activities</dt>
 				<dd class="mt-1 text-2xl font-semibold tabular-nums">{payload.count}</dd>
 			</div>
@@ -177,7 +177,7 @@
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">All efforts</h2>
 			<div class="overflow-hidden rounded-lg border border-zinc-800">
 				<table class="w-full text-sm">
-					<thead class="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-3 py-2 text-left font-medium">Date</th>
 							<th class="px-3 py-2 text-left font-medium">Activity</th>

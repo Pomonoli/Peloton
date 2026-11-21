@@ -6,6 +6,7 @@
 	import type { FeatureCollection } from 'geojson';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { basemapStyle, basemapVariants, type BasemapVariant } from '#lib/basemap.js';
+	import { appearance } from '#lib/appearance.js';
 	import ActivityFilterBar from '#lib/components/ActivityFilterBar.svelte';
 	import { ActivityFilter, type ActivityFacets } from '#lib/activity-filter.svelte.js';
 
@@ -42,25 +43,26 @@
 		}
 	}
 
-	// Basemap: a dark, low-detail map by default so the tracks stand out.
+	// Default to the app appearance and preserve any explicit basemap choice.
 	const BASEMAP_KEY = 'cairn.heatmap.basemap';
-	const BASEMAP_LABELS: Record<BasemapVariant, string> = {
+	type BasemapPreference = 'system' | BasemapVariant;
+	const BASEMAP_LABELS: Record<BasemapPreference, string> = {
+		system: 'Auto',
 		dark: 'Dark',
 		light: 'Light',
 		standard: 'Standard'
 	};
 	const variants = basemapVariants();
+	const basemapOptions: BasemapPreference[] = ['system', ...variants];
 	const savedBasemap = loadSetting(BASEMAP_KEY);
-	let basemap = $state<BasemapVariant>(
-		variants.find((v) => v === savedBasemap) ?? variants[0] ?? 'standard'
+	let basemapPreference = $state<BasemapPreference>(
+		variants.find((v) => v === savedBasemap) ?? 'system'
 	);
+	const basemap = $derived(basemapPreference === 'system' ? $appearance.mode : basemapPreference);
 
-	function setBasemap(v: BasemapVariant) {
-		if (v === basemap) return;
-		basemap = v;
+	function setBasemap(v: BasemapPreference) {
+		basemapPreference = v;
 		saveSetting(BASEMAP_KEY, v);
-		// A full reload (no diff) so style.load fires and re-adds the tracks.
-		map?.setStyle(basemapStyle(v), { diff: false });
 	}
 
 	// Track color: a hue slider at the default's saturation and lightness, so
@@ -68,25 +70,22 @@
 	// maps to exactly.
 	const HUE_KEY = 'cairn.heatmap.trackHue';
 	const DEFAULT_HUE = 19;
-	const DEFAULT_COLOR = '#ec7a45'; // ≈ hsl(19, 81%, 60%)
 	const TRACK_LAYERS = ['tracks-glow', 'tracks-line'];
 	const savedHue = Number(loadSetting(HUE_KEY) ?? DEFAULT_HUE);
 	let trackHue = $state(
 		Number.isInteger(savedHue) && savedHue >= 0 && savedHue < 360 ? savedHue : DEFAULT_HUE
 	);
-	const trackColor = $derived(
-		trackHue === DEFAULT_HUE ? DEFAULT_COLOR : `hsl(${trackHue}, 81%, 60%)`
-	);
+	const trackLightness = $derived(basemap === 'dark' ? 60 : 39);
+	const trackColor = $derived(`hsl(${trackHue}, 81%, ${trackLightness}%)`);
+	const trackOpacity = $derived(basemap === 'dark' ? 0.45 : 0.72);
 
 	function setTrackHue(h: number) {
 		trackHue = h;
-		for (const id of TRACK_LAYERS) {
-			if (map?.getLayer(id)) map.setPaintProperty(id, 'line-color', trackColor);
-		}
 	}
 
 	let container = $state<HTMLDivElement | null>(null);
 	let map: MapLibreMap | null = null;
+	let currentStyle: ReturnType<typeof basemapStyle>;
 	let mapLoaded = false;
 	let fitted = false;
 
@@ -183,7 +182,7 @@
 			type: 'line',
 			source: 'tracks',
 			layout: { 'line-cap': 'round', 'line-join': 'round' },
-			paint: { 'line-color': trackColor, 'line-width': 1.6, 'line-opacity': 0.35 }
+			paint: { 'line-color': trackColor, 'line-width': 1.8, 'line-opacity': trackOpacity }
 		});
 		mapLoaded = true;
 		applyData();
@@ -191,9 +190,10 @@
 
 	onMount(() => {
 		if (!container) return;
+		currentStyle = basemapStyle(basemap);
 		map = new MapLibreMap({
 			container,
-			style: basemapStyle(basemap),
+			style: currentStyle,
 			center: [10, 50],
 			zoom: 4,
 			attributionControl: { compact: true }
@@ -207,6 +207,22 @@
 			const id = e.features?.[0]?.properties?.id;
 			if (id) goto(`/activities/${id}`);
 		});
+	});
+	$effect(() => {
+		const next = basemapStyle(basemap);
+		if (!map || next === currentStyle) return;
+		currentStyle = next;
+		mapLoaded = false;
+		// Re-add the track overlays on style.load after switching a basemap.
+		map.setStyle(next, { diff: false });
+	});
+	$effect(() => {
+		const color = trackColor;
+		const opacity = trackOpacity;
+		for (const id of TRACK_LAYERS) {
+			if (map?.getLayer(id)) map.setPaintProperty(id, 'line-color', color);
+		}
+		if (map?.getLayer('tracks-line')) map.setPaintProperty('tracks-line', 'line-opacity', opacity);
 	});
 	onDestroy(() => {
 		abort?.abort();
@@ -234,16 +250,16 @@
 					aria-label="Basemap"
 					class="flex overflow-hidden rounded border border-zinc-700 text-xs"
 				>
-					{#each variants as v (v)}
+					{#each basemapOptions as v (v)}
 						<button
 							type="button"
-							aria-pressed={basemap === v}
+							aria-pressed={basemapPreference === v}
 							onclick={() => setBasemap(v)}
 							class="px-2.5 py-1.5 transition-colors"
-							class:bg-zinc-800={basemap === v}
-							class:text-accent-300={basemap === v}
-							class:text-zinc-400={basemap !== v}
-							class:hover:text-zinc-100={basemap !== v}
+							class:bg-zinc-800={basemapPreference === v}
+							class:text-accent-300={basemapPreference === v}
+							class:text-zinc-400={basemapPreference !== v}
+							class:hover:text-zinc-100={basemapPreference !== v}
 						>
 							{BASEMAP_LABELS[v]}
 						</button>
@@ -354,7 +370,7 @@
 		height: 14px;
 		border-radius: 9999px;
 		background: var(--thumb);
-		border: 2px solid #f4f4f5;
+		border: 2px solid var(--surface-panel);
 		box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5);
 	}
 	.hue::-moz-range-track {
@@ -365,11 +381,11 @@
 		height: 10px;
 		border-radius: 9999px;
 		background: var(--thumb);
-		border: 2px solid #f4f4f5;
+		border: 2px solid var(--surface-panel);
 		box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5);
 	}
 	.hue:focus-visible {
-		outline: 2px solid var(--color-accent-400);
+		outline: 2px solid var(--accent-primary);
 		outline-offset: 4px;
 	}
 </style>

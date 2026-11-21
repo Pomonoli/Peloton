@@ -42,14 +42,14 @@
 	});
 
 	const chip = 'rounded-full px-3 py-1 text-xs';
-	const chipOn = 'bg-accent-500 text-zinc-950';
+	const chipOn = 'bg-accent-500 text-on-accent';
 	const chipOff = 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700';
 	const field =
 		'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 focus:border-accent-400 focus:outline-none';
 </script>
 
 {#if facets}
-	<div class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+	<div class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
 		{#if showSports}
 			<div class="flex flex-wrap items-center gap-2">
 				<span class="mr-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Sport</span>
@@ -129,15 +129,15 @@
 				bind:value={filter.from}
 				onchange={() => filter.dateEdited()}
 				aria-label="From date"
-				class="{field} [color-scheme:dark]"
+				class={field}
 			/>
-			<span class="text-xs text-zinc-600">–</span>
+			<span class="text-xs text-quiet">–</span>
 			<input
 				type="date"
 				bind:value={filter.to}
 				onchange={() => filter.dateEdited()}
 				aria-label="To date"
-				class="{field} [color-scheme:dark]"
+				class={field}
 			/>
 		</div>
 
@@ -211,7 +211,7 @@
 							aria-label={`${r.label} minimum (${r.unit})`}
 							class="w-20 {field}"
 						/>
-						<span class="text-xs text-zinc-600">–</span>
+						<span class="text-xs text-quiet">–</span>
 						<input
 							type="number"
 							min="0"
@@ -220,7 +220,7 @@
 							aria-label={`${r.label} maximum (${r.unit})`}
 							class="w-20 {field}"
 						/>
-						<span class="text-xs text-zinc-600">{r.unit}</span>
+						<span class="text-xs text-quiet">{r.unit}</span>
 					</div>
 				{/each}
 			</div>

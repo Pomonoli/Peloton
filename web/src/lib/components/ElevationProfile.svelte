@@ -91,18 +91,18 @@
 	>
 		<defs>
 			<linearGradient id="ele-fill" x1="0" y1="0" x2="0" y2="1">
-				<stop offset="0%" stop-color="#a78bfa" stop-opacity="0.35" />
-				<stop offset="100%" stop-color="#a78bfa" stop-opacity="0.04" />
+				<stop offset="0%" stop-color="var(--plot-elevation)" stop-opacity="0.35" />
+				<stop offset="100%" stop-color="var(--plot-elevation)" stop-opacity="0.04" />
 			</linearGradient>
 		</defs>
 		{#if hi}
-			<rect x={hi.x} y="0" width={hi.w} {height} fill="#ec7a45" fill-opacity="0.22" />
+			<rect x={hi.x} y="0" width={hi.w} {height} fill="var(--plot-power)" fill-opacity="0.22" />
 		{/if}
 		<path d={areaPath} fill="url(#ele-fill)" />
 		<path
 			d={linePath}
 			fill="none"
-			stroke="#a78bfa"
+			stroke="var(--plot-elevation)"
 			stroke-width="1.5"
 			vector-effect="non-scaling-stroke"
 		/>

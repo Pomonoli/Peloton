@@ -66,7 +66,7 @@
 	};
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 	<h2 class="mb-1 text-sm font-medium text-zinc-300">API tokens</h2>
 	<p class="mb-3 text-xs text-zinc-500">
 		Personal access tokens authenticate CLI and API clients as you. Send them as
@@ -105,7 +105,7 @@
 			type="button"
 			disabled={creating}
 			onclick={create}
-			class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+			class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 		>
 			{creating ? 'Creating…' : 'Create token'}
 		</button>
@@ -139,7 +139,7 @@
 								'bg-zinc-800 text-zinc-400'}">{t.status}</span
 						>
 						<span class="ml-2 font-mono text-zinc-500">{t.prefix}</span>
-						<div class="mt-0.5 text-zinc-600">
+						<div class="mt-0.5 text-quiet">
 							created {formatDate(t.created_at)}
 							{#if t.last_used_at}· last used {formatDate(t.last_used_at)}{:else}· never used{/if}
 							{#if t.expires_at}· expires {formatDate(t.expires_at)}{/if}

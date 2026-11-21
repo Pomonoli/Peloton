@@ -60,16 +60,14 @@
 	{#if loading}
 		<div class="text-sm text-zinc-500">Loading…</div>
 	{:else if !s || s.totals.count === 0}
-		<div
-			class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-400"
-		>
+		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
 			No activities yet. Import some to see your stats.
 		</div>
 	{:else}
 		<!-- lifetime totals -->
 		<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
 			{#each [{ label: 'Activities', value: s.totals.count.toLocaleString(intlLocale()) }, { label: 'Distance', value: formatDistance(s.totals.distance_m) }, { label: 'Moving time', value: formatDuration(s.totals.moving_s) }, { label: 'Elevation', value: formatElevation(s.totals.elevation_gain_m) }] as c (c.label)}
-				<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+				<div class="rounded-xl border border-zinc-800 bg-panel p-5">
 					<div class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</div>
 					<div class="mt-1 text-2xl font-semibold tabular-nums text-zinc-100">{c.value}</div>
 				</div>
@@ -81,7 +79,7 @@
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Records</h2>
 			<div class="grid gap-4 sm:grid-cols-2">
 				{#each [{ label: 'Longest distance', r: s.records.longest_distance, metric: (r: NonNullable<Record>) => formatDistance(r.distance_m) }, { label: 'Longest duration', r: s.records.longest_duration, metric: (r: NonNullable<Record>) => formatDuration(r.elapsed_duration_s) }] as card (card.label)}
-					<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+					<div class="rounded-xl border border-zinc-800 bg-panel p-5">
 						<div class="text-xs uppercase tracking-wide text-zinc-500">{card.label}</div>
 						{#if card.r}
 							<a
@@ -117,7 +115,7 @@
 				<div class="overflow-hidden rounded-xl border border-zinc-800">
 					<div class="overflow-x-auto">
 						<table class="w-full text-sm">
-							<thead class="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+							<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 								<tr>
 									<th class="px-4 py-2 text-left font-medium">Year</th>
 									<th class="px-4 py-2 text-right font-medium">Activities</th>
@@ -166,7 +164,7 @@
 					{#each s.by_sport as f (f.value)}
 						<a
 							href={`/activities?type=${f.value}`}
-							class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2.5 hover:border-zinc-700 hover:bg-zinc-900/80"
+							class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-panel px-4 py-2.5 hover:border-zinc-700 hover:bg-zinc-900/80"
 						>
 							<span class="text-accent-400"><SportIcon type={f.value} size={20} /></span>
 							<span class="w-32 shrink-0 text-sm text-zinc-200 max-md:w-24"

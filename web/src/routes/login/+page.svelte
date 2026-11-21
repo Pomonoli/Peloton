@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BrandMark from '#lib/components/BrandMark.svelte';
 	import { APP_NAME } from '$app/env/public';
 	import { page } from '$app/state';
 	import { refreshAll, goto } from '$app/navigation';
@@ -132,7 +133,12 @@
 
 <div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center space-y-8">
 	<header class="text-center">
-		<div class="text-xs uppercase tracking-widest text-accent-400">{APP_NAME}</div>
+		<div
+			class="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-accent-300"
+		>
+			<BrandMark class="h-5 w-5" />
+			{APP_NAME}
+		</div>
 		<h1 class="mt-2 text-3xl font-semibold tracking-tight">Sign in</h1>
 		<p class="mt-1 text-sm text-zinc-400">Self-hosted activity tracker.</p>
 	</header>
@@ -153,7 +159,7 @@
 	{#if setPassword}
 		<form
 			onsubmit={finishPasswordChange}
-			class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+			class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4"
 		>
 			<h2 class="text-sm font-medium text-zinc-200">Choose a new password</h2>
 			<p class="text-xs text-zinc-400">
@@ -184,7 +190,7 @@
 			<button
 				type="submit"
 				disabled={setPasswordBusy}
-				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{setPasswordBusy ? 'Saving…' : 'Set password and continue'}
 			</button>
@@ -198,7 +204,7 @@
 			>
 		</form>
 	{:else if challenge}
-		<section class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+		<section class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
 			<h2 class="text-sm font-medium text-zinc-200">Confirm it's you</h2>
 			<p class="text-xs text-zinc-400">
 				Your account requires a passkey after the password. Use Touch ID, Windows Hello or your
@@ -208,7 +214,7 @@
 				type="button"
 				onclick={finishSecondFactor}
 				disabled={challengeBusy || !passkeysSupported()}
-				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{challengeBusy ? 'Waiting for passkey…' : 'Continue with passkey'}
 			</button>
@@ -230,7 +236,7 @@
 				{#each data.oidcClients as client (client.id)}
 					<a
 						href={`/auth/oidc/${client.id}/start`}
-						class="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm hover:border-accent-500 hover:bg-zinc-900"
+						class="flex items-center justify-between rounded-lg border border-zinc-800 bg-panel px-4 py-3 text-sm hover:border-accent-500 hover:bg-zinc-900"
 					>
 						<span class="flex items-center gap-3">
 							<span
@@ -259,7 +265,7 @@
 					type="button"
 					onclick={signInWithPasskey}
 					disabled={passkeyBusy}
-					class="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm font-medium hover:border-accent-500 hover:bg-zinc-900 disabled:opacity-50"
+					class="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-panel px-4 py-3 text-sm font-medium hover:border-accent-500 hover:bg-zinc-900 disabled:opacity-50"
 				>
 					<svg
 						class="h-4 w-4"
@@ -297,7 +303,7 @@
 				<form
 					method="POST"
 					action="/auth/password"
-					class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+					class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4"
 				>
 					<input type="hidden" name="redirect" value={nextDest} />
 					{#if loginError}
@@ -329,7 +335,7 @@
 					</label>
 					<button
 						type="submit"
-						class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400"
+						class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600"
 					>
 						Sign in
 					</button>

@@ -280,11 +280,11 @@ func capturePreview(ctx context.Context, app *App, log *slog.Logger, job string,
 		return false
 	}
 	ref := ia.GetRef()
-	_, acct, err := ingestActivityParseRef(ref)
+	userID, acct, err := ingestActivityParseRef(ref)
 	if err != nil {
 		return false
 	}
-	src, err := app.Activities.FindSourceByExternalID(ctx, ref.GetProvider(), acct, ref.GetExternalId())
+	src, err := app.Activities.FindOwnedSourceByExternalID(ctx, domain.UserID(userID), ref.GetProvider(), acct, ref.GetExternalId())
 	if err != nil {
 		return false
 	}

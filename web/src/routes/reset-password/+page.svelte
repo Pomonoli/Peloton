@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BrandMark from '#lib/components/BrandMark.svelte';
 	import { APP_NAME } from '$app/env/public';
 	import { page } from '$app/state';
 	import { refreshAll, goto } from '$app/navigation';
@@ -49,7 +50,12 @@
 
 <div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center space-y-6">
 	<header class="text-center">
-		<div class="text-xs uppercase tracking-widest text-accent-400">{APP_NAME}</div>
+		<div
+			class="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-accent-300"
+		>
+			<BrandMark class="h-5 w-5" />
+			{APP_NAME}
+		</div>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Choose a new password</h1>
 	</header>
 
@@ -61,7 +67,7 @@
 			>Request a reset link</a
 		>
 	{:else}
-		<form onsubmit={submit} class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+		<form onsubmit={submit} class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
 			{#if error}
 				<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
 					{error}
@@ -90,7 +96,7 @@
 			<button
 				type="submit"
 				disabled={busy}
-				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-accent-400 disabled:opacity-50"
+				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{busy ? 'Updating…' : 'Update password'}
 			</button>

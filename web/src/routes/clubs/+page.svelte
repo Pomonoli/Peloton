@@ -50,33 +50,33 @@
 		<h1 class="text-xl font-semibold">Clubs</h1>
 		<button
 			onclick={() => (showCreate = !showCreate)}
-			class="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+			class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600"
 		>
 			{showCreate ? 'Cancel' : 'New club'}
 		</button>
 	</div>
 
-	{#if error}<p class="mb-3 rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>{/if}
+	{#if error}<p class="mb-3 rounded bg-red-950 p-3 text-sm text-red-300">{error}</p>{/if}
 
 	{#if showCreate}
 		<div class="mb-4 space-y-3 rounded-lg border p-4">
 			<input
 				bind:value={form.name}
 				placeholder="Club name"
-				class="w-full rounded border px-3 py-2 text-sm"
+				class="w-full rounded border border-zinc-700 px-3 py-2 text-sm"
 			/>
 			<textarea
 				bind:value={form.description}
 				placeholder="Description (optional)"
 				rows="2"
-				class="w-full rounded border px-3 py-2 text-sm"></textarea>
+				class="w-full rounded border border-zinc-700 px-3 py-2 text-sm"></textarea>
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" bind:checked={form.is_public} /> Public (anyone can find &amp; join)
 			</label>
 			<button
 				onclick={create}
 				disabled={creating || !form.name.trim()}
-				class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+				class="rounded bg-accent-500 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
 			>
 				{creating ? 'Creating…' : 'Create club'}
 			</button>
@@ -84,7 +84,9 @@
 	{/if}
 
 	{#if clubs.length === 0}
-		<p class="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">
+		<p
+			class="rounded-lg border border-dashed border-zinc-800 p-8 text-center text-sm text-zinc-500"
+		>
 			No clubs yet. Create one!
 		</p>
 	{/if}
@@ -92,16 +94,16 @@
 		{#each clubs as c (c.id)}
 			<a
 				href={`/clubs/${c.slug}`}
-				class="flex items-center justify-between rounded-lg border bg-white p-4 shadow-sm hover:opacity-90"
+				class="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-4 shadow-sm hover:opacity-90"
 			>
 				<div>
 					<div class="font-medium">{c.name}</div>
-					<div class="text-xs text-gray-500">
+					<div class="text-xs text-zinc-500">
 						{c.member_count}
 						{c.member_count === 1 ? 'member' : 'members'} · {c.is_public ? 'Public' : 'Private'}
 					</div>
 				</div>
-				<span class="text-gray-400">→</span>
+				<span class="text-zinc-400">→</span>
 			</a>
 		{/each}
 	</div>

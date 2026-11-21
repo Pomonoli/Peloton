@@ -116,7 +116,7 @@
 					id="type"
 					bind:value={type}
 					onchange={onTypeChange}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm capitalize"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm capitalize"
 				>
 					{#each ACTIVITY_TYPES as t (t)}
 						<option value={t}>{t}</option>
@@ -131,7 +131,7 @@
 					id="disc"
 					bind:value={discipline}
 					disabled={disciplineOptions.length === 0}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm capitalize disabled:opacity-50"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm capitalize disabled:opacity-50"
 				>
 					<option value="">— none —</option>
 					{#each disciplineOptions as d (d)}
@@ -156,7 +156,7 @@
 				id="title"
 				bind:value={title}
 				placeholder="Morning Ride"
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 			/>
 		</div>
 
@@ -168,8 +168,7 @@
 				id="desc"
 				bind:value={description}
 				rows="2"
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
-			></textarea>
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"></textarea>
 		</div>
 
 		<div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
@@ -181,7 +180,7 @@
 					id="start"
 					type="datetime-local"
 					bind:value={startLocal}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 				/>
 			</div>
 			<div class="grid grid-cols-2 gap-2">
@@ -194,7 +193,7 @@
 						type="number"
 						min="1"
 						bind:value={durationMin}
-						class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+						class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 					/>
 				</div>
 				<div>
@@ -207,7 +206,7 @@
 						min="0"
 						bind:value={movingMin}
 						placeholder="opt"
-						class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+						class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 					/>
 				</div>
 			</div>
@@ -224,7 +223,7 @@
 					min="0"
 					step="0.01"
 					bind:value={distanceKm}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 				/>
 			</div>
 			<div>
@@ -236,7 +235,7 @@
 					type="number"
 					min="0"
 					bind:value={elevationGainM}
-					class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 				/>
 			</div>
 		</div>
@@ -249,7 +248,7 @@
 				id="subtype"
 				bind:value={customSubtype}
 				placeholder="e.g. Strength, Yoga"
-				class="mt-1 w-full rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm"
+				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
 			/>
 		</div>
 
@@ -278,7 +277,7 @@
 			<button
 				type="submit"
 				disabled={saving}
-				class="rounded bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50"
+				class="rounded bg-accent-600 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-500 disabled:opacity-50"
 			>
 				{saving ? 'Creating…' : 'Create activity'}
 			</button>

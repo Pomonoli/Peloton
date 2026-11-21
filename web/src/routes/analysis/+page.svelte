@@ -43,9 +43,9 @@
 
 	type Series = { key: 'ctl' | 'atl' | 'tsb'; label: string; color: string };
 	const series: Series[] = [
-		{ key: 'ctl', label: 'Fitness (CTL)', color: '#38bdf8' },
-		{ key: 'atl', label: 'Fatigue (ATL)', color: '#f472b6' },
-		{ key: 'tsb', label: 'Form (TSB)', color: '#a3e635' }
+		{ key: 'ctl', label: 'Fitness (CTL)', color: 'var(--plot-speed)' },
+		{ key: 'atl', label: 'Fatigue (ATL)', color: 'var(--plot-fatigue)' },
+		{ key: 'tsb', label: 'Form (TSB)', color: 'var(--plot-form)' }
 	];
 
 	const bounds = $derived.by(() => {
@@ -125,7 +125,7 @@
 		{#if a}
 			<div class="grid grid-cols-3 gap-4 max-md:grid-cols-1">
 				{#each series as s (s.key)}
-					<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+					<div class="rounded-xl border border-zinc-800 bg-panel p-5">
 						<div class="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
 							<span class="inline-block h-2.5 w-2.5 rounded-full" style:background={s.color}></span>
 							{s.label}
@@ -156,7 +156,7 @@
 		</div>
 
 		<!-- chart -->
-		<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<div class="rounded-xl border border-zinc-800 bg-panel p-4">
 			{#if loading}
 				<div class="flex h-[280px] items-center justify-center text-sm text-zinc-500">Loading…</div>
 			{:else if !a || a.dates.length === 0}
@@ -177,8 +177,15 @@
 					{#each [0, 0.25, 0.5, 0.75, 1] as t (t)}
 						{@const gy = PAD.t + plotH * t}
 						{@const val = bounds.max - (bounds.max - bounds.min) * t}
-						<line x1={PAD.l} y1={gy} x2={W - PAD.r} y2={gy} stroke="#27272a" stroke-width="1" />
-						<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-zinc-600 text-[10px]">
+						<line
+							x1={PAD.l}
+							y1={gy}
+							x2={W - PAD.r}
+							y2={gy}
+							stroke="var(--plot-grid)"
+							stroke-width="1"
+						/>
+						<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-quiet text-[10px]">
 							{val.toFixed(0)}
 						</text>
 					{/each}
@@ -190,7 +197,7 @@
 							y1={zeroY}
 							x2={W - PAD.r}
 							y2={zeroY}
-							stroke="#3f3f46"
+							stroke="var(--plot-grid)"
 							stroke-width="1"
 							stroke-dasharray="3 3"
 						/>
@@ -204,7 +211,14 @@
 					<!-- hover crosshair -->
 					{#if hover !== null}
 						{@const hx = x(hover, n)}
-						<line x1={hx} y1={PAD.t} x2={hx} y2={PAD.t + plotH} stroke="#52525b" stroke-width="1" />
+						<line
+							x1={hx}
+							y1={PAD.t}
+							x2={hx}
+							y2={PAD.t + plotH}
+							stroke="var(--plot-cursor)"
+							stroke-width="1"
+						/>
 						{#each series as s (s.key)}
 							{@const v = a[s.key][hover]}
 							{#if v !== undefined}

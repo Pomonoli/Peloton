@@ -70,7 +70,7 @@
 	</p>
 
 	{#if !loaded}
-		<p class="text-sm text-zinc-600">Loading…</p>
+		<p class="text-sm text-quiet">Loading…</p>
 	{:else if error}
 		<p class="text-sm text-red-400">{error}</p>
 	{:else if items.length === 0}
@@ -79,7 +79,7 @@
 		<ul class="space-y-2">
 			{#each items as it (itemKey(it))}
 				<li
-					class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 max-md:flex-wrap"
+					class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-panel p-3 max-md:flex-wrap"
 				>
 					<SportIcon type={it.type} size={18} />
 					<div class="min-w-0 flex-1">
@@ -89,7 +89,7 @@
 						>
 							{it.title || 'Untitled activity'}
 						</a>
-						<div class="text-xs text-zinc-600">{formatDateOnly(it.start_time)}</div>
+						<div class="text-xs text-quiet">{formatDateOnly(it.start_time)}</div>
 						{#if it.kind === 'duplicate'}
 							<div class="text-xs text-zinc-500">
 								{m.review_dup_hint()}
@@ -115,7 +115,7 @@
 							type="button"
 							onclick={() => merge(it)}
 							disabled={busy === itemKey(it)}
-							class="rounded bg-accent-600 px-2 py-1 text-xs font-medium text-white hover:bg-accent-500 disabled:opacity-50"
+							class="rounded bg-accent-600 px-2 py-1 text-xs font-medium text-on-accent hover:bg-accent-500 disabled:opacity-50"
 						>
 							{busy === itemKey(it) ? '…' : m.review_dup_merge()}
 						</button>
@@ -131,7 +131,7 @@
 							type="button"
 							onclick={() => confirm(it)}
 							disabled={busy === itemKey(it)}
-							class="rounded bg-accent-600 px-2 py-1 text-xs font-medium text-white hover:bg-accent-500 disabled:opacity-50"
+							class="rounded bg-accent-600 px-2 py-1 text-xs font-medium text-on-accent hover:bg-accent-500 disabled:opacity-50"
 						>
 							{busy === itemKey(it) ? '…' : 'Looks right'}
 						</button>

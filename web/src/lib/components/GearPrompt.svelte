@@ -43,7 +43,7 @@
 		type="button"
 		disabled={busy || !gearId}
 		onclick={() => save(gearId)}
-		class="rounded bg-accent-600 px-2 py-1 font-medium text-white hover:bg-accent-500 disabled:opacity-50"
+		class="rounded bg-accent-600 px-2 py-1 font-medium text-on-accent hover:bg-accent-500 disabled:opacity-50"
 	>
 		{m.gear_prompt_save()}
 	</button>

@@ -14,10 +14,10 @@ import (
 
 // ingestActivityStore is what ingest needs: identity lookup, source and activity writes, start coords.
 type ingestActivityStore interface {
-	port.SourceReader
 	port.SourceWriter
 	port.ActivityWriter
 	port.ActivityGeoStore
+	FindOwnedSourceByExternalID(context.Context, domain.UserID, string, *domain.ExternalAccountID, string) (domain.ActivitySource, error)
 }
 
 // IngestActivityFromWorker is the entry point for new activity data arriving
@@ -28,7 +28,7 @@ type ingestActivityStore interface {
 //
 // Identity resolution:
 //
-//	exact match on (provider, external_account_id, external_id)
+//	exact match on (user_id, provider, external_account_id, external_id)
 //	    → reimport: replace the existing source's parsed payload in place.
 //	otherwise
 //	    → persist the source as its own brand-new singleton activity.
@@ -155,8 +155,8 @@ func (uc *IngestActivityFromWorker) Execute(ctx context.Context, in IngestInput)
 				return err
 			}
 		}
-		existing, err := uc.activities.FindSourceByExternalID(
-			ctx, in.Provider, in.ExternalAccountID, in.ExternalID,
+		existing, err := uc.activities.FindOwnedSourceByExternalID(
+			ctx, in.UserID, in.Provider, in.ExternalAccountID, in.ExternalID,
 		)
 		if err == nil {
 			return uc.handleReimport(ctx, existing, in, &result)

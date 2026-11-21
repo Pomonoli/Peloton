@@ -50,7 +50,7 @@
 	const fmt = (s: string) => new Date(s).toLocaleString(intlLocale());
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 	<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">Worker pools</h2>
 	<p class="mt-1 text-xs text-zinc-500">
 		Every worker name seen for a provider, bound to the package it reported first. Connections are
@@ -58,7 +58,7 @@
 	</p>
 	{#if error}<p class="mt-2 text-xs text-red-400">{error}</p>{/if}
 	{#if pools.length === 0}
-		<p class="mt-3 text-xs text-zinc-600">No pools registered yet.</p>
+		<p class="mt-3 text-xs text-quiet">No pools registered yet.</p>
 	{:else}
 		<ul class="mt-3 divide-y divide-zinc-800 rounded border border-zinc-800 text-xs">
 			{#each pools as p (`${p.provider}/${p.name}`)}

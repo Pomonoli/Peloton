@@ -95,9 +95,7 @@
 	{#if loading}
 		<div class="text-sm text-zinc-500">Loading…</div>
 	{:else if notFound || !segment}
-		<div
-			class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-400"
-		>
+		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
 			Segment not found, or you have no efforts on it.
 		</div>
 	{:else}
@@ -130,23 +128,30 @@
 		{#if chrono.length > 1}
 			<section>
 				<h2 class="mb-2 text-sm font-medium text-zinc-300">Time trend</h2>
-				<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+				<div class="rounded-xl border border-zinc-800 bg-panel p-3">
 					<svg viewBox={`0 0 ${W} ${H}`} class="w-full" role="img" aria-label="Effort time trend">
 						{#each [0, 0.5, 1] as t (t)}
 							{@const gy = PAD.t + plotH * t}
 							{@const val = bounds.max - (bounds.max - bounds.min) * t}
-							<line x1={PAD.l} y1={gy} x2={W - PAD.r} y2={gy} stroke="#27272a" stroke-width="1" />
-							<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-zinc-600 text-[10px]">
+							<line
+								x1={PAD.l}
+								y1={gy}
+								x2={W - PAD.r}
+								y2={gy}
+								stroke="var(--plot-grid)"
+								stroke-width="1"
+							/>
+							<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-quiet text-[10px]">
 								{formatDuration(Math.round(val))}
 							</text>
 						{/each}
-						<path d={linePath} fill="none" stroke="#38bdf8" stroke-width="1.8" />
+						<path d={linePath} fill="none" stroke="var(--plot-speed)" stroke-width="1.8" />
 						{#each chrono as e, i (e.id)}
 							<circle
 								cx={x(i)}
 								cy={y(e.elapsed_s)}
 								r={e.elapsed_s === best ? 4 : 2.5}
-								fill={e.elapsed_s === best ? '#22c55e' : '#38bdf8'}
+								fill={e.elapsed_s === best ? 'var(--plot-cadence)' : 'var(--plot-speed)'}
 							>
 								<title
 									>{formatDate(e.start_time)}: {formatDuration(e.elapsed_s)}{e.elapsed_s === best
@@ -156,7 +161,7 @@
 							</circle>
 						{/each}
 					</svg>
-					<p class="mt-1 text-center text-[10px] text-zinc-600">
+					<p class="mt-1 text-center text-[10px] text-quiet">
 						Each point is one effort, oldest → newest. Green = your best.
 					</p>
 				</div>
@@ -167,7 +172,7 @@
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">All efforts</h2>
 			<div class="overflow-x-auto rounded-xl border border-zinc-800">
 				<table class="w-full text-sm">
-					<thead class="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-4 py-2 text-left font-medium">Date</th>
 							<th class="px-4 py-2 text-right font-medium">Time</th>
@@ -178,7 +183,7 @@
 					</thead>
 					<tbody>
 						{#each efforts as e (e.id)}
-							<tr class="border-t border-zinc-800/70 hover:bg-zinc-900/40">
+							<tr class="border-t border-zinc-800/70 hover:bg-panel">
 								<td class="px-4 py-2">
 									<a
 										href={`/activities/${e.activity_id}`}
