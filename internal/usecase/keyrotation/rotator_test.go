@@ -32,6 +32,7 @@ type fakeRepo struct {
 	tokens  []port.OAuthTokenCiphertexts
 	conns   []port.ConnectionSecretCiphertext
 	keys    []port.SigningKeySeedCiphertext
+	garmin  []port.GarminSessionCiphertext
 	writes  int
 	connErr error
 }
@@ -61,6 +62,20 @@ func (f *fakeRepo) SetConnectionSecret(_ context.Context, id domain.ConnectionID
 		}
 	}
 	f.writes++
+	return nil
+}
+
+func (f *fakeRepo) GarminSessions(context.Context) ([]port.GarminSessionCiphertext, error) {
+	return f.garmin, nil
+}
+
+func (f *fakeRepo) SetGarminSession(_ context.Context, user domain.UserID, before, after []byte) error {
+	for i := range f.garmin {
+		if f.garmin[i].UserID == user && bytes.Equal(f.garmin[i].Session, before) {
+			f.garmin[i].Session = after
+			f.writes++
+		}
+	}
 	return nil
 }
 
@@ -123,5 +138,20 @@ func TestRotator(t *testing.T) {
 	repo.connErr = errors.New("boom")
 	if _, err = (&Rotator{Repo: repo, Old: old, New: next}).Run(ctx); err == nil || err.Error() != "user_provider_configs (client secrets): boom" {
 		t.Fatalf("step error: %v", err)
+	}
+}
+
+func TestRotatorGarminSession(t *testing.T) {
+	owner := domain.UserID(uuid.New())
+	old, next := fakeCipher{"old"}, fakeCipher{"new"}
+	aad := domain.GarminSecretAAD(owner)
+	ct, _ := old.Encrypt([]byte("garmin fixture"), aad)
+	repo := &fakeRepo{garmin: []port.GarminSessionCiphertext{{UserID: owner, Session: ct}}}
+	got, err := (&Rotator{Repo: repo, Old: old, New: next}).Run(t.Context())
+	if err != nil || got != (Counts{Rotated: 1}) || repo.writes != 1 {
+		t.Fatalf("Garmin rotation: %+v, %v", got, err)
+	}
+	if pt, err := next.Decrypt(repo.garmin[0].Session, aad); err != nil || string(pt) != "garmin fixture" {
+		t.Fatalf("rotated session unreadable: %v", err)
 	}
 }

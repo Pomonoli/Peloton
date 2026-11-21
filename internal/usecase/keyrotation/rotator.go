@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
@@ -49,6 +50,7 @@ func (r *Rotator) Run(ctx context.Context) (Counts, error) {
 	}{
 		{"external_accounts (oauth tokens)", r.oauthTokens},
 		{"user_provider_configs (client secrets)", r.connectionSecrets},
+		{"garmin_connections (sessions)", r.garminSessions},
 		{"instance_signing_keys (account seed)", r.signingKeys},
 	}
 	for _, s := range steps {
@@ -140,6 +142,24 @@ func (r *Rotator) connectionSecrets(ctx context.Context) error {
 			continue
 		}
 		if err := r.Repo.SetConnectionSecret(ctx, row.ID, ct); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Rotator) garminSessions(ctx context.Context) error {
+	rows, err := r.Repo.GarminSessions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		ct, status := r.reencrypt(row.Session, domain.GarminSecretAAD(row.UserID))
+		r.tally(status, "garmin_connections.session", row.UserID.String())
+		if status != Rotated || r.DryRun {
+			continue
+		}
+		if err := r.Repo.SetGarminSession(ctx, row.UserID, row.Session, ct); err != nil {
 			return err
 		}
 	}

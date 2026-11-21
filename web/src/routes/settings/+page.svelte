@@ -236,6 +236,12 @@
 		{/if}
 	</section>
 
+	<a
+		href="/connections"
+		class="block rounded-lg border border-zinc-800 bg-panel p-5 text-sm font-medium text-accent-300 hover:border-accent-400"
+		>{m.nav_connections()}</a
+	>
+
 	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">{m.settings_appearance()}</h2>
 		<p id="appearance-description" class="mb-3 text-xs text-zinc-500">

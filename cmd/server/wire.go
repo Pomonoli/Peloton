@@ -37,6 +37,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 	"github.com/opencairn-org/cairn-core/internal/usecase/enrollment"
 	"github.com/opencairn-org/cairn-core/internal/usecase/fleet"
+	"github.com/opencairn-org/cairn-core/internal/usecase/garminsync"
 	gearuc "github.com/opencairn-org/cairn-core/internal/usecase/gear"
 	geocodeuc "github.com/opencairn-org/cairn-core/internal/usecase/geocode"
 	"github.com/opencairn-org/cairn-core/internal/usecase/instance"
@@ -71,6 +72,7 @@ import (
 type App struct {
 	// Adapters
 	QuotaMaxActivities int
+	Garmin             *garminsync.Connections
 	// DefaultPollInterval is the instance-wide reconcile cadence
 	// (SchedulerConfig.PollingInterval) — surfaced to the UI so the
 	// per-connection override setting can say what "instance default" means.
@@ -363,6 +365,7 @@ func newApp(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, logger 
 	wireAppGeocoder(app, cfg, logger)
 	wirePipeline(app, logger)
 	wireSegmentDiscovery(app, cfg.SegmentDiscovery.Enabled, logger)
+	wireGarmin(app, postgres.NewGarminSyncRepo(pool, app.SecretBox), cfg.Scheduler, logger)
 	wireRestUseCases(app, logger)
 	wireMaintenance(app, pool)
 	return app, nil

@@ -156,6 +156,9 @@ nonroot binary that serves the API *and* the embedded SPA (`-tags embedweb`),
 built + pushed by the `build-core` GitHub Actions workflow. Full walkthrough,
 ports, and prod notes are in **[docs/run-local.md](docs/run-local.md)**.
 
+To connect a personal Garmin account and test cycling imports locally, see
+[Garmin Connect setup](docs/garmin-connect.md).
+
 ### Running the server by hand
 
 For backend-only work, bring up the deps and run the binary directly:

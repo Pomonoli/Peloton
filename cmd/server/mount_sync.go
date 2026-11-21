@@ -60,6 +60,12 @@ func mountRestSync(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	logger.Info("sync endpoints mounted")
 }
 
+func mountRestGarmin(mux *http.ServeMux, app *App) {
+	if app.Garmin != nil {
+		(&rest.GarminHandlers{Auth: restAuth(app), Connections: app.Garmin}).Mount(mux)
+	}
+}
+
 // mountRestWebhooks mounts the provider webhook forwarder; without NATS it answers 503.
 func mountRestWebhooks(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	h := &rest.WebhookHandlers{

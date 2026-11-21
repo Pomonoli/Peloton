@@ -110,6 +110,10 @@ type IngestInput struct {
 	RawContentType string
 	RawSizeBytes   int64
 
+	// BeforeWrite can recheck an import's authorization in the same transaction
+	// that persists its activity, after the per-user lock has been taken.
+	BeforeWrite func(context.Context) error
+
 	Payload domain.ActivitySourcePayload
 
 	// Stream is the optional time-series the worker parsed alongside
@@ -152,6 +156,11 @@ func (uc *IngestActivityFromWorker) Execute(ctx context.Context, in IngestInput)
 	err := uc.tx.InTx(ctx, func(ctx context.Context) error {
 		if uc.lock != nil {
 			if err := uc.lock.LockUser(ctx, in.UserID); err != nil {
+				return err
+			}
+		}
+		if in.BeforeWrite != nil {
+			if err := in.BeforeWrite(ctx); err != nil {
 				return err
 			}
 		}

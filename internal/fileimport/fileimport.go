@@ -223,14 +223,22 @@ func fitRecordSample(rec *fit.RecordMsg) samplePoint {
 		sp.Lat = rec.PositionLat.Degrees()
 		sp.Lon = rec.PositionLong.Degrees()
 	}
-	if v := rec.GetAltitudeScaled(); !math.IsNaN(v) {
-		sp.Alt = &v
+	alt := rec.GetEnhancedAltitudeScaled()
+	if math.IsNaN(alt) {
+		alt = rec.GetAltitudeScaled()
+	}
+	if !math.IsNaN(alt) {
+		sp.Alt = &alt
 	}
 	if v := rec.GetDistanceScaled(); !math.IsNaN(v) {
 		sp.Dist = &v
 	}
-	if v := rec.GetSpeedScaled(); !math.IsNaN(v) {
-		sp.Speed = &v
+	speed := rec.GetEnhancedSpeedScaled()
+	if math.IsNaN(speed) {
+		speed = rec.GetSpeedScaled()
+	}
+	if !math.IsNaN(speed) {
+		sp.Speed = &speed
 	}
 	if rec.HeartRate != 0xFF {
 		hr := int(rec.HeartRate)

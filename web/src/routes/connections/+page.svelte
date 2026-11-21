@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
 	import AccountsSync from '#lib/components/AccountsSync.svelte';
+	import GarminConnection from '#lib/components/GarminConnection.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -77,6 +78,9 @@
 
 	// The two credential slots are labelled by the provider's worker (a login
 	// for credential providers, an app's client id/secret for OAuth ones).
+	const connectionOptions = $derived(
+		providers.filter((p) => p.provider !== 'garmin' || p.worker_pools?.length)
+	);
 	const formProvider = $derived(providers.find((p) => p.provider === form.provider));
 	const formProviderOAuth = $derived(formProvider?.oauth ?? true);
 	function fieldOf(provider: string, key: string): ConfigField | undefined {
@@ -126,8 +130,8 @@
 				const body = await cRes.json();
 				connections = body.connections ?? [];
 				providers = body.providers ?? [];
-				const first = providers[0];
-				if (first && !providers.find((p) => p.provider === form.provider)) {
+				const first = connectionOptions[0];
+				if (first && !connectionOptions.find((p) => p.provider === form.provider)) {
 					form.provider = first.provider;
 				}
 			}
@@ -227,6 +231,8 @@
 		</button>
 	</header>
 
+	<GarminConnection />
+
 	<div class="rounded-lg border border-zinc-800 bg-panel p-3 text-xs text-zinc-400">
 		Connecting needs a connector (worker) for the provider onboarded on this instance.
 		{#if data.isAdmin}
@@ -264,8 +270,10 @@
 						bind:value={form.provider}
 						class="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm focus:border-accent-400 focus:outline-none"
 					>
-						{#each providers as p (p.provider)}
-							<option value={p.provider}>{p.display_name}</option>
+						{#each connectionOptions as p (p.provider)}
+							<option value={p.provider}
+								>{p.provider === 'garmin' ? m.garmin_legacy_worker() : p.display_name}</option
+							>
 						{/each}
 					</select>
 				</div>
@@ -350,10 +358,6 @@
 				{busy ? 'Saving…' : 'Create connection'}
 			</button>
 		</div>
-	{/if}
-
-	{#if connections.length === 0 && !showAdd}
-		<p class="text-sm text-zinc-500">No connections yet. Add one to import your activities.</p>
 	{/if}
 
 	{#each connections as c (c.id)}

@@ -568,6 +568,17 @@ func ingestActivityEvent(
 	jr *workerv1.JobResult,
 	ia *workerv1.ImportedActivity,
 ) (activity.IngestResult, error) {
+	return ingestActivityEventChecked(ctx, app, log, jr, ia, nil)
+}
+
+func ingestActivityEventChecked(
+	ctx context.Context,
+	app *App,
+	log *slog.Logger,
+	jr *workerv1.JobResult,
+	ia *workerv1.ImportedActivity,
+	beforeWrite func(context.Context) error,
+) (activity.IngestResult, error) {
 	if ia == nil {
 		return activity.IngestResult{}, &port.TerminalError{Reason: "missing_activity"}
 	}
@@ -600,6 +611,7 @@ func ingestActivityEvent(
 		RawBlobID:           ia.GetRawBlobId(),
 		RawContentType:      ia.GetRawContentType(),
 		RawSizeBytes:        ia.GetRawSizeBytes(),
+		BeforeWrite:         beforeWrite,
 		Payload:             payload,
 		Stream:              stream,
 	}

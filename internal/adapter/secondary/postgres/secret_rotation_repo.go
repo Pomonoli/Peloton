@@ -60,6 +60,27 @@ func (r *SecretRotationRepo) SetConnectionSecret(ctx context.Context, id domain.
 	return err
 }
 
+func (r *SecretRotationRepo) GarminSessions(ctx context.Context) ([]port.GarminSessionCiphertext, error) {
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT user_id, session_encrypted FROM garmin_connections`)
+	if err != nil {
+		return nil, err
+	}
+	return pgCollectRows(rows, func(row rowScanner) (port.GarminSessionCiphertext, error) {
+		var uid uuid.UUID
+		var out port.GarminSessionCiphertext
+		err := row.Scan(&uid, &out.Session)
+		out.UserID = domain.UserID(uid)
+		return out, err
+	}, "scan Garmin sessions", "iterate Garmin sessions")
+}
+
+func (r *SecretRotationRepo) SetGarminSession(ctx context.Context, user domain.UserID, before, after []byte) error {
+	_, err := dbtx(ctx, r.pool).Exec(ctx, `
+		UPDATE garmin_connections SET session_encrypted = $3 WHERE user_id = $1 AND session_encrypted = $2`,
+		user.UUID(), before, after)
+	return err
+}
+
 func (r *SecretRotationRepo) SigningKeySeeds(ctx context.Context) ([]port.SigningKeySeedCiphertext, error) {
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT id, purpose, seed_encrypted FROM instance_signing_keys`)
 	if err != nil {

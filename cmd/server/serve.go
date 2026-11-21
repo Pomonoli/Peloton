@@ -326,6 +326,7 @@ func serveMountPlatform(mux *http.ServeMux, app *App, logger *slog.Logger) {
 
 	// Full-sync + import-queue endpoints (gated on NATS internally).
 	mountRestSync(mux, app, logger)
+	mountRestGarmin(mux, app)
 	mountAcctLifecycle(mux, app, logger)
 
 	// Build/version info (public) — shown in the UI footer.
@@ -639,6 +640,11 @@ func serveStartBackgroundLoops(ctx context.Context, app *App, cfg *config.Config
 		goSupervised(ctx, logger, "runNotificationRetryScheduler", func(ctx context.Context) { runNotificationRetryScheduler(ctx, logger, app) })
 	}
 
+	if app.Garmin != nil {
+		goSupervised(ctx, logger, "runGarminSync", func(ctx context.Context) {
+			app.Garmin.Run(ctx, cfg.Scheduler.TickInterval, cfg.Scheduler.BatchSize)
+		})
+	}
 	if cfg.Scheduler.Enabled && app.ReconcileAccount != nil {
 		goSupervised(ctx, logger, "runReconcileScheduler", func(ctx context.Context) { runReconcileScheduler(ctx, logger, app, cfg.Scheduler) })
 	} else {
