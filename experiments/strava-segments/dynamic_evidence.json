@@ -1,0 +1,54 @@
+{
+  "verification_date": "2026-11-21",
+  "map_source": "https://tailwindkompass.com/explore",
+  "input": "public geographic viewport without seed segment IDs",
+  "sint_niklaas": {
+    "central_rectangle": {"south": 51.145, "west": 4.105, "north": 51.185, "east": 4.175},
+    "planned_route": "https://www.routen.be/route/3906/download/gpx",
+    "planned_route_points": 238,
+    "planned_route_timestamped_points": 0,
+    "proximity_threshold_m": 100,
+    "viewports": [
+      {"latitude": 51.1645, "longitude": 4.1397, "zoom": 12, "rows": 1000, "central_starts": 51, "both_endpoints_near_route": 30, "all_vertices_near_route": 28},
+      {"latitude": 51.1645, "longitude": 4.1397, "zoom": 14, "rows": 78, "central_starts": 53, "both_endpoints_near_route": 8, "all_vertices_near_route": 7},
+      {"latitude": 51.20, "longitude": 4.07, "zoom": 12, "rows": 707, "central_starts": 57, "both_endpoints_near_route": 37, "all_vertices_near_route": 33}
+    ],
+    "city_zoom_12_repeat_identical_ids_and_polylines": 1000,
+    "central_ids_at_both_zooms": 49,
+    "central_ids_only_at_zoom_14": 4,
+    "central_ids_only_at_zoom_12": 2,
+    "strava_embed_verified_ids": [38043093, 15246798, 1484238, 19141960]
+  },
+  "anonymous_point_lookup": {
+    "interface": "https://tailwindkompass.com/developers",
+    "returned_counts": {
+      "sint_niklaas_centre": 5,
+      "sint_niklaas_north": 5,
+      "sint_niklaas_west": 4,
+      "sint_niklaas_south": 5,
+      "sint_niklaas_east": 2,
+      "oudenaarde": 5,
+      "utrecht": 5,
+      "north_sea": 0
+    },
+    "polyline_in_search_results": false,
+    "polyline_in_detail_result": false
+  },
+  "recorded_import": {
+    "data_source": "https://www.bikedataproject.org/",
+    "region": "Brussels area",
+    "captured_viewport": {"latitude": 50.82, "longitude": 4.30, "zoom": 11.5},
+    "original_timestamped_samples": 1041,
+    "byte_identical_peloton_archive": true,
+    "viewport_rows": 1000,
+    "usable_geometries": 1000,
+    "bounding_box_candidates": 248,
+    "elapsed_times_independently_checked_against_archived_gpx": true,
+    "all_matched_ids_independently_confirmed_as_strava_cycling_segments": true,
+    "matches": [
+      {"strava_id": 40628454, "name": "Buizingen-Lot - Kanaal", "geometry_vertices": 27, "elapsed_seconds": 271, "strava_embed_http_status": 200},
+      {"strava_id": 35700572, "name": "Canal Ruisbroek", "geometry_vertices": 20, "elapsed_seconds": 201, "strava_embed_http_status": 200},
+      {"strava_id": 29325646, "name": "Lot Dorent", "geometry_vertices": 50, "elapsed_seconds": 367, "strava_embed_http_status": 200}
+    ]
+  }
+}

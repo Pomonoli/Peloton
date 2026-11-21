@@ -1,0 +1,131 @@
+{
+  "fixture": "Cycling in Flanders Blue Loop geometry with simulated timestamps",
+  "archived_gpx_sha256": "9bb4d9e202829ce97f10e33d80630975da73f311d9a894727f2713c6cf6a4283",
+  "verifications": {
+    "archived_gpx_byte_identical": true,
+    "live_and_offline_results_identical": true
+  },
+  "live_refresh": {
+    "activity_samples": 10958,
+    "catalog_access": "live-refresh",
+    "catalog_retrieved_at": "2026-11-21T20:24:06.743948878Z",
+    "catalog_segments": 3,
+    "candidates": [
+      {
+        "strava_id": "19452499",
+        "name": "Koppenberg",
+        "strava_display_distance_m": 500,
+        "geometry_length_m": 557,
+        "geometry_points": 7,
+        "strava_url": "https://www.strava.com/segments/19452499",
+        "source_url": "https://www.cyclinginflanders.cc/koppenberg",
+        "efforts": [
+          {
+            "start_sample": 3138,
+            "end_sample": 3212,
+            "start_time": "2026-01-01T01:17:12.278Z",
+            "end_time": "2026-01-01T01:19:04.21Z",
+            "elapsed_seconds": 111.932
+          }
+        ]
+      },
+      {
+        "strava_id": "1092383",
+        "name": "Oude Kwaremont (kasseien)",
+        "strava_display_distance_m": 1400,
+        "geometry_length_m": 1486,
+        "geometry_points": 36,
+        "strava_url": "https://www.strava.com/segments/1092383",
+        "source_url": "https://www.cyclinginflanders.cc/oude-kwaremont",
+        "efforts": [
+          {
+            "start_sample": 1542,
+            "end_sample": 1744,
+            "start_time": "2026-01-01T00:38:14.204Z",
+            "end_time": "2026-01-01T00:43:11.53Z",
+            "elapsed_seconds": 297.326
+          }
+        ]
+      }
+    ]
+  },
+  "archived_replay": {
+    "activity_samples": 10958,
+    "catalog_access": "offline-cache",
+    "catalog_retrieved_at": "2026-11-21T20:24:06.743948878Z",
+    "catalog_segments": 3,
+    "candidates": [
+      {
+        "strava_id": "19452499",
+        "name": "Koppenberg",
+        "strava_display_distance_m": 500,
+        "geometry_length_m": 557,
+        "geometry_points": 7,
+        "strava_url": "https://www.strava.com/segments/19452499",
+        "source_url": "https://www.cyclinginflanders.cc/koppenberg",
+        "efforts": [
+          {
+            "start_sample": 3138,
+            "end_sample": 3212,
+            "start_time": "2026-01-01T01:17:12.278Z",
+            "end_time": "2026-01-01T01:19:04.21Z",
+            "elapsed_seconds": 111.932
+          }
+        ]
+      },
+      {
+        "strava_id": "1092383",
+        "name": "Oude Kwaremont (kasseien)",
+        "strava_display_distance_m": 1400,
+        "geometry_length_m": 1486,
+        "geometry_points": 36,
+        "strava_url": "https://www.strava.com/segments/1092383",
+        "source_url": "https://www.cyclinginflanders.cc/oude-kwaremont",
+        "efforts": [
+          {
+            "start_sample": 1542,
+            "end_sample": 1744,
+            "start_time": "2026-01-01T00:38:14.204Z",
+            "end_time": "2026-01-01T00:43:11.53Z",
+            "elapsed_seconds": 297.326
+          }
+        ]
+      }
+    ]
+  },
+  "reverse_replay": {
+    "activity_samples": 10958,
+    "catalog_access": "offline-cache",
+    "catalog_retrieved_at": "2026-11-21T20:24:06.743948878Z",
+    "catalog_segments": 3,
+    "candidates": [
+      {
+        "strava_id": "19452499",
+        "name": "Koppenberg",
+        "strava_display_distance_m": 500,
+        "geometry_length_m": 557,
+        "geometry_points": 7,
+        "strava_url": "https://www.strava.com/segments/19452499",
+        "source_url": "https://www.cyclinginflanders.cc/koppenberg",
+        "efforts": []
+      },
+      {
+        "strava_id": "1092383",
+        "name": "Oude Kwaremont (kasseien)",
+        "strava_display_distance_m": 1400,
+        "geometry_length_m": 1486,
+        "geometry_points": 36,
+        "strava_url": "https://www.strava.com/segments/1092383",
+        "source_url": "https://www.cyclinginflanders.cc/oude-kwaremont",
+        "efforts": []
+      }
+    ]
+  },
+  "out_of_region_fit_replay": {
+    "activity_samples": 31,
+    "catalog_access": "offline-cache",
+    "catalog_retrieved_at": "2026-11-21T20:24:06.743948878Z",
+    "catalog_segments": 3,
+    "candidates": []
+  }
+}
