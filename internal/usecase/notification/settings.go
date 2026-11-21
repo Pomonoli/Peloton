@@ -5,10 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"html"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
@@ -49,15 +51,17 @@ func (s *Settings) SendTestEmail(ctx context.Context, userID domain.UserID) (str
 	if user.Email == "" {
 		return "", port.NewActionError(port.ActionErrorInvalid, "your account has no email address")
 	}
+	name := branding.Name()
+	htmlName := html.EscapeString(name)
 	err = s.Mail.Send(ctx, port.EmailMessage{
 		To:      user.Email,
-		Subject: "Cairn — test email",
-		TextBody: "This is a test email from your Cairn instance.\n\n" +
+		Subject: name + " — test email",
+		TextBody: "This is a test email from your " + name + " instance.\n\n" +
 			"If you received this, the email channel is working and notifications " +
-			"can be delivered to this address.\n\n— Cairn",
-		HTMLBody: "<p>This is a <strong>test email</strong> from your Cairn instance.</p>" +
+			"can be delivered to this address.\n\n— " + name,
+		HTMLBody: "<p>This is a <strong>test email</strong> from your " + htmlName + " instance.</p>" +
 			"<p>If you received this, the email channel is working and notifications " +
-			"can be delivered to this address.</p><p>— Cairn</p>",
+			"can be delivered to this address.</p><p>— " + htmlName + "</p>",
 	})
 	if err != nil {
 		return "", port.NewActionError(port.ActionErrorUpstream, "send failed: "+err.Error())

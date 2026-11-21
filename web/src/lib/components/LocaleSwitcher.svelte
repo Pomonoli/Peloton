@@ -4,7 +4,7 @@
 
 	const current = $derived(getLocale());
 
-	const labels: Record<Locale, string> = {
+	const labels: Record<string, string> = {
 		de: m.locale_de(),
 		en: m.locale_en()
 	};
@@ -28,7 +28,7 @@
 		class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300 focus:border-accent-400 focus:outline-none"
 	>
 		{#each locales as locale (locale)}
-			<option value={locale}>{labels[locale]}</option>
+			<option value={locale}>{labels[locale] ?? locale}</option>
 		{/each}
 	</select>
 </div>

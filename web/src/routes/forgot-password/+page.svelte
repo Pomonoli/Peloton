@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	let email = $state('');
 	let busy = $state(false);
 	let done = $state(false);
@@ -28,7 +29,7 @@
 
 <div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center space-y-6">
 	<header class="text-center">
-		<div class="text-xs uppercase tracking-widest text-accent-400">Cairn</div>
+		<div class="text-xs uppercase tracking-widest text-accent-400">{APP_NAME}</div>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Reset your password</h1>
 		<p class="mt-1 text-sm text-zinc-400">We'll email you a link to choose a new one.</p>
 	</header>

@@ -58,9 +58,9 @@ describe('formatDistance', () => {
 		expect(formatDistance(12345)).toBe('12.35 km');
 	});
 
-	it('falls back to de-DE for unknown locales', () => {
+	it('falls back to English for unknown locales', () => {
 		locale.current = 'fr';
-		expect(formatDistance(1500)).toBe('1,50 km');
+		expect(formatDistance(1500)).toBe('1.50 km');
 	});
 
 	it('uses feet below a tenth of a mile, miles above', () => {

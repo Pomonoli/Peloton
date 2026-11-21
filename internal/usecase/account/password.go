@@ -6,8 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"html"
 	"time"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
@@ -90,16 +92,18 @@ func (p *Passwords) RequestReset(ctx context.Context, email string) (attempted b
 		return false, internalErr("create reset token", err)
 	}
 	link := p.ResetLink(code)
+	name := branding.Name()
+	htmlName := html.EscapeString(name)
 	// Delivery failures are logged by the caller, never surfaced to the requester.
 	err = p.Mail.Send(ctx, port.EmailMessage{
 		To:      user.Email,
-		Subject: "Reset your Cairn password",
-		TextBody: "Someone asked to reset the password for your Cairn account.\n\n" +
+		Subject: "Reset your " + name + " password",
+		TextBody: "Someone asked to reset the password for your " + name + " account.\n\n" +
 			"Open this link to choose a new password (valid for 1 hour):\n" + link + "\n\n" +
-			"If you didn't request this, you can ignore this email.\n\n- Cairn",
-		HTMLBody: "<p>Someone asked to reset the password for your Cairn account.</p>" +
+			"If you didn't request this, you can ignore this email.\n\n- " + name,
+		HTMLBody: "<p>Someone asked to reset the password for your " + htmlName + " account.</p>" +
 			"<p><a href=\"" + link + "\">Choose a new password</a> (valid for 1 hour).</p>" +
-			"<p>If you didn't request this, you can ignore this email.</p><p>- Cairn</p>",
+			"<p>If you didn't request this, you can ignore this email.</p><p>- " + htmlName + "</p>",
 	})
 	return true, err
 }

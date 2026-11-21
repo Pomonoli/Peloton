@@ -1,17 +1,17 @@
 <!doctype html>
 <!--
   Placeholder so `go:embed all:dist` compiles under -tags embedweb even
-  without a fresh frontend build. docker/Dockerfile.server overwrites this
+  without a fresh frontend build. docker/Dockerfile.core overwrites this
   directory with the real SvelteKit static output (web build, adapter-static)
   before compiling the production binary.
 -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Cairn</title>
+    <title>Frontend unavailable</title>
   </head>
   <body>
-    <p>Cairn frontend was not built into this binary. Run the production
-      build (docker/Dockerfile.server) or use the dev stack.</p>
+    <p>The frontend was not built into this binary. Run the production
+      build (docker/Dockerfile.core) or use the dev stack.</p>
   </body>
 </html>

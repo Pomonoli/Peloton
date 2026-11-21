@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
@@ -51,7 +52,7 @@
 	onMount(load);
 </script>
 
-<svelte:head><title>Shared activity · Cairn</title></svelte:head>
+<svelte:head><title>Shared activity · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-6">
 	{#if error}
@@ -102,7 +103,7 @@
 		</div>
 
 		<p class="mt-6 text-center text-xs text-zinc-500">
-			Powered by <a href="/" class="hover:underline">Cairn</a>
+			Powered by <a href="/" class="hover:underline">{APP_NAME}</a>
 		</p>
 	{:else}
 		<p class="text-sm text-zinc-400">Loading…</p>

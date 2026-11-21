@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
-	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
+	import { intlLocale, formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
 
 	type Stats = {
 		segments: number;
@@ -89,7 +89,9 @@
 			{#each [{ label: 'Segments', value: stats.segments }, { label: 'Efforts', value: stats.efforts }, { label: 'PRs', value: stats.prs }, { label: 'Course records', value: stats.crs }, { label: 'External', value: stats.external }, { label: 'Native', value: stats.native }] as c (c.label)}
 				<div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
 					<dt class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</dt>
-					<dd class="mt-1 text-2xl font-semibold tabular-nums">{c.value.toLocaleString()}</dd>
+					<dd class="mt-1 text-2xl font-semibold tabular-nums">
+						{c.value.toLocaleString(intlLocale())}
+					</dd>
 				</div>
 			{/each}
 		</dl>

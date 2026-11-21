@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
-	import { formatDistance, formatDuration, formatElevation } from '#lib/format.js';
+	import { intlLocale, formatDistance, formatDuration, formatElevation } from '#lib/format.js';
 
 	type Facet = { value: string; count: number };
 	type Year = {
@@ -68,7 +68,7 @@
 	{:else}
 		<!-- lifetime totals -->
 		<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-			{#each [{ label: 'Activities', value: s.totals.count.toLocaleString() }, { label: 'Distance', value: formatDistance(s.totals.distance_m) }, { label: 'Moving time', value: formatDuration(s.totals.moving_s) }, { label: 'Elevation', value: formatElevation(s.totals.elevation_gain_m) }] as c (c.label)}
+			{#each [{ label: 'Activities', value: s.totals.count.toLocaleString(intlLocale()) }, { label: 'Distance', value: formatDistance(s.totals.distance_m) }, { label: 'Moving time', value: formatDuration(s.totals.moving_s) }, { label: 'Elevation', value: formatElevation(s.totals.elevation_gain_m) }] as c (c.label)}
 				<div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
 					<div class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</div>
 					<div class="mt-1 text-2xl font-semibold tabular-nums text-zinc-100">{c.value}</div>

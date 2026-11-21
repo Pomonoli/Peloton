@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
@@ -470,11 +471,12 @@ func (uc *DeliverNotifications) render(n domain.Notification) (subject, body str
 	case domain.NotificationTypeExternalAccountRefreshFailed:
 		headline = "A connection needs to be re-authorised."
 	case domain.NotificationTypeGearDecisionNeeded:
-		headline = "A connection reported gear Cairn does not know yet. Create it or map it to existing gear."
+		headline = "A connection reported gear this instance does not know yet. Create it or map it to existing gear."
 	default:
-		headline = "You have a new Cairn notification."
+		headline = "You have a new " + branding.Name() + " notification."
 	}
-	subject = "Cairn: " + headline
-	body = fmt.Sprintf("%s\n\nOpen Cairn: %s\n\nManage which notifications email you in Settings.\n\n- Cairn", headline, link)
+	name := branding.Name()
+	subject = name + ": " + headline
+	body = fmt.Sprintf("%s\n\nOpen %s: %s\n\nManage which notifications email you in Settings.\n\n- %s", headline, name, link, name)
 	return subject, body
 }

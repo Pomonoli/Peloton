@@ -8,6 +8,7 @@ import (
 
 	"github.com/tormoder/fit"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
@@ -37,7 +38,7 @@ func TestGPX_StructureAndExtensions(t *testing.T) {
 
 	for _, want := range []string{
 		`<?xml version="1.0"`,
-		`<gpx version="1.1" creator="Cairn"`,
+		`<gpx version="1.1" creator="` + esc(branding.Name()) + `"`,
 		`xmlns:gpxtpx=`,
 		`<trkpt lat="49.87" lon="8.65">`,
 		`<ele>100</ele>`,

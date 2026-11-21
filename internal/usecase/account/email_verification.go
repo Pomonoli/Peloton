@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"html"
 	"time"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
@@ -44,13 +46,15 @@ func (e *EmailVerification) Send(ctx context.Context, user domain.User) error {
 		return fmt.Errorf("create email verification token: %w", err)
 	}
 	link := e.Link(code)
+	name := branding.Name()
+	htmlName := html.EscapeString(name)
 	return e.Mail.Send(ctx, port.EmailMessage{
 		To:      user.Email,
-		Subject: "Verify your Cairn email",
-		TextBody: "Welcome to Cairn! Confirm this email address by opening the link below " +
-			"(valid for 24 hours):\n" + link + "\n\n- Cairn",
-		HTMLBody: "<p>Welcome to Cairn! Confirm this email address:</p>" +
-			"<p><a href=\"" + link + "\">Verify email</a> (valid for 24 hours).</p><p>- Cairn</p>",
+		Subject: "Verify your " + name + " email",
+		TextBody: "Welcome to " + name + "! Confirm this email address by opening the link below " +
+			"(valid for 24 hours):\n" + link + "\n\n- " + name,
+		HTMLBody: "<p>Welcome to " + htmlName + "! Confirm this email address:</p>" +
+			"<p><a href=\"" + link + "\">Verify email</a> (valid for 24 hours).</p><p>- " + htmlName + "</p>",
 	})
 }
 

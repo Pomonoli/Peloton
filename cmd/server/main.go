@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/config"
 )
 
@@ -42,7 +43,7 @@ func main() {
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "cairn",
-		Short:         "Cairn — self-hosted activity tracker",
+		Short:         branding.Name() + " — " + branding.Description(),
 		SilenceUsage:  true, // don't dump usage on every runtime error
 		SilenceErrors: true, // we print errors ourselves with consistent formatting
 	}

@@ -3,6 +3,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
 	import LocaleSwitcher from '#lib/components/LocaleSwitcher.svelte';
+	import { locales } from '#lib/paraglide/runtime.js';
 	import PasskeyManager from '#lib/components/PasskeyManager.svelte';
 	import TokenManager from '#lib/components/TokenManager.svelte';
 	import AuthorizedApps from '#lib/components/AuthorizedApps.svelte';
@@ -400,10 +401,12 @@
 		</p>
 	</section>
 
-	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
-		<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_language_section()}</h2>
-		<LocaleSwitcher />
-	</section>
+	{#if locales.length > 1}
+		<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+			<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_language_section()}</h2>
+			<LocaleSwitcher />
+		</section>
+	{/if}
 
 	<PrivacySharingSettings username={data.user.username} />
 

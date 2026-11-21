@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
-	import { formatDate, formatDateOnly } from '#lib/format.js';
+	import { intlLocale, formatDate, formatDateOnly } from '#lib/format.js';
 	import {
 		formatMetricValue,
 		groupMetrics,
@@ -27,7 +28,7 @@
 		{ type: 'RestingHR', label: 'Resting HR', format: (v) => `${Math.round(v)} bpm` },
 		{ type: 'Sleep', label: 'Sleep', format: (v) => `${(v / 3600).toFixed(1)} h` },
 		{ type: 'Weight', label: 'Weight', format: (v) => `${v.toFixed(1)} kg` },
-		{ type: 'Steps', label: 'Steps', format: (v) => Math.round(v).toLocaleString() }
+		{ type: 'Steps', label: 'Steps', format: (v) => Math.round(v).toLocaleString(intlLocale()) }
 	];
 
 	let metrics = $state<Metric[]>([]);
@@ -124,7 +125,7 @@
 	const anyData = $derived(anyHealth || groups.length > 0);
 </script>
 
-<svelte:head><title>Health · Cairn</title></svelte:head>
+<svelte:head><title>Health · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-4xl px-4 py-6">
 	<div class="mb-4 flex items-center justify-between">

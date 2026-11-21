@@ -48,8 +48,8 @@
 <section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
 	<h2 class="mb-1 text-sm font-medium text-zinc-300">Authorized apps</h2>
 	<p class="mb-3 text-xs text-zinc-500">
-		Apps you signed into with your Cairn account (mobile clients, integrations). Revoking ends every
-		token the app holds.
+		Apps you signed into with this account (mobile clients, integrations). Revoking ends every token
+		the app holds.
 	</p>
 
 	{#if error}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 
@@ -99,7 +100,7 @@
 		{:else if info}
 			<p class="text-sm text-zinc-300">
 				<span class="font-semibold text-zinc-100">{info.client_name}</span>
-				wants access to your Cairn account. It will be able to:
+				wants access to your {APP_NAME} account. It will be able to:
 			</p>
 
 			<ul class="my-4 space-y-2">

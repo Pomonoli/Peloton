@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { page } from '$app/state';
 	import { refreshAll, goto } from '$app/navigation';
 
@@ -48,7 +49,7 @@
 
 <div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center space-y-6">
 	<header class="text-center">
-		<div class="text-xs uppercase tracking-widest text-accent-400">Cairn</div>
+		<div class="text-xs uppercase tracking-widest text-accent-400">{APP_NAME}</div>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Choose a new password</h1>
 	</header>
 

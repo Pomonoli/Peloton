@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 
 	type Club = { id: string; slug: string; name: string; is_public: boolean; member_count: number };
@@ -42,7 +43,7 @@
 	onMount(load);
 </script>
 
-<svelte:head><title>Clubs · Cairn</title></svelte:head>
+<svelte:head><title>Clubs · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-6">
 	<div class="mb-4 flex items-center justify-between">

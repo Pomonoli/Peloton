@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatSpeed, formatPower, formatHeartRate, formatDateOnly } from '#lib/format.js';
@@ -107,7 +108,7 @@
 	}
 </script>
 
-<svelte:head><title>Records · Cairn</title></svelte:head>
+<svelte:head><title>Records · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-4xl px-4 py-6">
 	<h1 class="mb-1 text-xl font-semibold text-zinc-100">Personal records</h1>

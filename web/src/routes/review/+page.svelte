@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDateOnly } from '#lib/format.js';
@@ -59,7 +60,7 @@
 		post(it, '/api/activities/merge', { activity_a: it.duplicate_of, activity_b: it.id });
 </script>
 
-<svelte:head><title>Review · Cairn</title></svelte:head>
+<svelte:head><title>Review · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-3xl px-4 py-6">
 	<h1 class="mb-1 text-xl font-semibold text-zinc-100">Review queue</h1>

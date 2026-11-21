@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
@@ -45,6 +46,9 @@ func (r *InstanceSettingsRepo) Get(ctx context.Context) (domain.InstanceSettings
 		&s.PerUserStorageQuotaBytes, &s.PerUserMaxExternalAccounts, &s.UpdatedAt)
 	if err != nil {
 		return domain.InstanceSettings{}, fmt.Errorf("read instance settings: %w", err)
+	}
+	if s.Name == "" {
+		s.Name = branding.Name()
 	}
 	s.DefaultUnits = domain.UserUnits(units)
 	if s.AllowedEmailDomains == nil {

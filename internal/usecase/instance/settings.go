@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/audit"
@@ -69,7 +70,7 @@ func (t *TestEmail) Send(ctx context.Context, to string) (time.Duration, error) 
 	}
 	name := t.Name
 	if name == "" {
-		name = "Cairn"
+		name = branding.Name()
 	}
 	start := time.Now()
 	err = t.Mail.Send(ctx, port.EmailMessage{

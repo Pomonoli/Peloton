@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
@@ -213,7 +214,7 @@
 			<p class="mt-1 max-w-2xl text-sm text-zinc-400">
 				Each connection is a separate link to a provider with its own credentials. Add several per
 				provider if you like — <strong class="text-zinc-300"
-					>all import into this one Cairn account.</strong
+					>all import into this one {APP_NAME} account.</strong
 				>
 			</p>
 		</div>

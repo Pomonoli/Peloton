@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/sethvargo/go-envconfig/v2"
+
+	"github.com/opencairn-org/cairn-core/internal/branding"
 )
 
 // EnvPrefix is the shared prefix for every Cairn environment variable.
@@ -317,7 +319,7 @@ type AuthConfig struct {
 type EmailConfig struct {
 	Adapter     string `env:"ADAPTER, default=none"` // none|smtp|ses|resend|mailgun
 	FromAddress string `env:"FROM_ADDRESS"`
-	FromName    string `env:"FROM_NAME, default=Cairn"`
+	FromName    string `env:"FROM_NAME"`
 
 	// SMTP
 	SMTPHost     string `env:"SMTP_HOST"`
@@ -419,6 +421,9 @@ func Load() (*Config, error) {
 		if v.Required && v.Value.IsZero() {
 			return nil, fmt.Errorf("load config: required key %s is empty", v.Key)
 		}
+	}
+	if _, configured := os.LookupEnv(EnvPrefix + "_EMAIL_FROM_NAME"); !configured {
+		cfg.Email.FromName = branding.Name()
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate config: %w", err)

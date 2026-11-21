@@ -11,16 +11,11 @@ const DASH = '—';
 const M_PER_MILE = 1609.344;
 const FT_PER_M = 3.28084;
 
-// Map paraglide locale → BCP 47 tag for Intl APIs.
+// Map Paraglide locales to regional formatting conventions.
+const intlLocales: Partial<Record<string, string>> = { en: 'en-US', de: 'de-DE' };
+
 export function intlLocale(): string {
-	switch (getLocale()) {
-		case 'de':
-			return 'de-DE';
-		case 'en':
-			return 'en-US';
-		default:
-			return 'de-DE';
-	}
+	return intlLocales[getLocale()] ?? 'en-US';
 }
 
 function num(v: number, frac = 2): string {

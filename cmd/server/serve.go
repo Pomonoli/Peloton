@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	webui "github.com/opencairn-org/cairn-core/internal/adapter/primary/web"
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/config"
 	"github.com/opencairn-org/cairn-core/internal/db"
 	"github.com/opencairn-org/cairn-core/internal/domain"
@@ -30,8 +31,8 @@ import (
 func newServeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve",
-		Short: "Start the Cairn server (HTTP + Connect-RPC + worker control plane)",
-		Long: `Start the Cairn server.
+		Short: "Start the " + branding.Name() + " server (HTTP + Connect-RPC + worker control plane)",
+		Long: `Start the ` + branding.Name() + ` server.
 
 On startup the server verifies that the database schema matches the version
 embedded in this binary. The behaviour is:

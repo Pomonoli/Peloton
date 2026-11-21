@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/audit"
@@ -162,7 +163,7 @@ func (a *Admin) deliver(ctx context.Context, inv domain.Invite, code string) (bo
 	}
 	name := a.Instance
 	if name == "" {
-		name = "Cairn"
+		name = branding.Name()
 	}
 	link := a.SignupURL(code)
 	err := a.Mail.Send(ctx, port.EmailMessage{

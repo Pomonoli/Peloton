@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { APP_NAME } from '$app/env/public';
 	import { m } from '#lib/paraglide/messages.js';
 	import { setPrefs } from '#lib/prefs.svelte.js';
 	import { formatDate } from '#lib/format.js';
@@ -163,14 +164,14 @@
 
 {#snippet brand()}
 	<a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
-		<svg viewBox="0 0 64 64" class="h-7 w-7 shrink-0" role="img" aria-label="Cairn logo">
+		<svg viewBox="0 0 64 64" class="h-7 w-7 shrink-0" aria-hidden="true">
 			<rect width="64" height="64" rx="14" fill="#1f2937" />
 			<rect x="13" y="45" width="38" height="11" rx="5.5" fill="#d6d3d1" />
 			<rect x="17.5" y="33.5" width="29" height="10" rx="5" fill="#a8a29e" />
 			<rect x="19.5" y="23" width="24" height="9" rx="4.5" fill="#cfcbc4" />
 			<rect x="24" y="13.5" width="16" height="8" rx="4" fill="#2dd4bf" />
 		</svg>
-		<span class="text-accent-400">Cairn</span>
+		<span class="text-accent-400">{APP_NAME}</span>
 	</a>
 {/snippet}
 
@@ -408,7 +409,14 @@
 		<footer
 			class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 px-6 py-4 text-xs text-zinc-500"
 		>
-			<span>{m.footer_tagline()}</span>
+			<span>
+				{APP_NAME} — {m.footer_tagline()} ·
+				<a href="https://github.com/Pomonoli/Peloton/blob/main/LICENSE" class="hover:underline"
+					>AGPL-3.0</a
+				>
+				· Based on
+				<a href="https://github.com/opencairn-org/cairn-core" class="hover:underline">Cairn</a>
+			</span>
 			{#if buildLabel}
 				<span class="font-mono text-[10px] text-zinc-600" title="Build info">{buildLabel}</span>
 			{/if}

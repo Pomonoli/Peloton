@@ -13,7 +13,7 @@ var (
 	ErrSegmentNameRequired     = errors.New("segment name required")
 	ErrSegmentTooFewPoints     = errors.New("segment polyline needs at least two points")
 	ErrSegmentTooShort         = errors.New("segment must be at least 50 m long")
-	ErrSegmentNotEditable      = errors.New("only Cairn-native segments can be edited")
+	ErrSegmentNotEditable      = errors.New("only native segments can be edited")
 	ErrSegmentPolylineLocked   = errors.New("the polyline cannot change once efforts exist; create a new segment")
 	ErrSegmentKeepEfforts      = errors.New("efforts are always removed with their segment on this instance")
 	ErrSegmentNotVisible       = errors.New("segment not visible to the caller")

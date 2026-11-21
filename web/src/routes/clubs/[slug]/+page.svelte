@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
@@ -98,7 +99,7 @@
 	onMount(loadClub);
 </script>
 
-<svelte:head><title>{club?.name ?? 'Club'} · Cairn</title></svelte:head>
+<svelte:head><title>{club?.name ?? 'Club'} · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-6">
 	{#if error}

@@ -38,6 +38,7 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+COPY internal/branding/brand.json /internal/branding/brand.json
 # The TS proto stubs (#lib/proto) are not committed — take them from the proto stage.
 COPY --from=proto /src/web/src/lib/proto ./src/lib/proto
 # adapter-static SPA (CAIRN_WEB_TARGET=static, vite --mode spa) → ./build

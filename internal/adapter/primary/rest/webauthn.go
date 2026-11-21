@@ -13,6 +13,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/usecase/account"
 	authuc "github.com/opencairn-org/cairn-core/internal/usecase/auth"
@@ -48,7 +49,7 @@ func NewWebAuthn(publicURL string) (*webauthn.WebAuthn, error) {
 	}
 	return webauthn.New(&webauthn.Config{
 		RPID:          u.Hostname(), // e.g. "localhost" or "cairn.example.com"
-		RPDisplayName: "Cairn",
+		RPDisplayName: branding.Name(),
 		RPOrigins:     []string{strings.TrimRight(publicURL, "/")},
 	})
 }

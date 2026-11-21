@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/usecase/oauthserver"
 	"github.com/opencairn-org/cairn-core/internal/usecase/owndata"
@@ -132,7 +133,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			"protocolVersion": mcpProtocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "cairn", "version": "1"},
-			"instructions":    "Read-only access to the authenticated user's Cairn activity data.",
+			"instructions":    "Read-only access to the authenticated user's " + branding.Name() + " activity data.",
 		}
 	case "notifications/initialized", "notifications/cancelled":
 		w.WriteHeader(http.StatusAccepted)

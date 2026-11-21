@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -69,7 +70,7 @@
 	onMount(load);
 </script>
 
-<svelte:head><title>{activity?.title ?? 'Activity'} · Cairn</title></svelte:head>
+<svelte:head><title>{activity?.title ?? 'Activity'} · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-6">
 	{#if error}

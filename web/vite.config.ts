@@ -37,10 +37,9 @@ export default defineConfig({
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
-			// cookie + Accept-Language header + baseLocale fallback.
-			// No URL strategy: the operator UI lives on a single path tree
-			// and the cookie + header are enough.
-			strategy: ['cookie', 'preferredLanguage', 'baseLocale']
+			// Ship a single consistent English UI. Keep the other catalogs for
+			// future localization without reading browser language preferences.
+			strategy: ['cookie', 'baseLocale']
 		}),
 		sveltekit({ preprocess: vitePreprocess(), adapter })
 	],

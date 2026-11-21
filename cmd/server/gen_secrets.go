@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/opencairn-org/cairn-core/internal/branding"
 )
 
 // newGenSecretsCmd generates the random secrets a production instance needs,
@@ -33,7 +35,7 @@ func newGenSecretsCmd() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "# Cairn production secrets — generated fresh; store in your secrets")
+			fmt.Fprintln(out, "# "+branding.Name()+" production secrets — generated fresh; store in your secrets")
 			fmt.Fprintln(out, "# manager and inject as env. NEVER commit these. Rotate the master key")
 			fmt.Fprintln(out, "# later with: cairn rotate-key --new-key=<new>")
 			fmt.Fprintln(out, "")

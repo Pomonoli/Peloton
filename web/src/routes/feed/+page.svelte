@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
@@ -47,7 +48,7 @@
 	onMount(() => load(true));
 </script>
 
-<svelte:head><title>Feed · Cairn</title></svelte:head>
+<svelte:head><title>Feed · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-6">
 	<h1 class="mb-4 text-xl font-semibold">Following</h1>

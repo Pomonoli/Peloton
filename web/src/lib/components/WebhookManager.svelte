@@ -180,7 +180,7 @@
 				<input
 					id="wh-url"
 					bind:value={url}
-					placeholder="https://example.com/cairn-hook"
+					placeholder="https://example.com/activity-hook"
 					class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-accent-400 focus:outline-none"
 				/>
 			</div>

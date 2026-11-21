@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { formatDate } from '#lib/format.js';
 	import ActivityNav from '#lib/components/ActivityNav.svelte';
@@ -297,7 +298,7 @@
 		}
 	}
 
-	// Per-source "view parsed data" (the normalized payload Cairn stored).
+	// Per-source "view parsed data" (the normalized payload stored by the importer).
 	let parsedOpen = $state<Record<string, boolean>>({});
 	let parsedJson = $state<Record<string, string>>({});
 	async function toggleParsed(s: ManageSource) {
@@ -347,9 +348,8 @@
 	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Export</h2>
 		<p class="mb-4 text-xs text-zinc-500">
-			Download the merged activity as a standard file, generated from Cairn's own data (works
-			regardless of where it was imported from). GPX needs a GPS track; TCX also carries indoor
-			HR/power.
+			Download the merged activity as a standard file, generated from data stored in {APP_NAME} (works
+			regardless of where it was imported from). GPX needs a GPS track; TCX also carries indoor HR/power.
 		</p>
 		{#if exportAvail != null}
 			<fieldset class="mb-4 flex flex-wrap gap-x-4 gap-y-2">
@@ -402,7 +402,7 @@
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Share</h2>
 		<p class="mb-4 text-xs text-zinc-500">
 			Create an unguessable read-only link. Anyone with the link sees this activity projected
-			through your "link" visibility rules — no Cairn account needed. Revoke any time.
+			through your "link" visibility rules — no {APP_NAME} account needed. Revoke any time.
 		</p>
 		<div class="mb-3">
 			<button
@@ -445,8 +445,8 @@
 	<section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Maintenance</h2>
 		<p class="mb-4 text-xs text-zinc-500">
-			These re-run Cairn's own computations from the data already stored — they don't contact any
-			external provider.
+			These re-run the internal calculations in {APP_NAME} from the data already stored — they don't contact
+			any external provider.
 		</p>
 		<div class="flex flex-wrap gap-3">
 			<button

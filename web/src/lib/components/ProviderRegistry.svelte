@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { intlLocale } from '#lib/format.js';
 	import { onMount } from 'svelte';
 
 	// The provider registry: what each worker package declared about
@@ -45,7 +46,7 @@
 			busy = null;
 		}
 	}
-	const fmt = (s: string) => new Date(s).toLocaleString();
+	const fmt = (s: string) => new Date(s).toLocaleString(intlLocale());
 </script>
 
 <section class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/httpsig"
 	"github.com/opencairn-org/cairn-core/internal/usecase/federation"
@@ -118,7 +119,7 @@ func (h *Handlers) nodeinfo(w http.ResponseWriter, _ *http.Request) {
 		"openRegistrations": false,
 		// User/post counts omitted on purpose (privacy on a personal instance).
 		"usage":    map[string]any{"users": map[string]any{}},
-		"metadata": map[string]any{"nodeName": "Cairn"},
+		"metadata": map[string]any{"nodeName": branding.Name()},
 	})
 }
 

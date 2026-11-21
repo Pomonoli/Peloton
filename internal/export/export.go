@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencairn-org/cairn-core/internal/branding"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
@@ -50,7 +51,7 @@ func activityName(a domain.Activity) string {
 func GPX(a domain.Activity, s domain.Stream) []byte {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
-	b.WriteString(`<gpx version="1.1" creator="Cairn" ` +
+	b.WriteString(`<gpx version="1.1" creator="` + esc(branding.Name()) + `" ` +
 		`xmlns="http://www.topografix.com/GPX/1/1" ` +
 		`xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">` + "\n")
 

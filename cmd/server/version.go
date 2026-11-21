@@ -6,6 +6,8 @@ import (
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
+
+	"github.com/opencairn-org/cairn-core/internal/branding"
 )
 
 // Version, Commit and BuildTime are injected at build time via
@@ -43,7 +45,7 @@ func buildInfo() (version, commit, buildTime string) {
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Print Cairn binary version and build metadata",
+		Short: "Print " + branding.Name() + " binary version and build metadata",
 		Run: func(*cobra.Command, []string) {
 			vcsRev, vcsTime, modified := readVCSInfo()
 			fmt.Printf("cairn version: %s\n", Version)

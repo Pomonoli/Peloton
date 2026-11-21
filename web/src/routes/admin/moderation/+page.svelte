@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { formatRelativeDate } from '#lib/format.js';
 
 	type Report = {
@@ -50,7 +51,7 @@
 	});
 </script>
 
-<svelte:head><title>Moderation · Cairn admin</title></svelte:head>
+<svelte:head><title>Moderation · {APP_NAME} admin</title></svelte:head>
 
 <div class="mx-auto max-w-3xl px-4 py-6">
 	<div class="mb-4 flex items-center justify-between">

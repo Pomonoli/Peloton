@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import {
+		intlLocale,
 		formatDistance,
 		formatDuration,
 		formatElevation,
@@ -97,7 +99,7 @@
 	const summary = $derived(
 		ov
 			? [
-					{ label: 'Activities', value: ov.totals.count.toLocaleString() },
+					{ label: 'Activities', value: ov.totals.count.toLocaleString(intlLocale()) },
 					{ label: 'Distance', value: formatDistance(ov.totals.distance_m) },
 					{ label: 'Moving time', value: formatDuration(ov.totals.moving_s) },
 					{ label: 'Elevation', value: formatElevation(ov.totals.elevation_gain_m) }
@@ -105,6 +107,8 @@
 			: []
 	);
 </script>
+
+<svelte:head><title>{APP_NAME}</title></svelte:head>
 
 {#if !data.user}
 	<div class="space-y-6">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$app/env/public';
 	import { page } from '$app/state';
 	import { refreshAll, goto } from '$app/navigation';
 	import {
@@ -103,8 +104,7 @@
 		oidc_verify_failed: 'The identity provider’s response could not be verified.',
 		oidc_bad_response: 'The identity provider returned an incomplete response.',
 		oidc_unavailable: 'That identity provider is not available.',
-		auto_provision_denied:
-			'No Cairn account exists for this identity yet — ask an admin to invite you.',
+		auto_provision_denied: `No ${APP_NAME} account exists for this identity yet — ask an admin to invite you.`,
 		oidc_failed: 'Single sign-on failed. Please try again.'
 	};
 	const loginError = $derived(
@@ -128,9 +128,11 @@
 	);
 </script>
 
+<svelte:head><title>{APP_NAME}</title></svelte:head>
+
 <div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center space-y-8">
 	<header class="text-center">
-		<div class="text-xs uppercase tracking-widest text-accent-400">Cairn</div>
+		<div class="text-xs uppercase tracking-widest text-accent-400">{APP_NAME}</div>
 		<h1 class="mt-2 text-3xl font-semibold tracking-tight">Sign in</h1>
 		<p class="mt-1 text-sm text-zinc-400">Self-hosted activity tracker.</p>
 	</header>

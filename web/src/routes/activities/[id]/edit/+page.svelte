@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { intlLocale } from '#lib/format.js';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { clients } from '#lib/connect.js';
@@ -161,7 +162,7 @@
 				.filter((a) => a.id !== init.id)
 				.map((a) => {
 					const when = a.startTime
-						? new Date(protoTimestampToISO(a.startTime)).toLocaleDateString()
+						? new Date(protoTimestampToISO(a.startTime)).toLocaleDateString(intlLocale())
 						: '';
 					const name = a.title || enumName(ActivityType, a.type) || 'activity';
 					return { id: a.id, label: `${name} — ${when}` };
