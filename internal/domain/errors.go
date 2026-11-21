@@ -79,7 +79,8 @@ var ErrParserDowngrade = errors.New("source: parser version older than the store
 
 // Segment invariants — checked by Segment.Validate.
 var (
-	ErrSegmentInvalidSource            = errors.New("segment: source must be external or native")
+	ErrSegmentInvalidSource            = errors.New("segment: invalid source")
+	ErrSegmentInvalidCatalog           = errors.New("segment: invalid catalog provenance or scope")
 	ErrSegmentInvalidScope             = errors.New("segment: scope must be private or instance")
 	ErrSegmentInvalidActivityType      = errors.New("segment: activity_type is invalid")
 	ErrSegmentExternalMissingExternal  = errors.New("segment: external source requires external_id and external_account_id")

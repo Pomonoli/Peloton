@@ -96,9 +96,9 @@ type SegmentPatch struct {
 	PolylinePrecision    int
 }
 
-// InstanceShared reports whether every user may read the segment.
+// InstanceShared reports whether the segment can have a shared leaderboard.
 func (s *Segment) InstanceShared() bool {
-	return s.Source == SegmentSourceNative && s.Scope == SegmentScopeInstance
+	return s.Scope == SegmentScopeInstance && (s.Source == SegmentSourceNative || s.Source == SegmentSourceStravaCatalog)
 }
 
 // ApplyPatch edits a native segment; hasEfforts locks the polyline. Starred

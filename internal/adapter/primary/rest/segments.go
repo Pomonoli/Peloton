@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 //	GET    /api/segments                         ?type=&limit=&offset=
 //	GET    /api/segments/{id}
 //	GET    /api/activities/{id}/segment-efforts
+//	POST   /api/activities/{id}/rescan-segments
 //
 // Mount:
 //
@@ -43,8 +45,9 @@ type SegmentHandlers struct {
 	Details    *view.Details
 	Activities *activity.SourceActions
 	// Backfill starts a background rematch of the segment and returns its job id.
-	Backfill func(userID domain.UserID, id domain.SegmentID, from, to time.Time) string
-	Log      *slog.Logger
+	Backfill    func(userID domain.UserID, id domain.SegmentID, from, to time.Time) string
+	Log         *slog.Logger
+	QueueRescan func(context.Context, domain.Activity) error
 }
 
 // MountMine registers the caller's segment library and an activity's efforts.
@@ -52,6 +55,9 @@ func (h *SegmentHandlers) MountMine(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/segments", h.list)
 	mux.HandleFunc("GET /api/segments/{id}", h.detail)
 	mux.HandleFunc("GET /api/activities/{id}/segment-efforts", h.activityEfforts)
+	if h.QueueRescan != nil {
+		mux.HandleFunc("POST /api/activities/{id}/rescan-segments", h.rescanActivity)
+	}
 }
 
 // Mount registers browsing, leaderboards and, with Authoring, the writes.
@@ -127,6 +133,8 @@ func (h *SegmentHandlers) detail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"segment": map[string]any{
 			"id":                 seg.ID.String(),
+			"source":             string(seg.Source),
+			"external_id":        seg.ExternalID,
 			"name":               seg.Name,
 			"distance_m":         seg.DistanceM,
 			"activity_type":      string(seg.ActivityType),
@@ -162,10 +170,59 @@ func (h *SegmentHandlers) activityEfforts(w http.ResponseWriter, r *http.Request
 		return
 	}
 	out := make([]map[string]any, 0, len(rows))
+	records := make(map[domain.SegmentID]*domain.LeaderboardEntry)
 	for _, row := range rows {
-		out = append(out, segEffortRowJSON(row))
+		item := segEffortRowJSON(row)
+		if row.Segment.Source == domain.SegmentSourceStravaCatalog {
+			record, ok := records[row.Segment.ID]
+			if !ok {
+				_, record, err = h.Views.Leaderboard(r.Context(), userID, row.Segment.ID, domain.LeaderboardQuery{Limit: 1})
+				if err != nil {
+					h.Log.Warn("load Local KOM position", "segment_id", row.Segment.ID, "error", err)
+				}
+				records[row.Segment.ID] = record
+			}
+			if record != nil {
+				isRecord := record.EffortID == row.Effort.ID
+				item["is_personal_record"] = isRecord
+				if isRecord {
+					item["local_kom_position"] = record.Rank
+					item["personal_rank"] = 1
+				}
+			}
+		}
+		out = append(out, item)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"efforts": out})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"efforts": out, "can_rescan": h.QueueRescan != nil && act.Type == domain.ActivityTypeRide,
+	})
+}
+
+func (h *SegmentHandlers) rescanActivity(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
+	id, err := domain.ParseUUID[domain.ActivityID](r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad activity id", http.StatusBadRequest)
+		return
+	}
+	act, err := h.Activities.OwnedActivity(r.Context(), userID, id)
+	if err != nil {
+		writeActionError(w, err, "load activity failed")
+		return
+	}
+	if act.Type != domain.ActivityTypeRide {
+		writeActionError(w, port.NewActionError(port.ActionErrorPrecondition, "segment discovery requires a cycling activity"), "rescan failed")
+		return
+	}
+	if err := h.QueueRescan(r.Context(), act); err != nil {
+		h.Log.Warn("queue segment rescan failed", "activity_id", id, "error", err)
+		http.Error(w, "could not queue segment rescan", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"queued": true})
 }
 
 func (h *SegmentHandlers) browse(w http.ResponseWriter, r *http.Request) {
@@ -472,8 +529,8 @@ func segEffortsJSON(efforts []domain.SegmentEffort) []map[string]any {
 			"id":                 e.ID.String(),
 			"activity_id":        e.ActivityID.String(),
 			"start_time":         e.StartTime.UTC().Format(time.RFC3339),
-			"elapsed_s":          int64(e.ElapsedS),
-			"moving_s":           int64(e.MovingS),
+			"elapsed_s":          e.ElapsedS,
+			"moving_s":           e.MovingS,
 			"avg_heart_rate":     e.AvgHeartRateBpm,
 			"avg_power":          e.AvgPowerW,
 			"personal_rank":      e.PersonalRank,
@@ -495,6 +552,7 @@ func segEffortRowJSON(row view.EffortRow) map[string]any {
 		"moving_s":           e.MovingS,
 		"avg_heart_rate":     e.AvgHeartRateBpm,
 		"avg_power":          e.AvgPowerW,
+		"avg_speed_mps":      e.AvgSpeedMps,
 		"is_personal_record": e.IsPersonalRecord,
 		"personal_rank":      e.PersonalRank,
 	}

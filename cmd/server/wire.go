@@ -244,6 +244,7 @@ type App struct {
 	SegmentAuthoring         *segment.Authoring
 	ProviderSegments         *segment.ProviderSegments
 	MatchSegments            *segment.MatchSegmentsForActivity
+	DiscoverSegments         *segment.DiscoverSegments
 	ComputeSegmentRanks      *segmentrank.ComputeSegmentRanks
 	ComputeTrainingLoad      *trainingload.ComputeTrainingLoadForUser
 	DispatchPR               *notification.DispatchPRNotifications
@@ -361,6 +362,7 @@ func newApp(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, logger 
 	app.AttachmentVariants = attachmentuc.NewVariants(app.Attachments, app.BlobStore, logger)
 	wireAppGeocoder(app, cfg, logger)
 	wirePipeline(app, logger)
+	wireSegmentDiscovery(app, cfg.SegmentDiscovery.Enabled, logger)
 	wireRestUseCases(app, logger)
 	wireMaintenance(app, pool)
 	return app, nil

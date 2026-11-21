@@ -63,10 +63,10 @@ func TestDiscoverMatchesGeometryAndOriginalTime(t *testing.T) {
 	line := []domain.GeoPoint{{Lat: 51, Lon: 4}, {Lat: 51.0015, Lon: 4}, {Lat: 51.0015, Lon: 4.0015}}
 	segment := definition{ID: "42", Name: "Test corner", Geometry: line}
 	distant := definition{ID: "43", Geometry: []domain.GeoPoint{{Lat: 52, Lon: 4}, {Lat: 52.001, Lon: 4}}}
-	forward := densify(line)
+	forward := testTrack(line)
 	reverse := slices.Clone(forward)
 	slices.Reverse(reverse)
-	shortcut := densify([]domain.GeoPoint{line[0], line[len(line)-1]})
+	shortcut := testTrack([]domain.GeoPoint{line[0], line[len(line)-1]})
 	forwardSamples := testSamples(forward)
 	for _, tt := range []struct {
 		name    string
@@ -106,4 +106,16 @@ func testSamples(line []domain.GeoPoint) []domain.StreamSample {
 		})
 	}
 	return samples
+}
+
+func testTrack(line []domain.GeoPoint) []domain.GeoPoint {
+	var points []domain.GeoPoint
+	for i, a := range line[:len(line)-1] {
+		b := line[i+1]
+		for j := 0; j < 20; j++ {
+			f := float64(j) / 20
+			points = append(points, domain.GeoPoint{Lat: a.Lat + f*(b.Lat-a.Lat), Lon: a.Lon + f*(b.Lon-a.Lon)})
+		}
+	}
+	return append(points, line[len(line)-1])
 }

@@ -33,9 +33,10 @@ type EventPublisher interface {
 type ChangeKind string
 
 const (
-	ChangeIngested ChangeKind = "ingested" // IngestSource: per-source + user stages, PRs, federation create
-	ChangeRemerged ChangeKind = "remerged" // Remerge: user stages, federation delete when soft-deleted
-	ChangeBorrowed ChangeKind = "borrowed" // BorrowFrom: per-source + user stages
+	ChangeIngested      ChangeKind = "ingested"       // IngestSource: per-source + user stages, PRs, federation create
+	ChangeRemerged      ChangeKind = "remerged"       // Remerge: user stages, federation delete when soft-deleted
+	ChangeBorrowed      ChangeKind = "borrowed"       // BorrowFrom: per-source + user stages
+	ChangeSegmentRescan ChangeKind = "segment_rescan" // consumed only by segment discovery
 )
 
 // ActivityChanged is the domain event a durable write publishes; its
@@ -81,7 +82,7 @@ func DecodeActivityChanged(b []byte) (ActivityChanged, error) {
 		return ActivityChanged{}, err
 	}
 	switch w.Kind {
-	case ChangeIngested, ChangeRemerged, ChangeBorrowed:
+	case ChangeIngested, ChangeRemerged, ChangeBorrowed, ChangeSegmentRescan:
 	default:
 		return ActivityChanged{}, fmt.Errorf("unknown kind %q", w.Kind)
 	}
@@ -97,7 +98,7 @@ func DecodeActivityChanged(b []byte) (ActivityChanged, error) {
 		Kind: w.Kind, UserID: domain.UserID(uid), ActivityID: domain.ActivityID(aid),
 		Action: w.Action, SoftDeleted: w.SoftDeleted, MsgID: w.MsgID,
 	}
-	if w.Kind != ChangeRemerged {
+	if w.Kind == ChangeIngested || w.Kind == ChangeBorrowed {
 		sid, err := uuid.Parse(w.SourceID)
 		if err != nil {
 			return ActivityChanged{}, fmt.Errorf("source_id: %w", err)
@@ -140,10 +141,24 @@ func (p *Pipeline) publish(ctx context.Context, ev ActivityChanged) error {
 	return p.Bus.Publish(ctx, ActivityChangedSubject, ev.MsgID, body)
 }
 
+// QueueSegmentRescan publishes an owner-authorized request to the discovery consumer.
+func (p *Pipeline) QueueSegmentRescan(ctx context.Context, act domain.Activity) error {
+	if p.Bus == nil {
+		return port.NewActionError(port.ActionErrorUnavailable, "segment discovery requires the job bus")
+	}
+	return p.publish(ctx, ActivityChanged{
+		Kind: ChangeSegmentRescan, UserID: act.UserID, ActivityID: act.ID,
+		MsgID: "segment-rescan:" + act.ID.String(),
+	})
+}
+
 // RunFollowUps runs every follow-up ev owes. Each stage logs and recovers;
 // the joined stage errors are returned so a bus consumer retries the event
 // (all stages are idempotent, federation is skipped on redelivery).
 func (p *Pipeline) RunFollowUps(ctx context.Context, ev ActivityChanged) error {
+	if ev.Kind == ChangeSegmentRescan {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, p.followUpTimeout())
 	defer cancel()
 	log := p.log().With("activity_id", ev.ActivityID, "kind", ev.Kind)

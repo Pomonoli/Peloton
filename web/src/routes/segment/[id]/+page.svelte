@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -9,6 +10,7 @@
 	type Segment = {
 		id: string;
 		name: string;
+		source: string;
 		distance_m: number;
 		activity_type: string;
 		climb_category: string | null;
@@ -30,6 +32,39 @@
 		is_personal_record: boolean;
 	};
 
+	type LeaderboardEntry = {
+		rank: number;
+		user_id: string;
+		display_name: string;
+		elapsed_s: number;
+	};
+
+	const leaderboardPageSize = 20;
+	let board = $state<LeaderboardEntry[]>([]);
+	let moreRiders = $state(false);
+	let boardLoading = $state(false);
+	let boardError = $state(false);
+
+	async function loadLeaderboard(id: string, offset: number) {
+		boardLoading = true;
+		boardError = false;
+		try {
+			const res = await fetch(
+				`/api/segments/${id}/leaderboard?limit=${leaderboardPageSize}&offset=${offset}`
+			);
+			if (!res.ok) throw new Error();
+			const entries: LeaderboardEntry[] = (await res.json()).entries ?? [];
+			if (id === page.params.id) {
+				board = offset === 0 ? entries : [...board, ...entries];
+				moreRiders = entries.length === leaderboardPageSize;
+			}
+		} catch {
+			if (id === page.params.id) boardError = true;
+		} finally {
+			if (id === page.params.id) boardLoading = false;
+		}
+	}
+
 	let segment = $state<Segment | null>(null);
 	let efforts = $state<Effort[]>([]);
 	let loading = $state(true);
@@ -44,6 +79,7 @@
 				const d = await res.json();
 				segment = d.segment;
 				efforts = d.efforts ?? [];
+				if (segment?.source === 'strava_catalog') void loadLeaderboard(segment.id, 0);
 			}
 		} catch {
 			/* ignore */
@@ -109,6 +145,7 @@
 				<h1 class="text-2xl font-semibold tracking-tight">{segment.name || 'Segment'}</h1>
 				<div class="mt-0.5 flex flex-wrap gap-x-4 text-xs text-zinc-500">
 					<span>{formatDistance(segment.distance_m)}</span>
+					{#if segment.source === 'strava_catalog'}<span>{m.segment_strava_source()}</span>{/if}
 					{#if segment.elevation_gain_m}<span
 							>{formatElevation(segment.elevation_gain_m)} climb</span
 						>{/if}
@@ -122,6 +159,52 @@
 		{#if coordinates.length > 1}
 			<section class="h-72 overflow-hidden rounded-xl border border-zinc-800">
 				<ActivityMap {coordinates} />
+			</section>
+		{/if}
+
+		{#if segment.source === 'strava_catalog'}
+			<section>
+				<h2 class="text-sm font-medium">{m.segment_local_kom()}</h2>
+				<p class="mb-3 text-sm text-quiet">{m.segment_leaderboard_intro()}</p>
+				{#if boardError}
+					<p role="status" class="mb-2 text-sm text-quiet">{m.segment_leaderboard_failed()}</p>
+				{/if}
+				{#if board.length > 0}
+					<div class="overflow-x-auto rounded-xl border border-zinc-800">
+						<table class="w-full text-sm">
+							<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
+								<tr>
+									<th scope="col" class="px-4 py-2 text-left">{m.segment_leaderboard_rank()}</th>
+									<th scope="col" class="px-4 py-2 text-left">{m.segment_leaderboard_rider()}</th>
+									<th scope="col" class="px-4 py-2 text-right">{m.segment_leaderboard_time()}</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-zinc-800">
+								{#each board as entry (entry.user_id)}
+									<tr>
+										<td class="px-4 py-2 tabular-nums">#{entry.rank}</td>
+										<td class="px-4 py-2">{entry.display_name}</td>
+										<td class="px-4 py-2 text-right tabular-nums"
+											>{formatDuration(entry.elapsed_s)}</td
+										>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{:else if !boardLoading && !boardError}
+					<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
+				{/if}
+				{#if moreRiders || boardError}
+					<button
+						type="button"
+						class="mt-2 text-sm text-accent-400 hover:underline disabled:opacity-50"
+						disabled={boardLoading}
+						onclick={() => loadLeaderboard(page.params.id ?? '', board.length)}
+					>
+						{m.segment_leaderboard_next()}
+					</button>
+				{/if}
 			</section>
 		{/if}
 
@@ -169,7 +252,7 @@
 		{/if}
 
 		<section>
-			<h2 class="mb-3 text-sm font-medium text-zinc-300">All efforts</h2>
+			<h2 class="mb-3 text-sm font-medium text-zinc-300">{m.segment_leaderboard_only_yours()}</h2>
 			<div class="overflow-x-auto rounded-xl border border-zinc-800">
 				<table class="w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">

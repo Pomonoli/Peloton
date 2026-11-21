@@ -40,19 +40,25 @@ const EnvPrefix = "CAIRN"
 // populates the whole tree. Validation beyond what the tags express
 // (required, default) happens in Validate.
 type Config struct {
-	Database   DatabaseConfig   `env:", prefix=DATABASE_"`
-	HTTP       HTTPConfig       `env:", prefix=HTTP_"`
-	NATS       NATSConfig       `env:", prefix=NATS_"`
-	Storage    StorageConfig    `env:", prefix=STORAGE_"`
-	Auth       AuthConfig       `env:", prefix=AUTH_"`
-	Email      EmailConfig      `env:", prefix=EMAIL_"`
-	Instance   InstanceConfig   `env:", prefix=INSTANCE_"`
-	Log        LogConfig        `env:", prefix=LOG_"`
-	Scheduler  SchedulerConfig  `env:", prefix=SCHEDULER_"`
-	Geocoder   GeocoderConfig   `env:", prefix=GEOCODER_"`
-	Map        MapConfig        `env:", prefix=MAP_"`
-	Quota      QuotaConfig      `env:", prefix=QUOTA_"`
-	Federation FederationConfig `env:", prefix=FEDERATION_"`
+	Database         DatabaseConfig         `env:", prefix=DATABASE_"`
+	HTTP             HTTPConfig             `env:", prefix=HTTP_"`
+	NATS             NATSConfig             `env:", prefix=NATS_"`
+	Storage          StorageConfig          `env:", prefix=STORAGE_"`
+	Auth             AuthConfig             `env:", prefix=AUTH_"`
+	Email            EmailConfig            `env:", prefix=EMAIL_"`
+	Instance         InstanceConfig         `env:", prefix=INSTANCE_"`
+	Log              LogConfig              `env:", prefix=LOG_"`
+	Scheduler        SchedulerConfig        `env:", prefix=SCHEDULER_"`
+	Geocoder         GeocoderConfig         `env:", prefix=GEOCODER_"`
+	Map              MapConfig              `env:", prefix=MAP_"`
+	Quota            QuotaConfig            `env:", prefix=QUOTA_"`
+	Federation       FederationConfig       `env:", prefix=FEDERATION_"`
+	SegmentDiscovery SegmentDiscoveryConfig `env:", prefix=SEGMENT_DISCOVERY_"`
+}
+
+// SegmentDiscoveryConfig opts into external, coarse geographic lookups.
+type SegmentDiscoveryConfig struct {
+	Enabled bool `env:"ENABLED, default=false"`
 }
 
 // FederationConfig gates ActivityPub federation (docs/federation-design.md).

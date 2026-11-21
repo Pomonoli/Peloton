@@ -16,6 +16,10 @@ func segmentVisibleSQL(viewerParam string) string {
 		OR (s.source = 'native' AND s.owner_user_id = ` + viewerParam + `)
 		OR (s.source = 'external' AND s.external_account_id IN (
 			SELECT id FROM external_accounts WHERE user_id = ` + viewerParam + `))
+		OR (s.source = 'strava_catalog' AND EXISTS (
+			SELECT 1 FROM segment_efforts e JOIN activities a ON a.id = e.activity_id
+			WHERE e.segment_id = s.id AND e.user_id = ` + viewerParam + `
+			  AND a.deleted_at IS NULL AND a.type = 'ride' AND e.provider_effort_external_id IS NULL))
 	)`
 }
 
@@ -151,9 +155,10 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 		        a.privacy, a.hidden_by_admin, u.display_name, COALESCE(u.avatar_url, '')
 		   FROM segment_efforts e
 		   JOIN activities a ON a.id = e.activity_id
+		   JOIN segments s ON s.id = e.segment_id
 		   JOIN users u ON u.id = e.user_id
 		  WHERE e.segment_id = $1
-		    AND a.deleted_at IS NULL
+		    AND a.deleted_at IS NULL AND `+catalogEffortSQL+`
 		    AND (e.user_id = $2 OR (a.privacy <> 'private' AND a.hidden_by_admin = false))
 		    AND ($3::uuid IS NULL OR e.user_id = $3)
 		    AND ($4::timestamptz IS NULL OR e.start_time >= $4)

@@ -43,7 +43,7 @@ const segmentColumns = `
 	climb_category,
 	match_corridor_m, match_start_tolerance_m, match_end_tolerance_m,
 	bidirectional, starred,
-	created_at, updated_at
+	created_at, updated_at, catalog_provider
 `
 
 const (
@@ -69,7 +69,7 @@ const segmentSaveSQL = `
 			climb_category,
 			match_corridor_m, match_start_tolerance_m, match_end_tolerance_m,
 			bidirectional, starred,
-			created_at, updated_at
+			created_at, updated_at, catalog_provider
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, $9,
@@ -80,7 +80,7 @@ const segmentSaveSQL = `
 			$19,
 			$20, $21, $22,
 			$23, $24,
-			COALESCE($26, now()), COALESCE($27, now())
+			COALESCE($26, now()), COALESCE($27, now()), $28
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			source = EXCLUDED.source,
@@ -107,7 +107,8 @@ const segmentSaveSQL = `
 			match_start_tolerance_m = EXCLUDED.match_start_tolerance_m,
 			match_end_tolerance_m = EXCLUDED.match_end_tolerance_m,
 			bidirectional = EXCLUDED.bidirectional,
-			starred = EXCLUDED.starred
+			starred = EXCLUDED.starred,
+			catalog_provider = EXCLUDED.catalog_provider
 		`
 
 // segmentSaveArgs builds the segmentSaveSQL bind parameters.
@@ -122,7 +123,7 @@ func segmentSaveArgs(s domain.Segment, lineWKT string) []any {
 		s.MatchCorridorM, s.MatchStartToleranceM, s.MatchEndToleranceM,
 		s.Bidirectional, s.Starred,
 		lineWKT,
-		nullableTime(s.CreatedAt), nullableTime(s.UpdatedAt),
+		nullableTime(s.CreatedAt), nullableTime(s.UpdatedAt), s.CatalogProvider,
 	}
 }
 
@@ -244,7 +245,7 @@ func (r *SegmentRepo) ListSegmentCandidatesForActivity(
 		        (source = 'native' AND scope = 'private' AND owner_user_id = $3)
 		        OR
 		        -- Native instance: all instance-scope segments visible.
-		        (source = 'native' AND scope = 'instance')
+		        (source IN ('native', 'strava_catalog') AND scope = 'instance')
 		    )
 		  ORDER BY distance_m DESC`,
 		string(activityType), bboxWKT, userID.UUID(),
@@ -374,16 +375,35 @@ func (r *SegmentRepo) DeleteEffortsForSource(ctx context.Context, sourceID domai
 	return nil
 }
 
+// catalogEffortSQL limits catalog results to GPX/FIT/TCX stream matches
+// on live activities. Prefer the activity's primary stream when it matched;
+// otherwise use one deterministic source. Keep repeat traversals on that source.
+const catalogEffortSQL = `(s.source <> 'strava_catalog' OR (
+	e.provider_effort_external_id IS NULL AND a.deleted_at IS NULL AND a.type = 'ride' AND NOT EXISTS (
+		SELECT 1 FROM segment_efforts alt
+		WHERE alt.segment_id = e.segment_id AND alt.activity_id = e.activity_id
+		  AND alt.activity_source_id <> e.activity_source_id AND alt.provider_effort_external_id IS NULL
+		  AND (
+		    alt.activity_source_id = a.primary_stream_source_id OR (
+		      e.activity_source_id IS DISTINCT FROM a.primary_stream_source_id
+		      AND alt.activity_source_id < e.activity_source_id
+		    )
+		  )
+	)
+))`
+
 // ListEffortsForActivity returns every effort across every source of the
 // activity. Ordered by start_time so the UI can render them along the
 // activity's timeline.
 func (r *SegmentRepo) ListEffortsForActivity(ctx context.Context, id domain.ActivityID) ([]domain.SegmentEffort, error) {
 	db := dbtx(ctx, r.pool)
 	rows, err := db.Query(ctx,
-		`SELECT `+segmentEffortColumns+`
-		   FROM segment_efforts
-		  WHERE activity_id = $1
-		  ORDER BY start_time ASC`,
+		`SELECT `+prefixedColumns(segmentEffortColumns, "e.")+`
+		   FROM segment_efforts e
+		   JOIN segments s ON s.id = e.segment_id
+		   JOIN activities a ON a.id = e.activity_id
+		  WHERE e.activity_id = $1 AND `+catalogEffortSQL+`
+		  ORDER BY e.start_time, e.id`,
 		id.UUID(),
 	)
 	if err != nil {
@@ -415,10 +435,12 @@ func (r *SegmentRepo) ListEffortsForSegment(
 	switch scope {
 	case port.LeaderboardScopePersonalOnly:
 		rows, err = db.Query(ctx,
-			`SELECT `+segmentEffortColumns+`
-			   FROM segment_efforts
-			  WHERE segment_id = $1 AND user_id = $2
-			  ORDER BY elapsed_s ASC
+			`SELECT `+prefixedColumns(segmentEffortColumns, "e.")+`
+			   FROM segment_efforts e
+			   JOIN segments s ON s.id = e.segment_id
+			   JOIN activities a ON a.id = e.activity_id
+			  WHERE e.segment_id = $1 AND e.user_id = $2 AND `+catalogEffortSQL+`
+			  ORDER BY e.elapsed_s, e.start_time, e.id
 			  LIMIT $3 OFFSET $4`,
 			segmentID.UUID(), viewerUserID.UUID(), limit, offset,
 		)
@@ -477,11 +499,14 @@ func (r *SegmentRepo) RecomputeRanksForSegment(ctx context.Context, segmentID do
 	_, err := db.Exec(ctx, `
 		WITH ranked AS (
 			SELECT
-				id,
-				ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY elapsed_s ASC, start_time ASC) AS personal_rank,
-				ROW_NUMBER() OVER (ORDER BY elapsed_s ASC, start_time ASC)                       AS instance_rank
-			  FROM segment_efforts
-			 WHERE segment_id = $1
+				e.id,
+				ROW_NUMBER() OVER (PARTITION BY e.user_id ORDER BY e.elapsed_s, e.start_time, e.id) AS personal_rank,
+				CASE WHEN s.source = 'strava_catalog' THEN 0
+				     ELSE ROW_NUMBER() OVER (ORDER BY e.elapsed_s, e.start_time, e.id) END AS instance_rank
+			  FROM segment_efforts e
+			  JOIN segments s ON s.id = e.segment_id
+			  JOIN activities a ON a.id = e.activity_id
+			 WHERE e.segment_id = $1 AND `+catalogEffortSQL+`
 		)
 		UPDATE segment_efforts e SET
 			personal_rank       = r.personal_rank,
@@ -595,7 +620,7 @@ func scanSegmentRow(row rowScanner) (domain.Segment, error) {
 		&climbCategory,
 		&seg.MatchCorridorM, &seg.MatchStartToleranceM, &seg.MatchEndToleranceM,
 		&seg.Bidirectional, &seg.Starred,
-		&seg.CreatedAt, &seg.UpdatedAt,
+		&seg.CreatedAt, &seg.UpdatedAt, &seg.CatalogProvider,
 	); err != nil {
 		return domain.Segment{}, err
 	}
@@ -687,11 +712,12 @@ func (r *SegmentRepo) ListUserSegmentsByEffortCount(
 		        count(e.*)                       AS effort_count,
 		        min(e.elapsed_s)                 AS best_elapsed_s,
 		        max(e.start_time)                AS last_effort_at,
-		        bool_or(e.is_personal_record)    AS has_pr,
+		        (s.source = 'strava_catalog' OR bool_or(e.is_personal_record)) AS has_pr,
 		        bool_or(e.is_instance_record)    AS has_cr
 		   FROM segment_efforts e
 		   JOIN segments s ON s.id = e.segment_id
-		  WHERE e.user_id = $1
+		   JOIN activities a ON a.id = e.activity_id
+		  WHERE e.user_id = $1 AND `+catalogEffortSQL+`
 		    AND ($2 = '' OR s.activity_type = $2)
 		  GROUP BY s.id
 		  ORDER BY effort_count DESC, last_effort_at DESC
@@ -732,13 +758,15 @@ func (r *SegmentRepo) UserSegmentStats(ctx context.Context, userID domain.UserID
 		`SELECT
 		    count(DISTINCT e.segment_id)                                   AS segments,
 		    count(*)                                                       AS efforts,
-		    count(*) FILTER (WHERE e.is_personal_record)                   AS prs,
+		    count(*) FILTER (WHERE s.source <> 'strava_catalog' AND e.is_personal_record)
+		    + count(DISTINCT e.segment_id) FILTER (WHERE s.source = 'strava_catalog') AS prs,
 		    count(*) FILTER (WHERE e.is_instance_record)                   AS crs,
-		    count(DISTINCT e.segment_id) FILTER (WHERE s.source = 'external') AS external,
+		    count(DISTINCT e.segment_id) FILTER (WHERE s.source IN ('external', 'strava_catalog')) AS external,
 		    count(DISTINCT e.segment_id) FILTER (WHERE s.source = 'native')   AS native
 		   FROM segment_efforts e
 		   JOIN segments s ON s.id = e.segment_id
-		  WHERE e.user_id = $1`,
+		   JOIN activities a ON a.id = e.activity_id
+		  WHERE e.user_id = $1 AND `+catalogEffortSQL,
 		userID.UUID(),
 	).Scan(&st.Segments, &st.Efforts, &st.PRs, &st.CRs, &st.External, &st.Native)
 	if err != nil {

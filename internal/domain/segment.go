@@ -15,13 +15,14 @@ import (
 // import time; each match becomes a SegmentEffort with a personal-best
 // rank.
 //
-// Two sources:
+// Segment sources:
 //
 //	SegmentSourceExternal - mirrored from an external provider via
 //	                        external_account; identity of the provider
 //	                        is implicit (external_account_id → provider).
 //	                        Scope-locked to PRIVATE.
 //	SegmentSourceNative   - created in Cairn, can be PRIVATE or INSTANCE scope.
+//	SegmentSourceStravaCatalog - discovered from an account-independent catalog.
 //
 // Geometry is stored two ways for two purposes:
 //   * polyline (encoded text) — wire format, fast over the network
@@ -32,19 +33,19 @@ import (
 // (computed on demand). The PostGIS columns are an adapter concern.
 // ---------------------------------------------------------------------------
 
-// SegmentSource indicates whether the segment is mirrored from an
-// external provider or created natively in Cairn. Provider-agnostic by
-// design — the domain doesn't care which external system the mirror
-// came from; that's recovered via external_account_id lookup.
+// SegmentSource distinguishes account-scoped mirrors, native segments and
+// Strava segments from a shared catalog. Mirror provenance comes from the
+// external account. Catalog provenance comes from CatalogProvider.
 type SegmentSource string
 
 const (
-	SegmentSourceExternal SegmentSource = "external"
-	SegmentSourceNative   SegmentSource = "native"
+	SegmentSourceExternal      SegmentSource = "external"
+	SegmentSourceNative        SegmentSource = "native"
+	SegmentSourceStravaCatalog SegmentSource = "strava_catalog"
 )
 
 func (s SegmentSource) Valid() bool {
-	return s == SegmentSourceExternal || s == SegmentSourceNative
+	return s == SegmentSourceExternal || s == SegmentSourceNative || s == SegmentSourceStravaCatalog
 }
 
 // SegmentScope is the visibility level for a segment within the instance.
@@ -87,10 +88,11 @@ type Segment struct {
 	ID     SegmentID
 	Source SegmentSource
 
-	// External-mirror fields. Both set together; nil for native.
-	// The owning provider is recovered via external_account_id.
+	// ExternalID is scoped to an account for a mirror and is a Strava ID
+	// for a catalog definition. CatalogProvider identifies its data source.
 	ExternalID        *string
 	ExternalAccountID *ExternalAccountID
+	CatalogProvider   *string
 
 	// Native field. Set when Source == SegmentSourceNative; nil for
 	// external-mirror.
@@ -157,7 +159,16 @@ func (s *Segment) Validate() error {
 
 // validateSourceShape checks the external/native ownership rules.
 func (s *Segment) validateSourceShape() error {
+	if s.Source != SegmentSourceStravaCatalog && s.CatalogProvider != nil {
+		return ErrSegmentInvalidCatalog
+	}
 	switch s.Source {
+	case SegmentSourceStravaCatalog:
+		if s.ExternalID == nil || !validStravaSegmentID(*s.ExternalID) || s.ExternalAccountID != nil || s.OwnerUserID != nil ||
+			s.CatalogProvider == nil || *s.CatalogProvider == "" || s.Scope != SegmentScopeInstance ||
+			s.ActivityType != ActivityTypeRide || s.Bidirectional {
+			return ErrSegmentInvalidCatalog
+		}
 	case SegmentSourceExternal:
 		if s.ExternalID == nil || s.ExternalAccountID == nil {
 			return ErrSegmentExternalMissingExternal
@@ -177,6 +188,18 @@ func (s *Segment) validateSourceShape() error {
 		}
 	}
 	return nil
+}
+
+func validStravaSegmentID(id string) bool {
+	if id == "" || id[0] == '0' {
+		return false
+	}
+	for _, digit := range id {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // SegmentEffort is the record of one traversal of one segment within one

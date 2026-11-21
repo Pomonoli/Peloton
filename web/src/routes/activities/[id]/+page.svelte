@@ -39,11 +39,17 @@
 		elapsed_s: number;
 		avg_heart_rate: number | null;
 		avg_power: number | null;
+		avg_speed_mps?: number | null;
+		local_kom_position?: number;
 		is_personal_record: boolean;
 		start_distance_m?: number;
 		end_distance_m?: number;
 	};
 	let segmentEfforts = $state<SegEffort[]>([]);
+	let canRescan = $state(false);
+	let rescanning = $state(false);
+	let rescanQueued = $state(false);
+	let segmentMessage = $state('');
 	// Segment effort the pointer is over — shades its span on the elevation profile.
 	let hoveredSeg = $state<SegEffort | null>(null);
 	const segHighlight = $derived(
@@ -92,13 +98,52 @@
 		if (res.ok) attachments = attachments.filter((x) => x.id !== id);
 	}
 
-	onMount(async () => {
+	async function loadSegmentEfforts() {
+		const activityID = a.id;
 		try {
-			const res = await fetch(`/api/activities/${a.id}/segment-efforts`);
-			if (res.ok) segmentEfforts = (await res.json()).efforts ?? [];
+			const res = await fetch(`/api/activities/${activityID}/segment-efforts`);
+			if (!res.ok) throw new Error();
+			const result = await res.json();
+			if (activityID === a.id) {
+				segmentEfforts = result.efforts ?? [];
+				canRescan = result.can_rescan === true;
+				return true;
+			}
 		} catch {
-			/* ignore */
+			if (activityID === a.id && rescanQueued) segmentMessage = m.segment_refresh_failed();
 		}
+		return false;
+	}
+
+	async function rescanSegments() {
+		const activityID = a.id;
+		rescanning = true;
+		try {
+			const res = await fetch(`/api/activities/${activityID}/rescan-segments`, { method: 'POST' });
+			if (!res.ok) throw new Error();
+			if (activityID === a.id) {
+				rescanQueued = true;
+				segmentMessage = m.segment_rescan_queued();
+			}
+		} catch {
+			if (activityID === a.id) segmentMessage = m.segment_rescan_failed();
+		} finally {
+			rescanning = false;
+		}
+	}
+
+	$effect(() => {
+		// Reset controls when navigating directly between activities.
+		if (a.id) {
+			segmentEfforts = [];
+			canRescan = false;
+			rescanQueued = false;
+			segmentMessage = '';
+			void loadSegmentEfforts();
+		}
+	});
+
+	onMount(async () => {
 		try {
 			const res = await fetch(`/api/activities/${a.id}/zones`);
 			if (res.ok) zones = await res.json();
@@ -273,6 +318,7 @@
 	// Achievements summary from already-loaded data.
 	const prCount = $derived(segmentEfforts.filter((e) => e.is_personal_record).length);
 	const segCount = $derived(segmentEfforts.length);
+	const hasLocalKOM = $derived(segmentEfforts.some((effort) => effort.local_kom_position != null));
 	const beCount = $derived(bestEfforts.length);
 </script>
 
@@ -661,72 +707,117 @@
 		</section>
 	{/if}
 
-	{#if segmentEfforts.length > 0}
+	{#if segmentEfforts.length > 0 || canRescan}
 		<section>
-			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">
-				Segments <span class="text-quiet">({segmentEfforts.length})</span>
-			</h2>
-			<div class="max-h-[28rem] overflow-y-auto rounded-lg border border-zinc-800">
-				{#if hasElevation}
-					<!-- Elevation profile pinned to the top of the scroll area; hovering a
-					     row shades the segment's span on it. -->
-					<div
-						class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/95 px-2 pt-2 backdrop-blur"
-					>
-						<ElevationProfile {track} highlight={segHighlight} />
+			<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+				<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">
+					{m.nav_segments()} <span class="text-quiet">({segmentEfforts.length})</span>
+				</h2>
+				{#if canRescan}
+					<div class="flex items-center gap-3">
+						{#if rescanQueued}
+							<button
+								type="button"
+								class="text-sm text-accent-400 hover:underline"
+								onclick={async () => {
+									if (await loadSegmentEfforts()) segmentMessage = '';
+								}}>{m.segment_refresh()}</button
+							>
+						{/if}
+						<button
+							type="button"
+							class="text-sm text-accent-400 hover:underline disabled:opacity-50"
+							disabled={rescanning}
+							onclick={rescanSegments}>{m.segment_rescan()}</button
+						>
 					</div>
 				{/if}
-				<table class="w-full text-sm">
-					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
-						<tr>
-							<th class="px-4 py-2 text-left">Segment</th>
-							<th class="hidden px-4 py-2 text-right sm:table-cell">{m.col_distance()}</th>
-							<th class="px-4 py-2 text-right">{m.col_duration()}</th>
-							<th class="hidden px-4 py-2 text-right md:table-cell">{m.col_avg_hr()}</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-zinc-800">
-						{#each segmentEfforts as s, i (i)}
-							<tr
-								class="bg-zinc-900/30 transition-colors hover:bg-zinc-800/50"
-								onmouseenter={() => (hoveredSeg = s)}
-								onmouseleave={() => (hoveredSeg = null)}
-							>
-								<td class="px-4 py-2">
-									<a
-										href={`/segment/${s.segment_id}`}
-										class="text-accent-400 hover:text-accent-300 hover:underline"
-									>
-										{s.segment_name}
-									</a>
-									{#if s.is_personal_record}
-										<span
-											class="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-300"
-											title="Personal record">PR</span
-										>
-									{/if}
-									{#if s.climb_category}
-										<span
-											class="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase text-zinc-400"
-										>
-											{s.climb_category.replace('_', ' ')}
-										</span>
-									{/if}
-								</td>
-								<td class="hidden px-4 py-2 text-right tabular-nums text-zinc-300 sm:table-cell">
-									{formatDistance(s.segment_distance_m)}
-								</td>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-100">
-									{formatDuration(s.elapsed_s)}
-								</td>
-								<td class="hidden px-4 py-2 text-right tabular-nums text-zinc-300 md:table-cell">
-									{s.avg_heart_rate ? formatHeartRate(s.avg_heart_rate) : m.placeholder_dash()}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
 			</div>
+			{#if segmentMessage}
+				<p class="mb-3 text-sm text-quiet" role="status">{segmentMessage}</p>
+			{/if}
+			{#if segmentEfforts.length === 0}
+				<p class="text-sm text-quiet">{m.segment_no_matches()}</p>
+			{:else}
+				<div class="max-h-[28rem] overflow-auto rounded-lg border border-zinc-800">
+					{#if hasElevation}
+						<!-- Elevation profile pinned to the top of the scroll area; hovering a
+					     row shades the segment's span on it. -->
+						<div
+							class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/95 px-2 pt-2 backdrop-blur"
+						>
+							<ElevationProfile {track} highlight={segHighlight} />
+						</div>
+					{/if}
+					<table class="w-full text-sm">
+						<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
+							<tr>
+								<th class="px-4 py-2 text-left">Segment</th>
+								<th class="px-4 py-2 text-right">{m.col_distance()}</th>
+								<th class="px-4 py-2 text-right">{m.col_duration()}</th>
+								<th class="px-4 py-2 text-right">{m.segment_avg_speed()}</th>
+								{#if hasLocalKOM}
+									<th class="px-4 py-2 text-right">{m.segment_local_kom()}</th>
+								{/if}
+								<th class="hidden px-4 py-2 text-right md:table-cell">{m.col_avg_hr()}</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-zinc-800">
+							{#each segmentEfforts as s, i (i)}
+								<tr
+									class="bg-zinc-900/30 transition-colors hover:bg-zinc-800/50"
+									onmouseenter={() => (hoveredSeg = s)}
+									onmouseleave={() => (hoveredSeg = null)}
+								>
+									<td class="px-4 py-2">
+										<a
+											href={`/segment/${s.segment_id}`}
+											class="text-accent-400 hover:text-accent-300 hover:underline"
+										>
+											{s.segment_name}
+										</a>
+										{#if s.is_personal_record}
+											<span
+												class="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-300"
+												title={m.segment_personal_record()}>PR</span
+											>
+										{/if}
+										{#if s.climb_category}
+											<span
+												class="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase text-zinc-400"
+											>
+												{s.climb_category.replace('_', ' ')}
+											</span>
+										{/if}
+									</td>
+									<td class="px-4 py-2 text-right tabular-nums text-zinc-300">
+										{formatDistance(s.segment_distance_m)}
+									</td>
+									<td class="px-4 py-2 text-right tabular-nums text-zinc-100">
+										{formatDuration(s.elapsed_s)}
+									</td>
+									<td class="whitespace-nowrap px-4 py-2 text-right tabular-nums text-zinc-300">
+										{formatSpeed(
+											s.avg_speed_mps ??
+												(s.elapsed_s > 0 ? s.segment_distance_m / s.elapsed_s : null)
+										)}
+									</td>
+									{#if hasLocalKOM}
+										<td class="px-4 py-2 text-right tabular-nums text-zinc-300">
+											{s.local_kom_position == null
+												? m.placeholder_dash()
+												: `#${s.local_kom_position}`}
+										</td>
+									{/if}
+									<td class="hidden px-4 py-2 text-right tabular-nums text-zinc-300 md:table-cell">
+										{s.avg_heart_rate ? formatHeartRate(s.avg_heart_rate) : m.placeholder_dash()}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		</section>
 	{/if}
 

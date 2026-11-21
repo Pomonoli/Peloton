@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -121,13 +122,33 @@ type Result struct {
 
 // Execute runs the matching pass.
 func (uc *MatchSegmentsForActivity) Execute(ctx context.Context, in Input) (Result, error) {
+	var res Result
+	var touched map[domain.SegmentID]struct{}
+	err := uc.tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		res, touched, err = uc.replaceMatches(ctx, in)
+		return err
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	uc.matchRefreshRanks(ctx, in.ActivitySourceID, touched)
+	return res, nil
+}
+
+func (uc *MatchSegmentsForActivity) replaceMatches(ctx context.Context, in Input) (Result, map[domain.SegmentID]struct{}, error) {
+	if lock, ok := uc.segments.(port.SegmentMatchLocker); ok {
+		if err := lock.LockSegmentMatch(ctx, in.ActivitySourceID); err != nil {
+			return Result{}, nil, fmt.Errorf("lock segment matching: %w", err)
+		}
+	}
 	src, err := uc.activities.GetSource(ctx, in.ActivitySourceID)
 	if err != nil {
-		return Result{}, fmt.Errorf("load source %s: %w", in.ActivitySourceID, err)
+		return Result{}, nil, fmt.Errorf("load source %s: %w", in.ActivitySourceID, err)
 	}
 	act, err := uc.activities.GetActivity(ctx, src.ActivityID)
 	if err != nil {
-		return Result{}, fmt.Errorf("load activity %s: %w", src.ActivityID, err)
+		return Result{}, nil, fmt.Errorf("load activity %s: %w", src.ActivityID, err)
 	}
 
 	stream, err := uc.streams.QueryStream(ctx, domain.StreamQuery{
@@ -135,19 +156,19 @@ func (uc *MatchSegmentsForActivity) Execute(ctx context.Context, in Input) (Resu
 		Resolution:       domain.StreamResolutionRaw,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("read stream for %s: %w", in.ActivitySourceID, err)
+		return Result{}, nil, fmt.Errorf("read stream for %s: %w", in.ActivitySourceID, err)
 	}
 	if len(stream.Samples) == 0 {
 		// Wipe any prior efforts — a reimport that lost its stream should
 		// not leave dangling efforts.
-		return uc.matchClearEfforts(ctx, in.ActivitySourceID, Result{NoStream: true})
+		return Result{NoStream: true}, nil, uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID)
 	}
 
 	minLat, maxLat, minLon, maxLon, ok := domain.SampleBoundingBox(stream.Samples)
 	if !ok {
 		// Stream has no GPS-bearing samples (e.g. an indoor trainer ride
 		// with power+HR but no GPS). Wipe any prior efforts and return.
-		return uc.matchClearEfforts(ctx, in.ActivitySourceID, Result{NoGPS: true})
+		return Result{NoGPS: true}, nil, uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID)
 	}
 
 	minLat, maxLat, minLon, maxLon = domain.ExpandBoundingBox(minLat, maxLat, minLon, maxLon, uc.bboxBufferMeters)
@@ -156,7 +177,7 @@ func (uc *MatchSegmentsForActivity) Execute(ctx context.Context, in Input) (Resu
 		MinLat: minLat, MaxLat: maxLat, MinLon: minLon, MaxLon: maxLon,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("list segment candidates: %w", err)
+		return Result{}, nil, fmt.Errorf("list segment candidates: %w", err)
 	}
 
 	// Run the in-Go matching algorithm per candidate. The set is small
@@ -165,40 +186,20 @@ func (uc *MatchSegmentsForActivity) Execute(ctx context.Context, in Input) (Resu
 	// M is segment-polyline vertex count — both small.
 	efforts, touchedSegments := uc.matchCandidates(act, src, candidates, stream.Samples)
 
-	// Persist atomically.
-	err = uc.tx.InTx(ctx, func(ctx context.Context) error {
-		if err := uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID); err != nil {
-			return err
-		}
-		for _, e := range efforts {
-			if err := uc.segments.SaveSegmentEffort(ctx, e); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return Result{}, fmt.Errorf("persist segment efforts: %w", err)
+	if err := uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID); err != nil {
+		return Result{}, nil, fmt.Errorf("replace segment efforts: %w", err)
 	}
-
-	// Refresh ranks outside the effort-write transaction.
-	uc.matchRefreshRanks(ctx, in.ActivitySourceID, touchedSegments)
+	for _, e := range efforts {
+		if err := uc.segments.SaveSegmentEffort(ctx, e); err != nil {
+			return Result{}, nil, fmt.Errorf("persist segment effort: %w", err)
+		}
+	}
 
 	return Result{
 		CandidatesEvaluated: len(candidates),
 		EffortsWritten:      len(efforts),
 		SegmentsRanked:      len(touchedSegments),
-	}, nil
-}
-
-// matchClearEfforts wipes prior efforts for the source and returns res.
-func (uc *MatchSegmentsForActivity) matchClearEfforts(ctx context.Context, sourceID domain.SourceID, res Result) (Result, error) {
-	if err := uc.tx.InTx(ctx, func(ctx context.Context) error {
-		return uc.segments.DeleteEffortsForSource(ctx, sourceID)
-	}); err != nil {
-		return Result{}, fmt.Errorf("clear efforts: %w", err)
-	}
-	return res, nil
+	}, touchedSegments, nil
 }
 
 // matchCandidates runs the matcher per candidate segment.
@@ -217,8 +218,12 @@ func (uc *MatchSegmentsForActivity) matchCandidates(
 				"segment_id", seg.ID, "error", err)
 			continue
 		}
-		effTol := seg.EffectiveTolerances(uc.tol)
-		matches := domain.MatchSegment(samples, polyline, effTol)
+		var matches []domain.SegmentMatch
+		if seg.Source == domain.SegmentSourceStravaCatalog {
+			matches = domain.MatchRecordedSegment(samples, polyline)
+		} else {
+			matches = domain.MatchSegment(samples, polyline, seg.EffectiveTolerances(uc.tol))
+		}
 		for _, m := range matches {
 			efforts = append(efforts, uc.buildEffort(act, src, seg, samples, m))
 		}
@@ -266,10 +271,19 @@ func (uc *MatchSegmentsForActivity) buildEffort(
 	avgP := avgPower(window)
 	avgC := avgCadence(window)
 	avgS := avgSpeed(window)
+	var effortID domain.SegmentEffortID
+	if seg.Source == domain.SegmentSourceStravaCatalog {
+		speed := seg.DistanceM / m.ElapsedSeconds
+		avgS = &speed
+		effortKey := src.ID.String() + ":" + strconv.Itoa(m.StartOffset)
+		effortID = domain.SegmentEffortID(uuid.NewSHA1(seg.ID.UUID(), []byte(effortKey)))
+	} else {
+		effortID = domain.SegmentEffortID(uc.newID())
+	}
 
 	movingS := m.ElapsedSeconds // v1: no pause detection; moving == elapsed
 	return domain.SegmentEffort{
-		ID:               domain.SegmentEffortID(uc.newID()),
+		ID:               effortID,
 		SegmentID:        seg.ID,
 		ActivityID:       act.ID,
 		ActivitySourceID: src.ID,

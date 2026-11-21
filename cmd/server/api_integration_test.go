@@ -122,6 +122,11 @@ type itestClient struct {
 
 func newITestEnv(t *testing.T) *itestEnv {
 	t.Helper()
+	return newITestEnvWithOverrides(t, nil)
+}
+
+func newITestEnvWithOverrides(t *testing.T, overrides map[string]string) *itestEnv {
+	t.Helper()
 	pool, dsn := itestDB(t)
 	tiles := tileServer(t)
 	for k, v := range map[string]string{
@@ -142,6 +147,9 @@ func newITestEnv(t *testing.T) *itestEnv {
 		"CAIRN_INSTANCE_BOOTSTRAP_ADMIN_PASSWORD": "",
 	} {
 		t.Setenv(k, v)
+	}
+	for key, value := range overrides {
+		t.Setenv(key, value)
 	}
 	mux := http.NewServeMux()
 	// The production chain, with a rate ceiling the suite cannot reach.
@@ -166,6 +174,9 @@ func newITestEnv(t *testing.T) *itestEnv {
 	serveMountCore(ctx, mux, app, pool, cfg, testLogger())
 	serveMountFeatures(mux, app, cfg, testLogger())
 	serveMountPlatform(mux, app, testLogger())
+	if app.NATSBus != nil {
+		t.Cleanup(app.NATSBus.Close)
+	}
 	return &itestEnv{t: t, srv: srv, app: app}
 }
 
@@ -315,6 +326,10 @@ func (c *itestClient) upload(filename string, content []byte) map[string]any {
 
 // gpxRide renders a 20-minute 1 Hz track heading north-east from a start point.
 func gpxRide(start time.Time) []byte {
+	return gpxRideAtInterval(start, time.Second)
+}
+
+func gpxRideAtInterval(start time.Time, interval time.Duration) []byte {
 	const lat, lon = 47.0, 8.0
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
@@ -325,7 +340,7 @@ func gpxRide(start time.Time) []byte {
 		fmt.Fprintf(&b, `<trkpt lat="%.6f" lon="%.6f"><ele>%.1f</ele><time>%s</time>`+
 			`<extensions><power>%d</power><gpxtpx:TrackPointExtension><gpxtpx:hr>%d</gpxtpx:hr><gpxtpx:cad>85</gpxtpx:cad></gpxtpx:TrackPointExtension></extensions></trkpt>`,
 			lat+float64(i)*0.00005, lon+float64(i)*0.00004, 300+float64(i%200)*0.5,
-			start.Add(time.Duration(i)*time.Second).UTC().Format(time.RFC3339), 180+i%60, 120+i%40)
+			start.Add(time.Duration(i)*interval).UTC().Format(time.RFC3339Nano), 180+i%60, 120+i%40)
 	}
 	b.WriteString(`</trkseg></trk></gpx>`)
 	return []byte(b.String())

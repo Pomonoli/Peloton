@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { intlLocale, formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
 
@@ -75,6 +76,7 @@
 		<h1 class="text-2xl font-semibold tracking-tight">Segments</h1>
 		<p class="mt-1 text-sm text-zinc-400">
 			Segments you've ridden or run, ranked by how often you've taken them on.
+			{m.segment_catalog_coverage()}
 		</p>
 	</header>
 
@@ -141,6 +143,9 @@
 							<div class="min-w-0 flex-1">
 								<div class="flex items-center gap-2">
 									<span class="truncate font-medium text-zinc-100">{s.name}</span>
+									{#if s.source === 'strava_catalog'}
+										<span class="text-xs text-quiet">{m.segment_strava_source()}</span>
+									{/if}
 									{#if s.has_cr}
 										<span
 											class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] uppercase text-amber-300"

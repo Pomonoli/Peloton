@@ -68,7 +68,7 @@ func (a *Authoring) Create(ctx context.Context, owner domain.UserID, in domain.N
 // or (for the starred flag only) a mirror of one of their accounts.
 func (a *Authoring) editable(ctx context.Context, userID domain.UserID, id domain.SegmentID) (domain.Segment, error) {
 	seg, err := a.Segments.GetSegment(ctx, id)
-	if err != nil {
+	if err != nil || seg.Source == domain.SegmentSourceStravaCatalog {
 		return domain.Segment{}, port.NewActionError(port.ActionErrorNotFound, "segment not found")
 	}
 	owns := false

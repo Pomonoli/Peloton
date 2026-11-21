@@ -96,12 +96,14 @@ func (s *Segments) Detail(ctx context.Context, userID domain.UserID, id domain.S
 	if len(efforts) == 0 && !owns {
 		return domain.Segment{}, nil, domain.ErrNotFound
 	}
+	setCatalogPersonalRanks(seg, efforts, 0)
 	return seg, efforts, nil
 }
 
 // MyEfforts pages the viewer's efforts on a visible segment, fastest first.
 func (s *Segments) MyEfforts(ctx context.Context, userID domain.UserID, id domain.SegmentID, limit, offset int) ([]domain.SegmentEffort, error) {
-	if _, _, err := s.Detail(ctx, userID, id); err != nil {
+	seg, _, err := s.Detail(ctx, userID, id)
+	if err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
@@ -114,7 +116,18 @@ func (s *Segments) MyEfforts(ctx context.Context, userID domain.UserID, id domai
 	if err != nil {
 		return nil, fmt.Errorf("list efforts: %w", err)
 	}
+	setCatalogPersonalRanks(seg, efforts, max(0, offset))
 	return efforts, nil
+}
+
+func setCatalogPersonalRanks(seg domain.Segment, efforts []domain.SegmentEffort, offset int) {
+	if seg.Source != domain.SegmentSourceStravaCatalog {
+		return
+	}
+	for i := range efforts {
+		efforts[i].PersonalRank = offset + i + 1
+		efforts[i].IsPersonalRecord = efforts[i].PersonalRank == 1
+	}
 }
 
 // Visible loads a segment the viewer may read (owner, instance scope, or a
@@ -126,6 +139,17 @@ func (s *Segments) Visible(ctx context.Context, viewer domain.UserID, id domain.
 	seg, err := s.segments.GetSegment(ctx, id)
 	if err != nil {
 		return domain.Segment{}, domain.ErrNotFound
+	}
+	if seg.Source == domain.SegmentSourceStravaCatalog {
+		// Cache population alone must not reveal areas another user rode.
+		efforts, err := s.segments.ListEffortsForSegment(ctx, id, viewer, port.LeaderboardScopePersonalOnly, 1, 0)
+		if err != nil {
+			return domain.Segment{}, err
+		}
+		if len(efforts) == 0 {
+			return domain.Segment{}, domain.ErrNotFound
+		}
+		return seg, nil
 	}
 	owns := false
 	if seg.ExternalAccountID != nil {
@@ -182,6 +206,10 @@ func (s *Segments) Efforts(ctx context.Context, viewer domain.UserID, id domain.
 		if skip > 0 {
 			skip--
 			return true
+		}
+		if seg.Source == domain.SegmentSourceStravaCatalog && c.Effort.UserID != viewer {
+			// Personal standings could reveal a faster, private effort.
+			c.Effort.PersonalRank, c.Effort.IsPersonalRecord = 0, false
 		}
 		out = append(out, c.Effort)
 		return len(out) < want

@@ -20,6 +20,9 @@ func mountRestSegments(mux *http.ServeMux, app *App, logger *slog.Logger) {
 			return backfillSegment(app, logger, userID, id, from, to)
 		},
 	}
+	if app.DiscoverSegments != nil {
+		h.QueueRescan = app.Pipeline.QueueSegmentRescan
+	}
 	// The library and activity efforts need the segment repo; browsing reports ErrUnavailable instead.
 	if app.Segments != nil {
 		h.MountMine(mux)
