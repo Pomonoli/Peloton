@@ -54,6 +54,7 @@ func mountRestSync(mux *http.ServeMux, app *App, logger *slog.Logger) {
 		Auth:               restAuth(app),
 		Accounts:           app.Accounts,
 		Imports:            syncImports(app, logger),
+		Reconcile:          app.ReconcileAccount,
 		DefaultPollSeconds: int(app.DefaultPollInterval.Seconds()),
 		Log:                logger,
 	}).Mount(mux)

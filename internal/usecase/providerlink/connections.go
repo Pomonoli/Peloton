@@ -1,8 +1,8 @@
 // Package providerlink links provider accounts (Strava, Garmin, ...) to
 // users: connection CRUD, the OAuth connect round-trip, credential-based
 // accounts, the account-scoped jobs (gear sync, health import) and the
-// token/credential lookups provider workers make. Provider knowledge comes
-// from the workers' manifests (port.ProviderRegistry); core compiles none in.
+// token/credential lookups provider workers make. OAuth endpoints and provider
+// setup fields come from the workers' manifests (port.ProviderRegistry).
 package providerlink
 
 import (
@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
@@ -26,6 +27,7 @@ func (e ConnectError) Error() string { return "connect: " + string(e) }
 
 // Connect round-trip failures.
 const (
+	ErrScopeMissing     ConnectError = "missing_activity_scope"
 	ErrNoConnection     ConnectError = "no_connection"
 	ErrConfigureFirst   ConnectError = "configure_first"
 	ErrSecretUnreadable ConnectError = "secret_unreadable"
@@ -55,6 +57,7 @@ type Connections struct {
 	// connections are then stored without an account.
 	Accounts  port.ExternalAccountRepo
 	Tokens    port.OAuthTokenRepo
+	Tx        port.TxManager
 	Pools     port.PoolDirectory
 	Exchanger port.ProviderCodeExchanger
 	// Bus reads worker presence for the webhook endpoints; may be nil.
@@ -264,6 +267,9 @@ func (c *Connections) AuthorizeURL(ctx context.Context, userID domain.UserID, p 
 	if p.OAuth2 == nil {
 		return "", "", ErrNotOAuth
 	}
+	if domain.ProviderDataRestricted(p.ID) && conn.ClientSecret == "" {
+		return "", "", ErrConfigureFirst
+	}
 	q := url.Values{}
 	for k, v := range p.OAuth2.AuthorizeParams {
 		q.Set(k, v)
@@ -292,7 +298,7 @@ func (c *Connections) AuthorizeURL(ctx context.Context, userID domain.UserID, p 
 // the account to the caller's connection; it returns the new account.
 func (c *Connections) Complete(ctx context.Context, userID domain.UserID, p domain.ProviderMeta, connID domain.ConnectionID, in port.CodeExchange, requestedWorker string) (domain.ExternalAccountID, error) {
 	conn, err := c.Configs.GetByID(ctx, connID)
-	if err != nil || conn.UserID != userID {
+	if err != nil || conn.UserID != userID || conn.Provider != p.ID {
 		return domain.ExternalAccountID{}, ErrConfigureFirst
 	}
 	if requestedWorker != "" && !domain.ValidWorkerName(requestedWorker) {
@@ -311,7 +317,35 @@ func (c *Connections) Complete(ctx context.Context, userID domain.UserID, p doma
 		c.Log.Error("oauth code exchange failed", "provider", p.ID, "pool", exchanger, "error", err)
 		return domain.ExternalAccountID{}, ErrExchangeFailed
 	}
-	return c.linkOAuthAccount(ctx, userID, p, conn, tok, providerAcctID, requestedWorker)
+	if domain.ProviderDataRestricted(p.ID) {
+		scope := in.GrantedScope
+		if scope == "" {
+			scope = tok.Scope
+		}
+		if !slices.Contains(oauthScopes(scope), "activity:read_all") {
+			return domain.ExternalAccountID{}, ErrScopeMissing
+		}
+		if providerAcctID == "" || tok.AccessToken == "" || tok.RefreshToken == "" {
+			return domain.ExternalAccountID{}, ErrExchangeFailed
+		}
+		tok.Scope = scope
+	}
+	var acctID domain.ExternalAccountID
+	link := func(ctx context.Context) error {
+		var err error
+		acctID, err = c.linkOAuthAccount(ctx, userID, p, conn, tok, providerAcctID, requestedWorker)
+		return err
+	}
+	if c.Tx != nil {
+		err = c.Tx.InTx(ctx, link)
+	} else {
+		err = link(ctx)
+	}
+	if err != nil {
+		return domain.ExternalAccountID{}, err
+	}
+	c.Jobs.SyncGearOnConnect(ctx, acctID)
+	return acctID, nil
 }
 
 // linkOAuthAccount creates the account for an exchanged token and stores it.
@@ -335,9 +369,9 @@ func (c *Connections) linkOAuthAccount(ctx context.Context, userID domain.UserID
 			"provider", p.ID, "provider_account_id", providerAcctID, "connection_id", conn.ID)
 		return domain.ExternalAccountID{}, ErrAlreadyLinked
 	}
-	scopes := []string{}
-	if p.OAuth2 != nil {
-		scopes = append(scopes, p.OAuth2.Scopes...)
+	scopes := oauthScopes(tok.Scope)
+	if len(scopes) == 0 && p.OAuth2 != nil {
+		scopes = p.OAuth2.Scopes
 	}
 	acctID, err := c.Accounts.CreateAccount(ctx, domain.ExternalAccount{
 		UserID: userID, Provider: p.ID, ProviderAccountID: providerAcctID,
@@ -348,13 +382,16 @@ func (c *Connections) linkOAuthAccount(ctx context.Context, userID domain.UserID
 		c.Log.Error("create external account failed", "error", err)
 		return domain.ExternalAccountID{}, port.NewActionError(port.ActionErrorInternal, "could not save account")
 	}
-	if err := c.Tokens.StoreToken(ctx, acctID, port.StoreTokenInput{State: tok}); err != nil {
+	if err := c.Tokens.StoreToken(ctx, acctID, port.StoreTokenInput{State: tok, ReplaceAuthorization: true}); err != nil {
 		c.Log.Error("store oauth token failed", "error", err)
 		return domain.ExternalAccountID{}, port.NewActionError(port.ActionErrorInternal, "could not save token")
 	}
 	c.Log.Info("oauth account connected", "provider", p.ID, "account_id", acctID, "connection_id", conn.ID)
-	c.Jobs.SyncGearOnConnect(ctx, acctID)
 	return acctID, nil
+}
+
+func oauthScopes(scope string) []string {
+	return strings.Fields(strings.ReplaceAll(scope, ",", " "))
 }
 
 // WebhookEndpoint is one advertised webhook callback.

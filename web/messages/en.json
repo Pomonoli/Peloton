@@ -392,6 +392,9 @@
 	"heatmap_power": "Power",
 	"heatmap_all_time": "All Time",
 	"heatmap_layer": "Layer",
+	"heatmap_scale": "Scale",
+	"heatmap_scale_auto": "Auto",
+	"heatmap_scale_fixed": "Fixed",
 	"heatmap_original_tracks": "Show original tracks",
 	"heatmap_legend": "Heatmap legend",
 	"heatmap_insufficient": "Insufficient data",
@@ -437,5 +440,17 @@
 	"record_sport_row": "Rowing",
 	"record_sport_ski": "Skiing",
 	"record_sport_workout": "Workout",
-	"record_personal_power": "Best power"
+	"record_personal_power": "Best power",
+	"strava_connection_help": "Peloton reads your cycling history and streams from Strava. Rides imported only from Strava are visible to you.",
+	"strava_disconnect": "Disconnect",
+	"strava_oauth_denied": "Strava authorization was declined. Try connecting again when you are ready.",
+	"strava_oauth_scope_missing": "Allow access to all activities on Strava to import rides marked Only You.",
+	"strava_reconnect_required": "Reconnect required",
+	"strava_history_sync_failed": "Full sync interrupted",
+	"strava_importer_offline": "Importer offline",
+	"strava_sync_now": "Sync now",
+	"strava_sync_queued": "Strava check queued.",
+	"strava_sync_unavailable": "Could not start the Strava check. Check the connection and try again when the importer and API are available.",
+	"connections_disconnect_confirm": "Disconnect this account? Imported activities will stay.",
+	"connections_disconnect_failed": "Could not disconnect the account."
 }

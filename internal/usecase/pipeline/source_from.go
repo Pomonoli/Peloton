@@ -122,6 +122,9 @@ func (p *Pipeline) ownedPair(ctx context.Context, in BorrowInput) (target, donor
 		return target, donor, err
 	}
 	donor, err = load(in.DonorID)
+	if err == nil && donor.ProviderRestricted {
+		err = port.NewActionError(port.ActionErrorForbidden, "this recording cannot be used as a source for another activity")
+	}
 	return target, donor, err
 }
 

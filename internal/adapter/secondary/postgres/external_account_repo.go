@@ -227,7 +227,8 @@ func (r *ExternalAccountRepo) HeldByOtherUser(
 	err := db.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM external_accounts
-			 WHERE provider = $1 AND provider_account_id = $2 AND user_id <> $3)`,
+			 WHERE provider = $1 AND provider_account_id = $2 AND user_id <> $3
+			   AND (provider <> 'strava' OR status <> 'disabled'))`,
 		provider, providerAccountID, userID.UUID()).Scan(&held)
 	if err != nil {
 		return false, fmt.Errorf("check provider account holder: %w", err)

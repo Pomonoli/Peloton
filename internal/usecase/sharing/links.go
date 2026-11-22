@@ -22,12 +22,12 @@ type Links struct {
 }
 
 // owned loads the caller's live activity; anything else is not found.
-func (l *Links) owned(ctx context.Context, owner domain.UserID, id domain.ActivityID) error {
+func (l *Links) owned(ctx context.Context, owner domain.UserID, id domain.ActivityID) (domain.Activity, error) {
 	a, err := l.Activities.GetActivity(ctx, id)
 	if err != nil || a.UserID != owner || a.IsDeleted() {
-		return domain.ErrNotFound
+		return domain.Activity{}, domain.ErrNotFound
 	}
-	return nil
+	return a, nil
 }
 
 // Create mints a link for the owner's activity and returns its token.
@@ -35,8 +35,12 @@ func (l *Links) Create(ctx context.Context, owner domain.UserID, id domain.Activ
 	if l == nil || l.Repo == nil {
 		return "", ErrUnavailable
 	}
-	if err := l.owned(ctx, owner, id); err != nil {
+	act, err := l.owned(ctx, owner, id)
+	if err != nil {
 		return "", err
+	}
+	if act.ProviderRestricted {
+		return "", port.NewActionError(port.ActionErrorForbidden, "this activity is available only to its owner")
 	}
 	token, err := newToken()
 	if err != nil {
@@ -53,7 +57,7 @@ func (l *Links) List(ctx context.Context, owner domain.UserID, id domain.Activit
 	if l == nil || l.Repo == nil {
 		return nil, ErrUnavailable
 	}
-	if err := l.owned(ctx, owner, id); err != nil {
+	if _, err := l.owned(ctx, owner, id); err != nil {
 		return nil, err
 	}
 	return l.Repo.ListForActivity(ctx, id)

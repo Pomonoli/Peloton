@@ -39,13 +39,20 @@ type ReclusterBucket struct {
 	opts       dmatch.Options
 	logger     *slog.Logger
 	events     port.AdminEventSink // optional; receives same-provider conflicts
-	lock       port.UserLock       // optional; serialises reclusters of one user
+	streams    port.StreamRepo
+	lock       port.UserLock // optional; serialises reclusters of one user
 }
 
 // WithUserLock makes each re-cluster hold the user's regrouping lock, so two
 // instances never reassign the same bucket from stale snapshots.
 func (uc *ReclusterBucket) WithUserLock(l port.UserLock) *ReclusterBucket {
 	uc.lock = l
+	return uc
+}
+
+// WithStreams enables route comparison for close cross-provider rides.
+func (uc *ReclusterBucket) WithStreams(streams port.StreamRepo) *ReclusterBucket {
+	uc.streams = streams
 	return uc
 }
 
@@ -120,6 +127,7 @@ type reclusterBucketInput struct {
 	mrecs            []dmatch.Record
 	existing         map[string]string // source id → current activity id
 	inBucket         map[string]bool
+	independent      map[string]bool
 	deniedSingletons []string // denied sources kept standalone (Gap 6)
 }
 
@@ -149,6 +157,9 @@ func (uc *ReclusterBucket) reclusterInTx(ctx context.Context, userID domain.User
 	}
 	mc := reclusterConstraints(cons, bucket.inBucket)
 
+	if err := uc.loadRideRoutes(ctx, bucket.mrecs); err != nil {
+		return err
+	}
 	clustered := dmatch.ClusterBucket(bucket.mrecs, mc, uc.opts)
 	result.Conflicts = len(clustered.Conflicts)
 	for _, cf := range clustered.Conflicts {
@@ -175,7 +186,7 @@ func (uc *ReclusterBucket) reclusterInTx(ctx context.Context, userID domain.User
 		rcl = append(rcl, reconcile.ClusterInput{SourceIDs: []string{sid}})
 		bandByKey[clusterKey([]string{sid})] = dmatch.BandHigh
 	}
-	plan := reconcile.Reconcile(rcl, bucket.existing, func() string { return uc.newID().String() })
+	plan := reconcile.ReconcilePreferred(rcl, bucket.existing, bucket.independent, func() string { return uc.newID().String() })
 
 	bandByActivity, err := uc.reclusterReassign(ctx, plan, bucket.existing, bandByKey)
 	if err != nil {
@@ -190,14 +201,18 @@ func (uc *ReclusterBucket) reclusterInTx(ctx context.Context, userID domain.User
 // reclusterBuildBucket converts records to matcher input, diverting denied sources.
 func (uc *ReclusterBucket) reclusterBuildBucket(ctx context.Context, userID domain.UserID, records []domain.SourceMatchRecord) (reclusterBucketInput, error) {
 	b := reclusterBucketInput{
-		mrecs:    make([]dmatch.Record, 0, len(records)),
-		existing: make(map[string]string, len(records)),
-		inBucket: make(map[string]bool, len(records)),
+		mrecs:       make([]dmatch.Record, 0, len(records)),
+		existing:    make(map[string]string, len(records)),
+		inBucket:    make(map[string]bool, len(records)),
+		independent: make(map[string]bool, len(records)),
 	}
 	for _, r := range records {
 		sid := r.SourceID.String()
 		b.inBucket[sid] = true
 		b.existing[sid] = r.ActivityID.String()
+		if !domain.ProviderDataRestricted(r.Provider) {
+			b.independent[r.ActivityID.String()] = true
+		}
 
 		// Gap-6: a previously-detached identity must not auto-merge on
 		// re-push — keep it standalone (the denylist survives the new source id).
@@ -228,6 +243,40 @@ func (uc *ReclusterBucket) reclusterBuildBucket(ctx context.Context, userID doma
 		})
 	}
 	return b, nil
+}
+
+func (uc *ReclusterBucket) loadRideRoutes(ctx context.Context, records []dmatch.Record) error {
+	if uc.streams == nil {
+		return nil
+	}
+	loaded := make(map[int]bool)
+	for i, a := range records {
+		for j := i + 1; j < len(records); j++ {
+			b := records[j]
+			if !dmatch.RideImportPair(a, b) || !dmatch.RideImportCandidate(a, b) {
+				continue
+			}
+			for _, k := range [...]int{i, j} {
+				if loaded[k] {
+					continue
+				}
+				sid, err := parseSourceID(records[k].ID)
+				if err != nil {
+					return err
+				}
+				stream, err := uc.streams.QueryStream(ctx, domain.StreamQuery{
+					ActivitySourceID: sid, Resolution: domain.StreamResolutionRaw,
+					Channels: []domain.StreamChannel{domain.StreamChannelLatitude, domain.StreamChannelLongitude},
+				})
+				if err != nil {
+					return fmt.Errorf("load route for matching %s: %w", sid, err)
+				}
+				records[k].Route = dmatch.RideRouteFromStream(stream.Samples)
+				loaded[k] = true
+			}
+		}
+	}
+	return nil
 }
 
 // ReasonSamePoolConflict tags a suspected_duplicate recorded by the matcher.

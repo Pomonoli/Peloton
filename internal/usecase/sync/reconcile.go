@@ -179,6 +179,10 @@ func (uc *ReconcileExternalAccount) reconcileTargets(ctx context.Context, in Rec
 		if err != nil {
 			return nil, false, fmt.Errorf("get account %s: %w", *in.AccountID, err)
 		}
+		// A manual check can run with scheduled imports turned off.
+		if in.Reason == "sync_now" {
+			a.AutoImportEnabled = true
+		}
 		if !in.Force && !a.IsEligibleForSync(uc.now()) {
 			return nil, true, nil
 		}
@@ -295,7 +299,11 @@ func (uc *ReconcileExternalAccount) publishOne(
 
 	since := now.Add(-reconcileKnownIDsLookback)
 	if a.SyncWatermark != nil {
-		if wm := a.SyncWatermark.Add(-reconcileWatermarkDriftMargin); wm.After(since) {
+		drift := reconcileWatermarkDriftMargin
+		if domain.ProviderDataRestricted(a.Provider) {
+			drift = 24 * time.Hour
+		}
+		if wm := a.SyncWatermark.Add(-drift); wm.After(since) {
 			since = wm
 		}
 	}

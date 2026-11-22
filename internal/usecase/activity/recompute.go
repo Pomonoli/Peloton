@@ -166,17 +166,22 @@ func (uc *RecomputeActivityFromSources) recomputeInTx(ctx context.Context, id do
 		return err
 	}
 
-	merged, err := domain.MergeWithOverrides(id, sources, resolver, overrides, uc.now())
+	canonical, restricted := domain.CanonicalSources(sources)
+	merged, err := domain.MergeWithOverrides(id, canonical, resolver, overrides, uc.now())
 	if err != nil {
 		return fmt.Errorf("merge: %w", err)
 	}
 
+	merged.ProviderRestricted = restricted
 	var prevPtr *domain.Activity
-	if prevExists {
+	if prevExists && prev.ProviderRestricted == restricted {
 		preserveUserEdits(&merged, prev)
 		prevPtr = &prev
+	} else if prevExists {
+		// The previous fields may have originated with the other data source.
+		merged.CreatedAt = prev.CreatedAt
 	}
-	if err := uc.applyOverlays(ctx, id, &merged, prevPtr, sources, overrides, resolver); err != nil {
+	if err := uc.applyOverlays(ctx, id, &merged, prevPtr, canonical, overrides, resolver); err != nil {
 		return err
 	}
 
@@ -476,11 +481,15 @@ func (uc *RecomputeActivityFromSources) PreviewMerge(ctx context.Context, id dom
 	if err != nil {
 		return domain.Activity{}, err
 	}
-	merged, err := domain.MergeWithOverrides(id, sources, resolver, overrides, uc.now())
+	canonical, restricted := domain.CanonicalSources(sources)
+	merged, err := domain.MergeWithOverrides(id, canonical, resolver, overrides, uc.now())
 	if err != nil {
 		return domain.Activity{}, fmt.Errorf("merge: %w", err)
 	}
-	preserveUserEdits(&merged, prev)
+	merged.ProviderRestricted = restricted
+	if prev.ProviderRestricted == restricted {
+		preserveUserEdits(&merged, prev)
+	}
 	if err := uc.applyClassificationOverride(ctx, id, &merged); err != nil {
 		return domain.Activity{}, err
 	}

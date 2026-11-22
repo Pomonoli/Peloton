@@ -31,9 +31,10 @@ import (
 //	POST /api/accounts/{id}/queue/items/{itemID}/requeue        failed → pending
 //	POST /api/accounts/{id}/queue/items/{itemID}/move-to-top    claim next
 type SyncHandlers struct {
-	Auth     *Auth
-	Accounts *providerlink.Accounts
-	Imports  *syncuc.Imports
+	Auth      *Auth
+	Accounts  *providerlink.Accounts
+	Imports   *syncuc.Imports
+	Reconcile *syncuc.ReconcileExternalAccount
 	// DefaultPollSeconds is the instance reconcile cadence, shown next to the override.
 	DefaultPollSeconds int
 	Log                *slog.Logger
@@ -47,6 +48,7 @@ func (h *SyncHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/accounts/{id}/reparse-out-of-date", h.reparseOutOfDate)
 	mux.HandleFunc("POST /api/accounts/{id}/sync/preview", h.preview)
 	mux.HandleFunc("POST /api/accounts/{id}/sync/start", h.start)
+	mux.HandleFunc("POST /api/accounts/{id}/sync/now", h.syncNow)
 	mux.HandleFunc("POST /api/accounts/{id}/import-one", h.importOne)
 	mux.HandleFunc("PUT /api/accounts/{id}/config", h.putConfig)
 	mux.HandleFunc("GET /api/accounts/{id}/history", h.history)
@@ -139,6 +141,7 @@ func syncAccountRowJSON(row providerlink.AccountRow) map[string]any {
 		"rate_limited":          row.RateLimited,
 		"rate_limit_budget":     syncBudgetJSON(row.Budget),
 		"discovering":           row.Discovering,
+		"discovery_failed":      row.DiscoveryFailed,
 		"poll_interval_seconds": row.PollInterval,
 		"auto_import_enabled":   a.AutoImportEnabled,
 		"queue":                 syncQueueJSON(row.Queue),
@@ -239,6 +242,27 @@ func (h *SyncHandlers) preview(w http.ResponseWriter, r *http.Request) {
 		"total": p.Total, "already_present": p.AlreadyPresent, "new": p.Total - p.AlreadyPresent,
 		"complete": p.Complete,
 	})
+}
+
+func (h *SyncHandlers) syncNow(w http.ResponseWriter, r *http.Request) {
+	a, ok := h.owned(w, r)
+	if !ok {
+		return
+	}
+	if h.Reconcile == nil || !domain.ProviderDataRestricted(a.Provider) {
+		http.Error(w, "sync unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	result, err := h.Reconcile.Execute(r.Context(), syncuc.ReconcileInput{AccountID: &a.ID, Reason: "sync_now"})
+	if err != nil || len(result.Errors) > 0 {
+		http.Error(w, "could not queue sync", http.StatusServiceUnavailable)
+		return
+	}
+	if result.AccountsScheduled == 0 {
+		http.Error(w, "sync unavailable while the importer is offline, the connection needs authorization, or the API budget is spent", http.StatusConflict)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]bool{"queued": true})
 }
 
 // start returns at once; the UI follows the queue counts and "discovering".

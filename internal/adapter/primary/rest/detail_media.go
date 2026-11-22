@@ -160,7 +160,7 @@ func (h *AttachmentHandlers) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	atts, err := h.Photos.List(r.Context(), act.ID)
+	atts, err := h.Photos.List(port.WithActivityReadViewer(r.Context(), isOwner), act.ID)
 	if err != nil {
 		http.Error(w, "list failed", http.StatusInternalServerError)
 		return
@@ -203,7 +203,7 @@ func (h *AttachmentHandlers) raw(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	att, err := h.Photos.Get(r.Context(), act.ID, attID)
+	att, err := h.Photos.Get(port.WithActivityReadViewer(r.Context(), isOwner), act.ID, attID)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return

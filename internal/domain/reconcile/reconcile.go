@@ -29,9 +29,15 @@ type Plan struct {
 // Reconcile computes the identity plan. existing maps current source-id →
 // activity-id (absent = brand new); newID mints a fresh activity id.
 func Reconcile(clusters []ClusterInput, existing map[string]string, newID func() string) Plan {
+	return ReconcilePreferred(clusters, existing, nil, newID)
+}
+
+// ReconcilePreferred prefers IDs with independently imported recordings when
+// two prior activities contributed equally to the surviving cluster.
+func ReconcilePreferred(clusters []ClusterInput, existing map[string]string, preferred map[string]bool, newID func() string) Plan {
 	cls := reconcileSortClusters(clusters)
 	overlaps, allOld := reconcileOverlaps(cls, existing)
-	bestOld, bestCnt := reconcileBestOld(overlaps)
+	bestOld, bestCnt := reconcileBestOld(overlaps, preferred)
 	claimedBy := reconcileClaims(bestOld, bestCnt)
 
 	// Assign ids: inheritors keep their claimed old id; everyone else gets fresh.
@@ -101,20 +107,27 @@ func reconcileOverlaps(cls []ClusterInput, existing map[string]string) ([]map[st
 }
 
 // reconcileBestOld picks each cluster's preferred old id = max overlap (tie → smallest id).
-func reconcileBestOld(overlaps []map[string]int) ([]string, []int) {
+func reconcileBestOld(overlaps []map[string]int, preferred map[string]bool) ([]string, []int) {
 	bestOld := make([]string, len(overlaps))
 	bestCnt := make([]int, len(overlaps))
 	for ci, ov := range overlaps {
 		var bo string
 		bc := 0
 		for old, cnt := range ov {
-			if cnt > bc || (cnt == bc && (bo == "" || old < bo)) {
+			if cnt > bc || (cnt == bc && preferOldID(old, bo, preferred)) {
 				bo, bc = old, cnt
 			}
 		}
 		bestOld[ci], bestCnt[ci] = bo, bc
 	}
 	return bestOld, bestCnt
+}
+
+func preferOldID(candidate, current string, preferred map[string]bool) bool {
+	if preferred[candidate] != preferred[current] {
+		return preferred[candidate]
+	}
+	return current == "" || candidate < current
 }
 
 // reconcileClaims: each old id is inherited by at most one cluster (largest overlap).

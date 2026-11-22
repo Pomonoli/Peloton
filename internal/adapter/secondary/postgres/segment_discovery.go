@@ -50,7 +50,7 @@ func (r *SegmentRepo) ListPendingGarminSegmentScans(ctx context.Context, after d
 		FROM activity_sources src JOIN activities a ON a.id = src.activity_id
 		WHERE src.provider = 'garmin' AND src.status = 'active'
 		  AND src.parsed @> '{"has_stream":true}' AND src.garmin_segments_scanned_at IS NULL
-		  AND a.deleted_at IS NULL AND a.hidden_by_admin = false AND a.type = 'ride'
+		  AND a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted AND a.type = 'ride' AND src.provider <> 'strava'
 		  AND src.id > $1
 		ORDER BY src.id LIMIT $2`, after.UUID(), limit)
 	if err != nil {

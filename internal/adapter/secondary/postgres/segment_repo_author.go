@@ -16,7 +16,7 @@ import (
 const segmentVisibleSQL = `(s.source IN ('native', 'external')
 	OR (s.source = 'strava_catalog' AND EXISTS (
 		SELECT 1 FROM segment_efforts e JOIN activities a ON a.id = e.activity_id
-		WHERE e.segment_id = s.id AND a.hidden_by_admin = false AND ` + catalogEffortSQL + `)))`
+		WHERE e.segment_id = s.id AND NOT a.hidden_by_admin AND NOT a.provider_restricted AND ` + catalogEffortSQL + `)))`
 
 func (r *SegmentRepo) ViewerOwnsAccount(ctx context.Context, viewer domain.UserID, account domain.ExternalAccountID) (bool, error) {
 	db := dbtx(ctx, r.pool)
@@ -148,6 +148,7 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 		   JOIN users u ON u.id = e.user_id
 		  WHERE e.segment_id = $1
 		    AND a.deleted_at IS NULL AND ` + catalogEffortSQL + `
+		    AND NOT a.provider_restricted
 		    AND (a.hidden_by_admin = false OR (s.source <> 'strava_catalog' AND e.user_id = $2))
 		    AND ($3::uuid IS NULL OR e.user_id = $3)
 		    AND ($4::timestamptz IS NULL OR e.start_time >= $4)
@@ -196,12 +197,12 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		WITH eligible AS (
 			SELECT e.id, e.segment_id, e.user_id, e.elapsed_s, e.start_time, e.activity_id,
- e.activity_source_id, a.primary_stream_source_id, src.provider AS source_provider
+                e.activity_source_id, a.primary_stream_source_id, src.provider AS source_provider
 			FROM segment_efforts e
 			JOIN activities a ON a.id = e.activity_id
 			JOIN segments s ON s.id = e.segment_id
- JOIN activity_sources src ON src.id = e.activity_source_id AND src.activity_id = a.id AND src.status <> 'detached'
-			WHERE a.deleted_at IS NULL AND a.hidden_by_admin = false AND a.type = 'ride'
+            JOIN activity_sources src ON src.id = e.activity_source_id AND src.activity_id = a.id AND src.status <> 'detached'
+			WHERE a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted AND a.type = 'ride'
              AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8 AND `+catalogEffortSQL+where+`
 		), summary AS (
 			SELECT segment_id, count(DISTINCT user_id) AS members
@@ -227,7 +228,7 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 		FROM summary
 		JOIN segments s ON s.id = summary.segment_id
 		JOIN winner ON winner.segment_id = s.id
- LEFT JOIN personal ON personal.segment_id = s.id
+        LEFT JOIN personal ON personal.segment_id = s.id
 		JOIN users u ON u.id = winner.user_id
 		ORDER BY `+catalogSegmentOrder(q.Order)+` LIMIT $2 OFFSET $3`, args...)
 	if err != nil {

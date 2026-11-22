@@ -31,7 +31,7 @@ func (r *BestEffortRepo) ListPersonalRecords(ctx context.Context, userID domain.
 		       activity_type, metric, window_kind, window_value,
 		       achieved_value, activity_id, ts
 		  FROM best_efforts b
-		 WHERE user_id = $1 AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL`+communityReadSQL(ctx, "a.")+`)
+		 WHERE user_id = $1 AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`)
 		 ORDER BY activity_type, metric, window_kind, window_value,
 		          (CASE WHEN metric = ANY($2) THEN achieved_value ELSE -achieved_value END) ASC,
 		          ts ASC`,
@@ -173,11 +173,12 @@ func (r *BestEffortRepo) saveEfforts(ctx context.Context, efforts []domain.BestE
 func (r *BestEffortRepo) ListForActivity(ctx context.Context, activityID domain.ActivityID) ([]domain.BestEffort, error) {
 	db := dbtx(ctx, r.pool)
 	rows, err := db.Query(ctx,
-		`SELECT `+bestEffortColumns+`
-		   FROM best_efforts
-		  WHERE activity_id = $1
-		  ORDER BY metric, window_kind, window_value`,
-		activityID.UUID(),
+		`SELECT DISTINCT ON (b.metric, b.window_kind, b.window_value) `+prefixedColumns(bestEffortColumns, "b.")+`
+		   FROM best_efforts b JOIN activities a ON a.id = b.activity_id
+		  WHERE b.activity_id = $1 AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
+		  ORDER BY b.metric, b.window_kind, b.window_value,
+		           CASE WHEN b.metric = ANY($2) THEN b.achieved_value ELSE -b.achieved_value END, b.ts, b.id`,
+		activityID.UUID(), smallerIsBetterMetrics(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list best_efforts for %s: %w", activityID, err)
@@ -260,7 +261,7 @@ func (r *BestEffortRepo) ListBestEffortHistory(
 		   FROM best_efforts b
 		   JOIN activities a ON a.id = b.activity_id AND a.deleted_at IS NULL
 		  WHERE b.user_id = $1 AND b.activity_type = $2
-		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5`+communityReadSQL(ctx, "a.")+`
+		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5 AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
 		  ORDER BY b.activity_id, b.achieved_value `+betterDir,
 		userID.UUID(), activityType, metric, windowKind, windowValue,
 	)
@@ -296,4 +297,11 @@ func smallerIsBetterMetrics() []string {
 		out[i] = string(m)
 	}
 	return out
+}
+
+// canonicalEffortSourceSQL also excludes stale or detached efforts.
+func canonicalEffortSourceSQL(e string) string {
+	return `EXISTS (SELECT 1 FROM activity_sources src
+		WHERE src.id = ` + e + `activity_source_id AND src.activity_id = a.id
+		  AND src.status <> 'detached' AND (src.provider <> 'strava' OR a.provider_restricted))`
 }

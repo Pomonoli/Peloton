@@ -219,13 +219,14 @@ func TestRunFullDiscovery_EnqueuesEveryPage(t *testing.T) {
 	bus.pages[2] = discoverResp{Items: []discoverItem{{ExternalID: "b", ItemType: "activity", ItemTime: "2026-01-01T00:00:00Z"}}, Complete: true}
 
 	uc.RunFullDiscovery(accts.acct, true)
-	if len(q.enqueued) != 1 || q.enqueued[0].ExternalID != "b" || q.enqueued[0].ItemTime == nil {
-		t.Errorf("skip-existing enqueued = %+v", q.enqueued)
+	if len(q.requeued) != 1 || q.requeued[0].ExternalID != "b" || q.requeued[0].ItemTime == nil {
+		t.Errorf("skip-existing requeued = %+v", q.requeued)
 	}
 	if got := accts.patches[len(accts.patches)-1]; got["discovering"] != false {
 		t.Errorf("final patch = %v", got)
 	}
 
+	q.requeued = nil
 	uc.RunFullDiscovery(accts.acct, false)
 	if len(q.requeued) != 2 {
 		t.Errorf("re-download requeued = %d, want 2", len(q.requeued))

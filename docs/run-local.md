@@ -61,8 +61,8 @@ run `( set -a; . ./dev.env; set +a; make run )` from the repository root.
 
 Provider workers live in separate repositories. For local development, use
 FIT, GPX or TCX uploads to exercise ingest, merge, best efforts, segment
-matching and training load. Peloton’s local stack leaves Strava activity sync
-disabled.
+matching and training load. The local stack starts without Strava activity sync.
+See [the optional Strava worker](strava-connect.md) for setup and mock testing.
 
 ### Production worker auth
 

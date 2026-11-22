@@ -5,8 +5,9 @@
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
+		adaptiveHeatmapScale,
+		fixedHeatmapScale,
 		heatmapColor,
-		heatmapLegend,
 		heatmapMetricLabel,
 		heatmapMetrics,
 		heatmapValue,
@@ -29,8 +30,7 @@
 
 	let { data: pageData } = $props();
 
-	// Every GPS track the filter matches, drawn as translucent lines so the
-	// routes you ride most burn brightest.
+	// Both heatmap endpoints share this response shape.
 	type Heatmap = {
 		matched: number;
 		with_track: number;
@@ -41,13 +41,23 @@
 	const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 	const filter = new ActivityFilter(page.url.searchParams);
-	let data = $state<Heatmap | null>(null);
+	let overview = $state.raw<Heatmap | null>(null);
+	let data = $state.raw<Heatmap | null>(null);
+	let facets = $state.raw<ActivityFacets | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let metric = $state<HeatmapMetric>('density');
+	let scaleMode = $state<'auto' | 'fixed'>('auto');
 	let individual = $state(false);
 	const original = $derived(metric === 'density' && individual);
-	const legend = $derived(heatmapLegend(metric));
+	const scale = $derived(
+		scaleMode === 'fixed'
+			? fixedHeatmapScale(metric)
+			: adaptiveHeatmapScale(
+					metric,
+					overview?.geojson.features.map((f) => f.properties?.[metric]) ?? []
+				)
+	);
 	let viewport = $state('');
 	let pending = $state(0);
 	let hovered = $state<Record<string, unknown> | null>(null);
@@ -147,49 +157,39 @@
 		map.fitBounds(b, { padding: 40, duration: 0, maxZoom: 14 });
 	}
 
-	let abort: AbortController | null = null;
-	async function load(
-		params: URLSearchParams,
-		tracks: boolean,
-		area: string,
-		subject: typeof pageData.member
-	) {
-		abort?.abort();
-		const ctrl = new AbortController();
-		abort = ctrl;
+	function showData(result: Heatmap | null) {
+		data = result;
+		hovered = null;
+		pinned = null;
+		applyData();
+	}
+
+	async function load(url: string, signal: AbortSignal, onResult: (result: Heatmap) => void) {
 		loading = true;
 		error = null;
 		pending = 0;
-		hovered = null;
-		pinned = null;
-		if (!tracks) for (const [key, value] of new URLSearchParams(area)) params.set(key, value);
-		const endpoint = tracks ? '/api/activities/heatmap' : '/api/activities/heatmap/performance';
 		try {
-			while (!ctrl.signal.aborted) {
-				const res = await fetch(memberURL(`${endpoint}?${params}`, subject), {
-					signal: ctrl.signal
-				});
+			while (!signal.aborted) {
+				const res = await fetch(url, { signal });
 				if (!res.ok) throw new Error(m.heatmap_load_failed());
 				const result = await res.json();
-				if (ctrl.signal.aborted) return;
+				if (signal.aborted) return;
 				if (res.status === 202) {
 					pending = result.pending;
 					await new Promise((resolve) => setTimeout(resolve, 350));
 					continue;
 				}
 				pending = 0;
-				data = result as Heatmap;
-				applyData();
+				onResult(result as Heatmap);
 				return;
 			}
 		} catch {
-			if (!ctrl.signal.aborted) {
+			if (!signal.aborted) {
 				error = m.heatmap_load_failed();
-				data = null;
-				applyData();
+				showData(null);
 			}
 		} finally {
-			if (!ctrl.signal.aborted) loading = false;
+			if (!signal.aborted) loading = false;
 		}
 	}
 
@@ -215,17 +215,40 @@
 		clearTimeout(debounceTimer);
 		debounceTimer = setTimeout(() => (debounced += 1), 350);
 	});
-	$effect(() => {
+	const overviewURL = $derived.by(() => {
 		void filter.immediateKey;
 		void debounced;
-		const tracks = original;
-		const area = tracks ? '' : viewport;
-		load(
-			untrack(() => filter.params()),
-			tracks,
-			area,
-			pageData.member
-		);
+		const endpoint = original ? '/api/activities/heatmap' : '/api/activities/heatmap/performance';
+		return memberURL(`${endpoint}?${untrack(() => filter.params())}`, pageData.member);
+	});
+	// The overview covers the selected rider and filters at a single resolution.
+	// Viewport requests draw finer geometry using the same overview scale.
+	$effect(() => {
+		const url = overviewURL;
+		const ctrl = new AbortController();
+		overview = null;
+		untrack(() => showData(null));
+		void load(url, ctrl.signal, (result) => {
+			overview = result;
+			facets = result.facets;
+		});
+		return () => ctrl.abort();
+	});
+	$effect(() => {
+		const base = overview;
+		if (!base) return;
+		const area = original ? '' : viewport;
+		if (!area) {
+			loading = false;
+			pending = 0;
+			error = null;
+			untrack(() => showData(base));
+			return;
+		}
+		const url = `${overviewURL}&${area}`;
+		const ctrl = new AbortController();
+		void load(url, ctrl.signal, showData);
+		return () => ctrl.abort();
 	});
 
 	// Tracks source + layers. Runs on every style load: setStyle() drops
@@ -247,7 +270,7 @@
 			type: 'line',
 			source: 'tracks',
 			layout: { 'line-cap': 'round', 'line-join': 'round' },
-			paint: { 'line-color': heatmapColor(metric), 'line-width': 3.5, 'line-opacity': 0.9 }
+			paint: { 'line-color': heatmapColor(metric, scale), 'line-width': 3.5, 'line-opacity': 0.9 }
 		});
 		mapLoaded = true;
 		applyPaint();
@@ -306,7 +329,7 @@
 
 	function applyPaint() {
 		const raw = original;
-		const color = raw ? trackColor : heatmapColor(metric);
+		const color = raw ? trackColor : heatmapColor(metric, scale);
 		const opacity = raw ? trackOpacity : 0.94;
 		if (!map?.getLayer('tracks-line')) return;
 		map.setLayoutProperty('tracks-glow', 'visibility', raw ? 'visible' : 'none');
@@ -319,7 +342,7 @@
 	$effect(applyPaint);
 
 	onDestroy(() => {
-		abort?.abort();
+		clearTimeout(debounceTimer);
 		map?.remove();
 		map = null;
 	});
@@ -349,6 +372,18 @@
 					{/each}
 				</select>
 			</label>
+			{#if !original}
+				<label class="flex items-center gap-2 text-sm">
+					{m.heatmap_scale()}
+					<select
+						bind:value={scaleMode}
+						class="min-h-10 rounded border border-zinc-700 bg-panel px-2"
+					>
+						<option value="auto">{m.heatmap_scale_auto()}</option>
+						<option value="fixed">{m.heatmap_scale_fixed()}</option>
+					</select>
+				</label>
+			{/if}
 			{#if variants.length > 1}
 				<div
 					role="group"
@@ -429,12 +464,7 @@
 		</div>
 	</header>
 
-	<ActivityFilterBar
-		{filter}
-		facets={data?.facets ?? null}
-		showSort={false}
-		member={pageData.member?.username}
-	/>
+	<ActivityFilterBar {filter} {facets} showSort={false} member={pageData.member?.username} />
 
 	{#if error}
 		<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
@@ -444,15 +474,22 @@
 
 	{#if !original}
 		<div
+			role="group"
 			class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs"
 			aria-label={m.heatmap_legend()}
 		>
-			{#each legend as tick (tick.value)}
+			{#if metric === 'density' && scale.length}
+				<span>{m.heatmap_passages()}</span>
+			{/if}
+			{#each scale as tick (tick.value)}
 				<span class="inline-flex items-center gap-1.5">
-					<span class="h-2.5 w-5 rounded-sm" style:background={tick.color}></span>{tick.label}
+					<span class="h-2.5 w-5 rounded-sm" style:background={tick.color}></span>{heatmapValue(
+						metric,
+						tick.value
+					)}
 				</span>
 			{/each}
-			{#if metric !== 'density' && metric !== 'speed'}
+			{#if (!loading && !scale.length) || (metric !== 'density' && metric !== 'speed')}
 				<span class="inline-flex items-center gap-1.5">
 					<span class="h-2.5 w-5 rounded-sm" style:background={missingHeatmapColor}
 					></span>{m.heatmap_insufficient()}

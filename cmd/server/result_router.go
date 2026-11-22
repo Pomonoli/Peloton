@@ -18,6 +18,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/protoconv"
 	"github.com/opencairn-org/cairn-core/internal/usecase/activity"
+	"github.com/opencairn-org/cairn-core/internal/usecase/fleet"
 	metricsuc "github.com/opencairn-org/cairn-core/internal/usecase/metrics"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segment"
 )
@@ -161,6 +162,10 @@ func processJobResult(ctx context.Context, app *App, log *slog.Logger, subject s
 
 // processWorkerEvent ingests one event; a returned error NAKs the message.
 func processWorkerEvent(ctx context.Context, app *App, log *slog.Logger, jr *workerv1.JobResult, b *ingestBundle, ev *workerv1.WorkerEvent) error {
+	if domain.ProviderDataRestricted(b.provider) && ev.GetType() != workerv1.WorkerEventType_WORKER_EVENT_TYPE_ACTIVITY {
+		// Shared segment and gear stores must never receive Strava API entities.
+		return nil
+	}
 	switch ev.GetType() {
 	case workerv1.WorkerEventType_WORKER_EVENT_TYPE_ACTIVITY:
 		return processActivityEvent(ctx, app, log, jr, b, ev.GetActivity())
@@ -471,8 +476,22 @@ func processActivityEvent(ctx context.Context, app *App, log *slog.Logger, jr *w
 	// A pool may only import for its own accounts and re-parse its own
 	// package's sources (docs/adr/0006).
 	if err := checkResultAccount(ctx, app, b.job, jr, ia.GetRef()); err != nil {
+		if domain.ProviderDataRestricted(b.provider) && !errors.Is(err, domain.ErrNotFound) &&
+			!errors.Is(err, fleet.ErrResultWrongPool) {
+			return err
+		}
 		failQueueItem(ctx, app, log, ia.GetRef(), err)
 		return nil
+	}
+	if domain.ProviderDataRestricted(b.provider) {
+		ref := ia.GetRef()
+		if ref.GetProvider() != b.provider {
+			return nil
+		}
+		if protoconv.ActivitySourcePayloadFromProto(ia.GetPayload()).Type != domain.ActivityTypeRide {
+			failQueueItem(ctx, app, log, ref, errors.New("only cycling activities are imported from Strava"))
+			return nil
+		}
 	}
 	if capturePreview(ctx, app, log, b.job, jr, ia) {
 		return nil
@@ -598,6 +617,12 @@ func ingestActivityEventChecked(
 	payload := protoconv.ActivitySourcePayloadFromProto(ia.GetPayload())
 	stream := protoconv.ActivityStreamSamplesFromProto(ia.GetStream(), payload.StartTime)
 	payload.HasStream = len(stream) > 0
+	if domain.ProviderDataRestricted(ref.GetProvider()) {
+		if payload.Type != domain.ActivityTypeRide {
+			return activity.IngestResult{}, &port.TerminalError{Reason: "not_cycling"}
+		}
+		payload.GearExternalID, payload.GearName = "", ""
+	}
 
 	in := activity.IngestInput{
 		UserID:              domain.UserID(uid),
@@ -629,7 +654,9 @@ func ingestActivityEventChecked(
 		"activity_id", out.ActivityID, "source_id", out.SourceID, "action", out.Action)
 	publishIngestOutcome(app, in.Provider, out)
 
-	ingestActivityAttachments(ctx, app, log, ia, out, in.UserID)
+	if !domain.ProviderDataRestricted(in.Provider) {
+		ingestActivityAttachments(ctx, app, log, ia, out, in.UserID)
+	}
 	if extAcct != nil {
 		ingestActivityAccountBookkeeping(ctx, app, log, *extAcct, ref.GetExternalId(), payload.StartTime, out)
 	}

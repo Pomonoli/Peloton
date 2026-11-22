@@ -276,6 +276,7 @@ func (uc *IngestActivityFromWorker) handleCreateNew(
 	if err != nil {
 		return fmt.Errorf("initial merge: %w", err)
 	}
+	merged.ProviderRestricted = domain.ProviderDataRestricted(src.Provider)
 	merged.CreatedAt = uc.now()
 	if uc.recompute != nil {
 		if err := uc.recompute.assignGear(ctx, &merged, nil, []domain.ActivitySource{src}, nil, resolver); err != nil {

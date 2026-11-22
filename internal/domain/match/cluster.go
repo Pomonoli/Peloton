@@ -1,6 +1,8 @@
 package match
 
-import "sort"
+import (
+	"sort"
+)
 
 // Clustering: score all pairs in a bucket, group via constrained union-find.
 // must-link unioned first; cannot-link and the ≤1-per-provider rule block
@@ -13,7 +15,8 @@ type Record struct {
 	// at most one source per pool: two pools of one provider (docs/adr/0006)
 	// may both feed an activity, two imports by one pool may not. Empty
 	// means the provider alone is the identity.
-	Pool string
+	Pool  string
+	Route RideRoute
 	SourceFeatures
 }
 
@@ -103,7 +106,7 @@ func ClusterBucket(records []Record, c Constraints, opt Options) Result {
 		}
 	}
 
-	edges := clusterScoredEdges(recs, opt)
+	edges := clusterScoredEdges(recs, opt, forbidden)
 	minEdge, conflicts := clusterApplyEdges(uf, recs, edges, forbidden)
 	out := clusterBuild(uf, recs, minEdge, opt)
 
@@ -141,11 +144,18 @@ type clusterEdge struct {
 }
 
 // clusterScoredEdges returns above-threshold, ungated pairs, best-first.
-func clusterScoredEdges(recs []Record, opt Options) []clusterEdge {
+func clusterScoredEdges(recs []Record, opt Options, forbidden map[[2]string]struct{}) []clusterEdge {
 	var edges []clusterEdge
 	for i := 0; i < len(recs); i++ {
 		for j := i + 1; j < len(recs); j++ {
-			s, gated := Score(recs[i].SourceFeatures, recs[j].SourceFeatures, opt.Weights)
+			a, b := recs[i], recs[j]
+			s, gated := Score(a.SourceFeatures, b.SourceFeatures, opt.Weights)
+			if RideImportPair(a, b) {
+				s, gated = rideImportScore(a, b, opt.Weights)
+				if gated {
+					forbidden[[2]string{a.ID, b.ID}] = struct{}{}
+				}
+			}
 			if gated || s < opt.EdgeThreshold {
 				continue
 			}

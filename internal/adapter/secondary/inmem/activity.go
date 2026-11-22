@@ -73,7 +73,7 @@ func (r *ActivityRepo) ActivityTotals(ctx context.Context, userID domain.UserID)
 	defer r.mu.Unlock()
 	var out port.ActivityTotalsResult
 	for _, a := range r.Activities {
-		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || !a.HiddenByAdmin) {
+		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || (!a.HiddenByAdmin && !a.ProviderRestricted)) {
 			out.Count++
 		}
 	}
@@ -85,7 +85,7 @@ func (r *ActivityRepo) ActivityTotalsForRange(ctx context.Context, userID domain
 	defer r.mu.Unlock()
 	var out port.ActivityTotalsResult
 	for _, a := range r.Activities {
-		if a.UserID != userID || a.DeletedAt != nil || (port.IsCommunityActivityRead(ctx) && a.HiddenByAdmin) || a.StartTime.Before(start) || !a.StartTime.Before(end) {
+		if a.UserID != userID || a.DeletedAt != nil || (port.IsCommunityActivityRead(ctx) && (a.HiddenByAdmin || a.ProviderRestricted)) || a.StartTime.Before(start) || !a.StartTime.Before(end) {
 			continue
 		}
 		out.Count++
@@ -112,7 +112,7 @@ func (r *ActivityRepo) HasHiddenTrainingStress(_ context.Context, userID domain.
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, a := range r.Activities {
-		if a.UserID == userID && !a.IsDeleted() && a.HiddenByAdmin && a.Summary.TSS != nil && a.StartTime.Before(before) {
+		if a.UserID == userID && !a.IsDeleted() && (a.HiddenByAdmin || a.ProviderRestricted) && a.Summary.TSS != nil && a.StartTime.Before(before) {
 			return true, nil
 		}
 	}
@@ -124,7 +124,7 @@ func (r *ActivityRepo) ListRecentActivitiesForUser(ctx context.Context, userID d
 	defer r.mu.Unlock()
 	var out []domain.Activity
 	for _, a := range r.Activities {
-		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || !a.HiddenByAdmin) {
+		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || (!a.HiddenByAdmin && !a.ProviderRestricted)) {
 			out = append(out, a)
 		}
 	}
@@ -152,8 +152,14 @@ func (r *ActivityRepo) SaveSource(_ context.Context, s domain.ActivitySource) er
 	return nil
 }
 
-func (r *ActivityRepo) ListSourcesForActivity(_ context.Context, id domain.ActivityID) ([]domain.ActivitySource, error) {
-	return r.sourcesOf(id, false), nil
+func (r *ActivityRepo) ListSourcesForActivity(ctx context.Context, id domain.ActivityID) ([]domain.ActivitySource, error) {
+	sources := r.sourcesOf(id, false)
+	if port.IsCommunityActivityRead(ctx) {
+		sources = slices.DeleteFunc(sources, func(s domain.ActivitySource) bool {
+			return domain.ProviderDataRestricted(s.Provider)
+		})
+	}
+	return sources, nil
 }
 
 func (r *ActivityRepo) ListSourcesForAccount(_ context.Context, acct domain.ExternalAccountID) ([]domain.ActivitySource, error) {
@@ -354,7 +360,7 @@ func (r *ActivityRepo) live(ctx context.Context, userID domain.UserID) []domain.
 	defer r.mu.Unlock()
 	var out []domain.Activity
 	for _, a := range r.Activities {
-		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || !a.HiddenByAdmin) {
+		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || (!a.HiddenByAdmin && !a.ProviderRestricted)) {
 			out = append(out, a)
 		}
 	}
@@ -463,7 +469,7 @@ func (r *ActivityRepo) ListCommunityActivities(_ context.Context, viewerID domai
 	r.mu.Lock()
 	var out []domain.Activity
 	for _, a := range r.Activities {
-		if a.IsDeleted() || (a.HiddenByAdmin && a.UserID != viewerID) || (ownerID != nil && a.UserID != *ownerID) {
+		if a.IsDeleted() || ((a.HiddenByAdmin || a.ProviderRestricted) && a.UserID != viewerID) || (ownerID != nil && a.UserID != *ownerID) {
 			continue
 		}
 		out = append(out, a)

@@ -195,6 +195,20 @@ func checkResultPool(ctx context.Context, app *App, log *slog.Logger, subject st
 
 // checkResultAccount rejects a result ref from a pool that does not serve the account.
 func checkResultAccount(ctx context.Context, app *App, job string, jr *workerv1.JobResult, ref *workerv1.ExternalRef) error {
+	if domain.ProviderDataRestricted(ref.GetProvider()) && app.ExternalAccounts != nil {
+		id, err := domain.ParseUUID[domain.ExternalAccountID](ref.GetExternalAccountId())
+		if err != nil {
+			return domain.ErrNotFound
+		}
+		acct, err := app.ExternalAccounts.GetExternalAccount(ctx, id)
+		if err != nil {
+			return err
+		}
+		if acct.Provider != ref.GetProvider() || acct.UserID.String() != ref.GetUserId() ||
+			(job != "parse_blob" && (acct.ConnectionID == nil || acct.Status == domain.ExternalAccountStatusDisabled)) {
+			return domain.ErrNotFound
+		}
+	}
 	return poolRouting(app, slog.Default()).CheckResultAccount(ctx, job, jr.GetWorkerName(), jr.GetWorkerPackage(),
 		fleet.ResultRef{Provider: ref.GetProvider(), ExternalAccountID: ref.GetExternalAccountId(), ExternalID: ref.GetExternalId()})
 }

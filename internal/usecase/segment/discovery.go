@@ -62,7 +62,7 @@ func (d *DiscoverSegments) ForSource(ctx context.Context, user domain.UserID, so
 	if err != nil {
 		return DiscoveryResult{}, err
 	}
-	if act.UserID != user || act.IsDeleted() || act.HiddenByAdmin || act.Type != domain.ActivityTypeRide || source.Status != domain.SourceStatusActive {
+	if act.UserID != user || act.IsDeleted() || act.HiddenByAdmin || domain.ProviderDataRestricted(source.Provider) || act.Type != domain.ActivityTypeRide || source.Status != domain.SourceStatusActive {
 		return DiscoveryResult{}, nil
 	}
 	stream, err := d.Streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: sourceID, Resolution: domain.StreamResolutionRaw})

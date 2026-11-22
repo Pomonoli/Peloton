@@ -88,6 +88,16 @@ func Build(streams map[domain.SourceID]domain.Stream, winners map[domain.StreamC
 	return out
 }
 
+// PreferredWinners selects the fullest recording for each channel, using
+// preferred recordings first and filling absent channels from the others.
+func PreferredWinners(preferred, all map[domain.SourceID]domain.Stream) map[domain.StreamChannel]domain.SourceID {
+	winners := defaultWinners(all)
+	for channel, source := range defaultWinners(preferred) {
+		winners[channel] = source
+	}
+	return winners
+}
+
 // alignShifts returns the earliest sample time and, when alignStarts, the
 // per-source clock-offset shift (add to each ts) that aligns starts to it.
 func alignShifts(streams map[domain.SourceID]domain.Stream, alignStarts bool) (map[domain.SourceID]time.Duration, time.Time) {

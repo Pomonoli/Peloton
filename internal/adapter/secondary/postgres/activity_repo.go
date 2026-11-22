@@ -50,7 +50,7 @@ const activityColumns = `
 	gear_id, tags, privacy,
 	created_at, updated_at, deleted_at,
 	start_lat, start_lng, start_place,
-	hidden_by_admin,
+	hidden_by_admin, provider_restricted,
 	gear_set_by
 `
 
@@ -139,7 +139,7 @@ func activitySaveArgs(a domain.Activity, provenanceJSON []byte) []any {
 		a.MergedAt,
 		gearParam, tags, string(a.Privacy),
 		nullableTime(a.CreatedAt), deletedAtParam,
-		string(gearSetByOrMerge(a.GearSetBy)),
+		string(gearSetByOrMerge(a.GearSetBy)), a.ProviderRestricted,
 	}
 }
 
@@ -172,7 +172,7 @@ const activitySaveSQL = `
 			merged_at,
 			gear_id, tags, privacy,
 			created_at, updated_at, deleted_at,
-			gear_set_by
+			gear_set_by, provider_restricted
 		) VALUES (
 			$1, $2,
 			$3, $4, $5, $6, $7, $8, $9,
@@ -191,7 +191,7 @@ const activitySaveSQL = `
 			$41,
 			$42, $43, $44,
 			COALESCE($45, now()), now(), $46,
-			$47
+			$47, $48
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			type = EXCLUDED.type,
@@ -237,6 +237,10 @@ const activitySaveSQL = `
 			gear_set_by = EXCLUDED.gear_set_by,
 			tags = EXCLUDED.tags,
 			privacy = EXCLUDED.privacy,
+			provider_restricted = EXCLUDED.provider_restricted,
+			start_lat = CASE WHEN activities.provider_restricted = EXCLUDED.provider_restricted THEN activities.start_lat END,
+			start_lng = CASE WHEN activities.provider_restricted = EXCLUDED.provider_restricted THEN activities.start_lng END,
+			start_place = CASE WHEN activities.provider_restricted = EXCLUDED.provider_restricted THEN activities.start_place END,
 			-- created_at: never overwritten (preserves original creation time)
 			updated_at = now(),
 			deleted_at = EXCLUDED.deleted_at
@@ -417,8 +421,9 @@ func (r *ActivityRepo) ListSourcesForActivity(ctx context.Context, id domain.Act
 		   FROM activity_sources
 		  WHERE activity_id = $1
 		    AND status != 'detached'
+		    AND (NOT $2 OR provider <> 'strava')
 		  ORDER BY imported_at DESC`,
-		id.UUID(),
+		id.UUID(), port.IsCommunityActivityRead(ctx),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list sources for activity %s: %w", id, err)
@@ -650,6 +655,18 @@ func (r *ActivityRepo) ReassignSource(ctx context.Context, sourceID domain.Sourc
 	)
 	if err != nil {
 		return fmt.Errorf("reassign source %s: %w", sourceID, err)
+	}
+	// Follow the source to the canonical ID, including previously computed data.
+	// The foreign keys are deferred so splits can materialize the target later.
+	for _, stmt := range []string{
+		"UPDATE best_efforts SET activity_id = $1 WHERE activity_source_id = $2",
+		"UPDATE user_records SET activity_id = $1 WHERE activity_source_id = $2",
+		"UPDATE segment_efforts SET activity_id = $1 WHERE activity_source_id = $2",
+		"UPDATE activity_attachments SET activity_id = $1 WHERE source_id = $2",
+	} {
+		if _, err := db.Exec(ctx, stmt, newActivityID.UUID(), sourceID.UUID()); err != nil {
+			return fmt.Errorf("reassign derived data for source %s: %w", sourceID, err)
+		}
 	}
 	return nil
 }
@@ -1000,7 +1017,7 @@ func (r *ActivityRepo) HasHiddenTrainingStress(ctx context.Context, userID domai
 	var hidden bool
 	err := dbtx(ctx, r.pool).QueryRow(ctx, `SELECT EXISTS (
 		SELECT 1 FROM activities WHERE user_id = $1 AND deleted_at IS NULL
-		AND hidden_by_admin AND tss IS NOT NULL AND start_time < $2
+		AND (hidden_by_admin OR provider_restricted) AND tss IS NOT NULL AND start_time < $2
 	)`, userID.UUID(), before).Scan(&hidden)
 	return hidden, err
 }
@@ -1046,7 +1063,7 @@ func (r *ActivityRepo) ListPublicActivitiesForUser(ctx context.Context, userID d
 		`SELECT `+activityColumns+`
 		   FROM activities
 		  WHERE user_id = $1 AND deleted_at IS NULL
-		    AND privacy = 'public' AND hidden_by_admin = false
+		    AND privacy = 'public' AND NOT hidden_by_admin AND NOT provider_restricted
 		  ORDER BY start_time DESC
 		  LIMIT $2 OFFSET $3`,
 		userID.UUID(), limit, offset,
@@ -1074,7 +1091,7 @@ func (r *ActivityRepo) CountPublicActivitiesForUser(ctx context.Context, userID 
 	if err := db.QueryRow(ctx,
 		`SELECT count(*) FROM activities
 		  WHERE user_id = $1 AND deleted_at IS NULL
-		    AND privacy = 'public' AND hidden_by_admin = false`,
+		    AND privacy = 'public' AND NOT hidden_by_admin AND NOT provider_restricted`,
 		userID.UUID()).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count public activities for %s: %w", userID, err)
 	}
@@ -1398,7 +1415,7 @@ func scanActivityRow(row rowScanner) (domain.Activity, error) {
 		&x.gearID, &a.Tags, &x.privacy,
 		&a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
 		&a.StartLat, &a.StartLng, &x.startPlace,
-		&a.HiddenByAdmin,
+		&a.HiddenByAdmin, &a.ProviderRestricted,
 		&x.gearSetBy,
 	)
 	if err != nil {

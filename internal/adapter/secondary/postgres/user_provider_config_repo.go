@@ -154,6 +154,17 @@ func (r *UserProviderConfigRepo) ListForUser(ctx context.Context, userID domain.
 }
 
 func (r *UserProviderConfigRepo) Delete(ctx context.Context, id domain.ConnectionID) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM user_provider_configs WHERE id=$1`, id.UUID())
-	return err
+	return NewTxManager(r.pool).InTx(ctx, func(ctx context.Context) error {
+		db := dbtx(ctx, r.pool)
+		// Keep the account identity and imported sources for reauthorization.
+		if _, err := db.Exec(ctx, `UPDATE external_accounts SET status = 'disabled',
+		    status_reason = 'disconnected', access_token_encrypted = NULL,
+		    refresh_token_encrypted = NULL, access_token_expires_at = NULL,
+		    webhook_subscribed = false, webhook_subscription_id = NULL
+		    WHERE connection_id = $1 AND provider = 'strava'`, id.UUID()); err != nil {
+			return err
+		}
+		_, err := db.Exec(ctx, `DELETE FROM user_provider_configs WHERE id = $1`, id.UUID())
+		return err
+	})
 }

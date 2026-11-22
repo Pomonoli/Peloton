@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
 // AttachmentRepo implements port.AttachmentRepo over activity_attachments.
@@ -27,8 +28,10 @@ func (r *AttachmentRepo) ListForActivity(ctx context.Context, activityID domain.
 		        thumb_blob_id, medium_blob_id, blurhash
 		   FROM activity_attachments
 		  WHERE activity_id = $1
+		     AND (NOT $2 OR NOT EXISTS (SELECT 1 FROM activity_sources s
+		        WHERE s.id = activity_attachments.source_id AND s.provider = 'strava'))
 		  ORDER BY position, created_at`,
-		activityID.UUID(),
+		activityID.UUID(), port.IsCommunityActivityRead(ctx),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list attachments: %w", err)
@@ -51,8 +54,10 @@ func (r *AttachmentRepo) Get(ctx context.Context, id domain.AttachmentID) (domai
 		`SELECT id, activity_id, source_id, user_id, blob_id, external_url,
 		        content_type, caption, width, height, position, created_at,
 		        thumb_blob_id, medium_blob_id, blurhash
-		   FROM activity_attachments WHERE id = $1`,
-		id.UUID(),
+		   FROM activity_attachments WHERE id = $1
+		     AND (NOT $2 OR NOT EXISTS (SELECT 1 FROM activity_sources s
+		        WHERE s.id = activity_attachments.source_id AND s.provider = 'strava'))`,
+		id.UUID(), port.IsCommunityActivityRead(ctx),
 	)
 	a, err := scanAttachment(row)
 	if errors.Is(err, pgx.ErrNoRows) {

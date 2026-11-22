@@ -77,7 +77,7 @@ func (s CategorySet) Slice() []Category {
 // CommunityActivityCategories grants a signed-in member access to a live
 // activity. Administrative hides still apply to viewers other than its owner.
 func CommunityActivityCategories(act *Activity, viewer *UserID) CategorySet {
-	if viewer == nil || act.IsDeleted() || (act.HiddenByAdmin && *viewer != act.UserID) {
+	if viewer == nil || act.IsDeleted() || ((act.HiddenByAdmin || act.ProviderRestricted) && *viewer != act.UserID) {
 		return nil
 	}
 	return categorySetOf(AllCategories...)
@@ -132,7 +132,7 @@ type VisibilityInput struct {
 
 // VisibilityInputFor seeds the activity-state fields from act.
 func VisibilityInputFor(act *Activity) VisibilityInput {
-	return VisibilityInput{Privacy: act.Privacy, Hidden: act.HiddenByAdmin, Deleted: act.IsDeleted()}
+	return VisibilityInput{Privacy: act.Privacy, Hidden: act.HiddenByAdmin || act.ProviderRestricted, Deleted: act.IsDeleted()}
 }
 
 // ResolveAudience picks the single most-privileged audience for a viewer.

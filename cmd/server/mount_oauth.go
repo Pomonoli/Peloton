@@ -90,8 +90,8 @@ func mountRestAccountJobs(mux *http.ServeMux, app *App, logger *slog.Logger) {
 
 func oauthConnections(app *App, logger *slog.Logger) *providerlink.Connections {
 	c := &providerlink.Connections{
-		Pools:     oauthPools{app: app, logger: logger},
-		Exchanger: appExchanger{app: app}, Bus: oauthJobBus(app), Jobs: oauthProviderJobs(app, logger), Log: logger,
+		Pools: oauthPools{app: app, logger: logger},
+		Tx:    app.Tx, Exchanger: appExchanger{app: app}, Bus: oauthJobBus(app), Jobs: oauthProviderJobs(app, logger), Log: logger,
 	}
 	if app.Providers != nil {
 		c.Providers = app.Providers

@@ -48,7 +48,7 @@ func (f *Feeds) Projected(ctx context.Context, id domain.ActivityID, viewer *dom
 	if err != nil {
 		return domain.ProjectedActivity{}, domain.User{}, false, domain.ErrNotFound
 	}
-	if a.IsDeleted() || (hasLink && a.HiddenByAdmin) {
+	if a.IsDeleted() || (hasLink && (a.HiddenByAdmin || a.ProviderRestricted)) {
 		return domain.ProjectedActivity{}, domain.User{}, false, domain.ErrNotFound
 	}
 	vw, ok := f.visibility.Resolve(ctx, a, viewer, hasLink)

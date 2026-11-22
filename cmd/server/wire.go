@@ -541,6 +541,9 @@ func wireAppIngestUseCases(app *App, pool *pgxpool.Pool, logger *slog.Logger) {
 		dmatch.DefaultOptions(),
 		logger,
 	).WithEvents(app.AdminEvents).WithUserLock(app.Tx)
+	if app.Streams != nil {
+		app.ReclusterBucket.WithStreams(app.Streams)
+	}
 	wireAppViews(app, logger)
 	// The owner-facing source actions, shared by REST and Connect.
 	app.SourceActions = activity.NewSourceActions(app.Activities, app.SourceDenylist, app.RecomputeActivity, newFederationPublisher(app, logger), nil)

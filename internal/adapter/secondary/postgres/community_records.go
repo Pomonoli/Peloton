@@ -42,8 +42,8 @@ func (r *BestEffortRepo) ListCommunityRecords(ctx context.Context, bucket *domai
 			FROM best_efforts b
 			JOIN activities a ON a.id = b.activity_id AND a.type = b.activity_type AND a.user_id = b.user_id
 			JOIN activity_sources src ON src.id = b.activity_source_id AND src.activity_id = a.id AND src.status <> 'detached'
-			WHERE a.deleted_at IS NULL AND NOT a.hidden_by_admin
-				AND `+validRecordSQL+filter+`
+			WHERE a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted
+				AND src.provider <> 'strava' AND `+validRecordSQL+filter+`
 		), personal AS (
 			SELECT DISTINCT ON (activity_type, metric, window_kind, window_value, user_id) *
 			FROM eligible
