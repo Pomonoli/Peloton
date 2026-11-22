@@ -22,6 +22,12 @@
 	import KudosComments from '#lib/components/KudosComments.svelte';
 	import GearPrompt from '#lib/components/GearPrompt.svelte';
 	import ActivityNav from '#lib/components/ActivityNav.svelte';
+	import {
+		bestEffortValue,
+		isCyclingDistanceRecord,
+		recordMetric,
+		recordWindow
+	} from '#lib/records.js';
 	import { goto, refreshAll } from '$app/navigation';
 	import { buildSeries } from './streamSeries';
 	import type { PageData } from './$types';
@@ -206,39 +212,6 @@
 		!!zones &&
 			((zones.hr && zones.hr.total_seconds > 0) || (zones.power && zones.power.total_seconds > 0))
 	);
-
-	function formatEffortWindow(b: (typeof bestEfforts)[number]): string {
-		if (b.windowKind === 'distance') {
-			return b.windowValue >= 1000 ? `${b.windowValue / 1000} km` : `${b.windowValue} m`;
-		}
-		if (b.windowKind === 'duration') {
-			if (b.windowValue >= 3600) return `${Math.round(b.windowValue / 3600)} h`;
-			if (b.windowValue >= 60) return `${Math.round(b.windowValue / 60)} min`;
-			return `${b.windowValue} s`;
-		}
-		return '—';
-	}
-
-	function formatEffortValue(b: (typeof bestEfforts)[number]): string {
-		const v = b.achievedValue;
-		switch (b.metric) {
-			case 'pace': {
-				// seconds per km
-				const m = Math.floor(v / 60);
-				const s = Math.round(v % 60);
-				return `${m}:${s.toString().padStart(2, '0')} /km`;
-			}
-			case 'speed':
-				return `${(v * 3.6).toFixed(1)} km/h`;
-			case 'power':
-				return `${Math.round(v)} W`;
-			case 'heart_rate':
-				return `${Math.round(v)} bpm`;
-			case 'vam':
-				return `${Math.round(v)} m/h`;
-		}
-		return v.toFixed(0);
-	}
 
 	// --- sources / detach ---
 	const activeSources = $derived((a.sources ?? []).filter((s) => s.status !== 'detached'));
@@ -590,7 +563,7 @@
 	{#if bestEfforts.length > 0}
 		<section>
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">Best Efforts</h2>
-			<div class="overflow-hidden rounded-lg border border-zinc-800">
+			<div class="overflow-x-auto rounded-lg border border-zinc-800">
 				<table class="w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
@@ -601,6 +574,12 @@
 					</thead>
 					<tbody class="divide-y divide-zinc-800">
 						{#each bestEfforts as b (b.id)}
+							{@const bucket = {
+								activity_type: a.type,
+								metric: b.metric,
+								window_kind: b.windowKind,
+								window_value: b.windowValue
+							}}
 							<tr
 								class="cursor-pointer bg-zinc-900/30 transition-colors hover:bg-zinc-800/60"
 								onclick={() =>
@@ -611,9 +590,15 @@
 										)
 									)}
 							>
-								<td class="px-4 py-2 font-mono text-xs uppercase text-accent-400">{b.metric}</td>
-								<td class="px-4 py-2 text-zinc-300">{formatEffortWindow(b)}</td>
-								<td class="px-4 py-2 text-right tabular-nums">{formatEffortValue(b)} ↗</td>
+								<td class="px-4 py-2 text-xs text-accent-400">
+									{isCyclingDistanceRecord(bucket)
+										? m.ride_elapsed()
+										: recordMetric(b.metric, false)}
+								</td>
+								<td class="px-4 py-2 text-zinc-300">{recordWindow(b.windowKind, b.windowValue)}</td>
+								<td class="px-4 py-2 text-right tabular-nums"
+									>{bestEffortValue(bucket, b.achievedValue)} ↗</td
+								>
 							</tr>
 						{/each}
 					</tbody>

@@ -2,13 +2,13 @@
 	import { formatDateOnly } from '#lib/format.js';
 	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { recordMetric, recordSport, recordValue, recordWindow } from '#lib/records.js';
+	import { recordLabel, recordSport, recordValue } from '#lib/records.js';
 
 	let { data } = $props();
 	const { bucket, records } = $derived(data);
 </script>
 
-<svelte:head><title>{recordMetric(bucket.metric)} · {m.record_leaderboards()}</title></svelte:head>
+<svelte:head><title>{recordLabel(bucket)} · {m.record_leaderboards()}</title></svelte:head>
 
 <section class="space-y-5">
 	<header>
@@ -19,7 +19,7 @@
 			← {m.record_leaderboards()}
 		</a>
 		<h1 class="mt-2 text-2xl font-semibold">
-			{recordMetric(bucket.metric)} · {recordWindow(bucket.window_kind, bucket.window_value)}
+			{recordLabel(bucket)}
 		</h1>
 		<p class="mt-1 text-sm text-quiet">{recordSport(bucket.activity_type)}</p>
 	</header>
@@ -51,7 +51,7 @@
 									></td
 								>
 								<td class="px-3 py-3 font-semibold whitespace-nowrap tabular-nums"
-									>{recordValue(row.metric, row.result.achieved_value)}</td
+									>{recordValue(row, row.result.achieved_value)}</td
 								>
 								<td class="px-3 py-3"
 									><a

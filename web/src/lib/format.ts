@@ -45,6 +45,20 @@ export function formatSpeedKmh(kmh: number | null | undefined): string {
 	return `${num(kmh, 1)} km/h`;
 }
 
+export function formatTimeAndSpeed(time: string, speedKmh: number | null | undefined): string {
+	const speed = formatSpeedKmh(speedKmh);
+	return speed === DASH ? time : `${time} · ${speed}`;
+}
+
+export function formatDistanceEffort(
+	distanceM: number | null | undefined,
+	elapsedS: number | null | undefined
+): string {
+	if (elapsedS == null || !Number.isFinite(elapsedS) || elapsedS <= 0) return DASH;
+	const speedKmh = distanceM == null ? null : (distanceM / elapsedS) * 3.6;
+	return formatTimeAndSpeed(formatDuration(elapsedS), speedKmh);
+}
+
 export function formatDuration(seconds: number | null | undefined): string {
 	if (seconds == null) return DASH;
 	const total = Math.round(seconds);

@@ -2,7 +2,13 @@
 	import { memberURL } from '#lib/member.js';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
-	import { intlLocale, formatDistance, formatDuration, formatElevation } from '#lib/format.js';
+	import {
+		intlLocale,
+		formatDistance,
+		formatDistanceEffort,
+		formatDuration,
+		formatElevation
+	} from '#lib/format.js';
 
 	let { data } = $props();
 
@@ -81,7 +87,7 @@
 		<section>
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Records</h2>
 			<div class="grid gap-4 sm:grid-cols-2">
-				{#each [{ label: 'Longest distance', r: s.records.longest_distance, metric: (r: NonNullable<Record>) => formatDistance(r.distance_m) }, { label: 'Longest duration', r: s.records.longest_duration, metric: (r: NonNullable<Record>) => formatDuration(r.elapsed_duration_s) }] as card (card.label)}
+				{#each [{ label: 'Longest distance', r: s.records.longest_distance, distanceRecord: true }, { label: 'Longest duration', r: s.records.longest_duration, distanceRecord: false }] as card (card.label)}
 					<div class="rounded-xl border border-zinc-800 bg-panel p-5">
 						<div class="text-xs uppercase tracking-wide text-zinc-500">{card.label}</div>
 						{#if card.r}
@@ -99,8 +105,17 @@
 										{card.r.title || `${humanize(card.r.discipline || card.r.type)} Activity`}
 									</div>
 								</div>
-								<div class="text-lg font-semibold tabular-nums text-zinc-100">
-									{card.metric(card.r)}
+								<div class="text-right tabular-nums">
+									<div class="text-lg font-semibold text-zinc-100">
+										{card.distanceRecord
+											? formatDistance(card.r.distance_m)
+											: formatDuration(card.r.elapsed_duration_s)}
+									</div>
+									{#if card.distanceRecord && card.r.type === 'ride'}
+										<div class="text-sm text-quiet">
+											{formatDistanceEffort(card.r.distance_m, card.r.elapsed_duration_s)}
+										</div>
+									{/if}
 								</div>
 							</a>
 						{:else}

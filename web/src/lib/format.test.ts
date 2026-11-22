@@ -7,6 +7,7 @@ import {
 	formatDate,
 	formatDateOnly,
 	formatDistance,
+	formatDistanceEffort,
 	formatDuration,
 	formatElevation,
 	formatHeartRate,
@@ -15,7 +16,8 @@ import {
 	formatRelativeDate,
 	formatSpeed,
 	formatSpeedKmh,
-	formatTemp
+	formatTemp,
+	formatTimeAndSpeed
 } from './format';
 import { setPrefs } from './prefs.svelte';
 
@@ -196,4 +198,27 @@ it('formats segment speed with one decimal in km/h regardless of unit preference
 
 	locale.current = 'nl-BE';
 	expect(norm(formatSpeedKmh(32.74))).toBe('32,7 km/h');
+});
+
+describe('formatDistanceEffort', () => {
+	it('uses matched distance and unrounded elapsed time with metric speed', () => {
+		locale.current = 'en';
+		setPrefs({ units: 'imperial' });
+		expect(formatDistanceEffort(1090, 120)).toBe('2:00 · 32.7 km/h');
+		expect(formatDistanceEffort(1090, 120.49)).toBe('2:00 · 32.6 km/h');
+
+		locale.current = 'nl-BE';
+		expect(formatDistanceEffort(1090, 120)).toBe('2:00 · 32,7 km/h');
+	});
+
+	it.each([0, -1, null, undefined, NaN, Infinity])('handles invalid input (%s)', (invalid) => {
+		expect(formatDistanceEffort(1090, invalid)).toBe('—');
+		expect(formatDistanceEffort(invalid, 120)).toBe('2:00');
+	});
+});
+
+it('adds provided segment speed while preserving the formatted time', () => {
+	locale.current = 'en';
+	expect(formatTimeAndSpeed('120.49 sec', 32.567)).toBe('120.49 sec · 32.6 km/h');
+	expect(formatTimeAndSpeed('120.49 sec', null)).toBe('120.49 sec');
 });

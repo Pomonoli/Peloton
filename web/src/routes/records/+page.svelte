@@ -5,7 +5,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
 	import RecordLeaderboards from '#lib/components/RecordLeaderboards.svelte';
-	import { recordMetric, recordValue, recordWindow, type PersonalRecord } from '#lib/records.js';
+	import { recordLabel, recordSport, recordValue, type PersonalRecord } from '#lib/records.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDateOnly } from '#lib/format.js';
 
@@ -99,7 +99,7 @@
 						class="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-zinc-400"
 					>
 						<SportIcon {type} size={16} />
-						{type}
+						{recordSport(type)}
 					</h2>
 					<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 						{#each list as r (r.metric + r.window_kind + r.window_value)}
@@ -108,10 +108,10 @@
 								class="rounded-lg border border-zinc-800 bg-panel p-3 hover:border-accent-600"
 							>
 								<div class="text-xs text-zinc-500">
-									{recordMetric(r.metric, false)} · {recordWindow(r.window_kind, r.window_value)}
+									{recordLabel(r, false)}
 								</div>
 								<div class="mt-0.5 text-lg font-semibold text-zinc-100">
-									{recordValue(r.metric, r.achieved_value)}
+									{recordValue(r, r.achieved_value)}
 								</div>
 								<div class="mt-0.5 text-xs text-quiet">{formatDateOnly(r.timestamp)}</div>
 							</a>

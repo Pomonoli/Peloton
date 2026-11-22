@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { formatDateOnly, intlLocale, formatSpeedKmh } from '#lib/format.js';
+	import {
+		formatDateOnly,
+		formatDistanceEffort,
+		formatSpeedKmh,
+		formatTimeAndSpeed,
+		intlLocale
+	} from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
@@ -11,13 +17,15 @@
 	} from '#lib/segment-rivalries.js';
 	import StreamChart from './StreamChart.svelte';
 
-	let { id, member }: { id: string; member: MemberView | null } = $props();
+	let { id, distanceM, member }: { id: string; distanceM: number; member: MemberView | null } =
+		$props();
 
 	interface Entry {
 		rank: number;
 		user_id: string;
 		display_name: string;
 		elapsed_s: number;
+		average_speed_kmh: number | null;
 		effort_count: number;
 		all_efforts_speed_kmh: number | null;
 		start_time: string;
@@ -55,7 +63,7 @@
 			values: chart.values[i] ?? [],
 			label: entry.display_name,
 			color: colors[i]!,
-			unit: 's'
+			formatValue: (elapsedS: number | null) => formatDistanceEffort(distanceM, elapsedS)
 		}))
 	);
 
@@ -187,7 +195,7 @@
 								: m.segment_rivalry_period_best()}</th
 						>
 						<th scope="col" class="px-3 py-2 text-right">{m.segment_rivalry_gap()}</th>
-						<th scope="col" class="px-3 py-2 text-right">{m.segment_avg_speed()}</th>
+						<th scope="col" class="px-3 py-2 text-right">{m.segment_rivalry_avg_speed()}</th>
 						<th scope="col" class="px-3 py-2 text-right">{m.segment_rivalry_efforts()}</th>
 						<th scope="col" class="px-3 py-2 text-right">{m.segment_leaderboard_date()}</th>
 					</tr>
@@ -210,7 +218,9 @@
 							</td>
 							<td class="px-3 py-2 tabular-nums">#{entry.rank}</td>
 							<td class="px-3 py-2" class:font-semibold={gap === 0}>{entry.display_name}</td>
-							<td class="px-3 py-2 text-right tabular-nums">{seconds(entry.elapsed_s)}</td>
+							<td class="px-3 py-2 text-right tabular-nums">
+								{formatTimeAndSpeed(seconds(entry.elapsed_s), entry.average_speed_kmh)}
+							</td>
 							<td class="px-3 py-2 text-right tabular-nums"
 								>{gap === 0 ? m.segment_rivalry_fastest() : `+${seconds(gap)}`}</td
 							>

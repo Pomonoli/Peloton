@@ -1,4 +1,11 @@
-import { formatHeartRate, formatPower, formatSpeed, intlLocale } from '#lib/format.js';
+import {
+	formatDistanceEffort,
+	formatHeartRate,
+	formatPower,
+	formatSpeed,
+	formatSpeedKmh,
+	intlLocale
+} from '#lib/format.js';
 import { m } from '#lib/paraglide/messages.js';
 
 export type RecordBucket = {
@@ -68,7 +75,29 @@ export function recordMetric(metric: string, measured = true): string {
 	}
 }
 
-export function recordValue(metric: string, value: number): string {
+export function isCyclingDistanceRecord({
+	activity_type,
+	metric,
+	window_kind
+}: RecordBucket): boolean {
+	return activity_type === 'ride' && metric === 'pace' && window_kind === 'distance';
+}
+
+export function recordLabel(bucket: RecordBucket, measured = true): string {
+	const window = recordWindow(bucket.window_kind, bucket.window_value);
+	return isCyclingDistanceRecord(bucket)
+		? m.record_fastest_distance({ distance: window })
+		: `${recordMetric(bucket.metric, measured)} · ${window}`;
+}
+
+export function recordValue(bucket: RecordBucket, value: number): string {
+	const { metric, window_value } = bucket;
+	if (isCyclingDistanceRecord(bucket)) {
+		if (!Number.isFinite(window_value) || window_value <= 0) return m.placeholder_dash();
+		// Stored pace is seconds per kilometer, calculated over the sampled window.
+		// Scale to the category distance so displayed time follows the ranked value.
+		return formatDistanceEffort(window_value, value * (window_value / 1000));
+	}
 	switch (metric) {
 		case 'pace': {
 			const seconds = Math.round(value);
@@ -84,6 +113,18 @@ export function recordValue(metric: string, value: number): string {
 			return `${Math.round(value).toLocaleString(intlLocale())} m/h`;
 		default:
 			return Math.round(value).toLocaleString(intlLocale());
+	}
+}
+
+export function bestEffortValue(bucket: RecordBucket, value: number): string {
+	switch (bucket.metric) {
+		case 'speed':
+			return formatSpeedKmh(value * 3.6);
+		case 'power':
+		case 'heart_rate':
+			return recordValue(bucket, Math.round(value));
+		default:
+			return recordValue(bucket, value);
 	}
 }
 

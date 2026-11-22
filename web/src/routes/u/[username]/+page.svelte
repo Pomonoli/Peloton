@@ -4,7 +4,12 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import MemberNav from '#lib/components/MemberNav.svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
-	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
+	import {
+		formatDistance,
+		formatDistanceEffort,
+		formatDuration,
+		formatRelativeDate
+	} from '#lib/format.js';
 
 	let { data } = $props();
 
@@ -179,9 +184,13 @@
 							</div>
 						</div>
 					</div>
-					<div class="mt-2 flex gap-6 text-sm">
+					<div class="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
 						<span class="font-semibold">{formatDistance(a.distance_m ?? 0)}</span>
-						<span class="font-semibold">{formatDuration(a.elapsed_duration_s)}</span>
+						<span class="font-semibold">
+							{a.type === 'ride'
+								? formatDistanceEffort(a.distance_m, a.elapsed_duration_s)
+								: formatDuration(a.elapsed_duration_s)}
+						</span>
 						{#if a.elevation_gain_m}<span class="font-semibold"
 								>{Math.round(a.elevation_gain_m)} m</span
 							>{/if}

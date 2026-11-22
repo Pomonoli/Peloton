@@ -11,6 +11,7 @@
 		values: (number | null)[];
 		color: string;
 		unit?: string;
+		formatValue?: (value: number | null) => string;
 		fill?: boolean; // render as a filled area (e.g. elevation as a mountain profile)
 	}
 
@@ -109,8 +110,12 @@
 				{ label: m.detail_label_time() },
 				...ordered.map((s, i) => {
 					const stroke = appearanceColor(s.color.slice(4, -1));
+					const { formatValue } = s;
 					return {
 						label: s.unit ? `${s.label} (${s.unit})` : s.label,
+						...(formatValue
+							? { value: (_plot: uPlot, value: number | null) => formatValue(value) }
+							: {}),
 						stroke,
 						width: s.fill ? 1 : 1.5,
 						...(s.fill ? { fill: stroke + '2e' } : {}),

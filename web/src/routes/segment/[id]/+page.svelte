@@ -8,6 +8,7 @@
 	import { decodePolylineLonLat } from '#lib/polyline.js';
 	import {
 		formatMetricDistance,
+		formatDistanceEffort,
 		formatDuration,
 		formatDate,
 		formatElevation
@@ -146,7 +147,7 @@
 			</section>
 		{/if}
 
-		<SegmentRivalries id={segment.id} member={data.member} />
+		<SegmentRivalries id={segment.id} distanceM={segment.distance_m} member={data.member} />
 
 		{#if chrono.length > 1}
 			<section>
@@ -177,9 +178,10 @@
 								fill={e.elapsed_s === best ? 'var(--plot-cadence)' : 'var(--plot-speed)'}
 							>
 								<title
-									>{formatDate(e.start_time)}: {formatDuration(e.elapsed_s)}{e.elapsed_s === best
-										? ' (PR)'
-										: ''}</title
+									>{formatDate(e.start_time)} · {formatDistanceEffort(
+										segment.distance_m,
+										e.elapsed_s
+									)}{e.elapsed_s === best ? ' (PR)' : ''}</title
 								>
 							</circle>
 						{/each}
@@ -223,7 +225,7 @@
 										</a>
 									</td>
 									<td class="px-4 py-2 text-right tabular-nums">
-										{formatDuration(e.elapsed_s)}
+										{formatDistanceEffort(segment.distance_m, e.elapsed_s)}
 										{#if e.is_personal_record}<span
 												class="ml-1 rounded bg-amber-500/15 px-1 text-[10px] text-amber-300"
 												>PR</span

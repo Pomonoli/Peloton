@@ -9,7 +9,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { basemapStyle } from '#lib/basemap.js';
-	import { formatDuration, formatMetricDistance } from '#lib/format.js';
+	import { formatDuration, formatMetricDistance, formatTimeAndSpeed } from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
@@ -325,7 +325,12 @@
 							</div>
 							<div>
 								<dt class="text-quiet">{m.segment_leaderboard_time()}</dt>
-								<dd>{formatDuration(selected.best_elapsed_s)}</dd>
+								<dd>
+									{formatTimeAndSpeed(
+										formatDuration(selected.best_elapsed_s),
+										selected.average_speed_kmh
+									)}
+								</dd>
 							</div>
 						</dl>
 						<a

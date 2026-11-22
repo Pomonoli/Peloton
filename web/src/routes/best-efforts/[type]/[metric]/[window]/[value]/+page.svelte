@@ -2,6 +2,7 @@
 	import { memberURL } from '#lib/member.js';
 
 	import { formatDateOnly } from '#lib/format.js';
+	import { bestEffortValue, recordLabel } from '#lib/records.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -14,9 +15,6 @@
 		is_best: boolean;
 	};
 	type Payload = {
-		metric: string;
-		window_kind: string;
-		window_value: number;
 		best: number;
 		count: number;
 		items: Item[];
@@ -52,43 +50,12 @@
 		return () => request.abort();
 	});
 
-	function fmtValue(v: number, metric: string): string {
-		switch (metric) {
-			case 'pace': {
-				const m = Math.floor(v / 60);
-				const s = Math.round(v % 60);
-				return `${m}:${s.toString().padStart(2, '0')} /km`;
-			}
-			case 'speed':
-				return `${(v * 3.6).toFixed(1)} km/h`;
-			case 'power':
-				return `${Math.round(v)} W`;
-			case 'heart_rate':
-				return `${Math.round(v)} bpm`;
-			case 'vam':
-				return `${Math.round(v)} m/h`;
-		}
-		return v.toFixed(0);
-	}
-
-	function fmtWindow(kind: string, value: number): string {
-		if (kind === 'distance') return value >= 1000 ? `${value / 1000} km` : `${value} m`;
-		if (value >= 3600) return `${Math.round(value / 3600)} h`;
-		if (value >= 60) return `${Math.round(value / 60)} min`;
-		return `${value} s`;
-	}
-
-	const metricLabel: Record<string, string> = {
-		pace: 'Pace',
-		speed: 'Speed',
-		power: 'Power',
-		heart_rate: 'Heart rate',
-		vam: 'VAM'
-	};
-
-	const title = $derived(
-		`${metricLabel[data.metric] ?? data.metric} · ${fmtWindow(data.window, data.value)}`
-	);
+	const bucket = $derived({
+		activity_type: data.type,
+		metric: data.metric,
+		window_kind: data.window,
+		window_value: data.value
+	});
 
 	// Bar chart over the chronological series; taller = higher value. For pace
 	// (lower is better) we still draw raw value but mark the best (min) green.
@@ -126,7 +93,9 @@
 <section class="space-y-8">
 	<header>
 		<a href="/" class="text-xs text-accent-400 hover:text-accent-300">← Overview</a>
-		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Best effort · {title}</h1>
+		<h1 class="mt-2 text-2xl font-semibold tracking-tight">
+			Best effort · {recordLabel(bucket, false)}
+		</h1>
 		<p class="mt-1 text-sm text-zinc-400">
 			Your progression for this effort across all activities.
 		</p>
@@ -141,7 +110,7 @@
 			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 				<dt class="text-xs uppercase tracking-wide text-zinc-500">All-time best</dt>
 				<dd class="mt-1 text-2xl font-semibold tabular-nums text-emerald-300">
-					{fmtValue(payload.best, payload.metric)}
+					{bestEffortValue(bucket, payload.best)}
 				</dd>
 			</div>
 			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
@@ -171,9 +140,9 @@
 							class={b.item.is_best ? 'fill-emerald-500' : 'fill-zinc-600'}
 						>
 							<title
-								>{formatDateOnly(b.item.start_time)} · {fmtValue(
-									b.item.achieved_value,
-									payload.metric
+								>{formatDateOnly(b.item.start_time)} · {bestEffortValue(
+									bucket,
+									b.item.achieved_value
 								)}</title
 							>
 						</rect>
@@ -187,7 +156,7 @@
 
 		<section>
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">All efforts</h2>
-			<div class="overflow-hidden rounded-lg border border-zinc-800">
+			<div class="overflow-x-auto rounded-lg border border-zinc-800">
 				<table class="w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
@@ -209,7 +178,7 @@
 									</a>
 								</td>
 								<td class="px-3 py-2 text-right font-medium tabular-nums">
-									{fmtValue(it.achieved_value, payload.metric)}
+									{bestEffortValue(bucket, it.achieved_value)}
 									{#if it.is_best}<span class="ml-1 text-emerald-400">★</span>{/if}
 								</td>
 							</tr>

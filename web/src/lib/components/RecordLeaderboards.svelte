@@ -5,11 +5,11 @@
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import {
 		filterCommunityRecords,
+		recordLabel,
 		recordMetric,
 		recordPath,
 		recordSport,
 		recordValue,
-		recordWindow,
 		type CommunityRecord,
 		type RecordOrder
 	} from '#lib/records.js';
@@ -105,11 +105,11 @@
 							class="rounded-lg border border-zinc-800 bg-panel p-3 hover:border-accent-500"
 						>
 							<div class="text-sm font-medium">
-								{recordMetric(row.metric)} · {recordWindow(row.window_kind, row.window_value)}
+								{recordLabel(row)}
 							</div>
 							{#if row.result}
 								<div class="mt-1 text-lg font-semibold tabular-nums">
-									{recordValue(row.metric, row.result.achieved_value)}
+									{recordValue(row, row.result.achieved_value)}
 								</div>
 								<div class="text-sm text-quiet">{row.result.display_name}</div>
 							{:else}

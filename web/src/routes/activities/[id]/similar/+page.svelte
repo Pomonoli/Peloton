@@ -1,9 +1,16 @@
 <script lang="ts">
-	import { formatDistance, formatDuration, formatDateOnly } from '#lib/format.js';
+	import {
+		formatDistance,
+		formatDistanceEffort,
+		formatDuration,
+		formatDateOnly
+	} from '#lib/format.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const a = $derived(data.activity);
+	const isRide = $derived(a.type === 'ride');
 
 	type Row = {
 		id: string;
@@ -155,7 +162,12 @@
 									? 'fill-emerald-500'
 									: 'fill-zinc-600'}
 						>
-							<title>{formatDateOnly(b.row.start_time)} · {formatDuration(b.row.moving_s)}</title>
+							<title>
+								{formatDateOnly(b.row.start_time)} · {formatDuration(b.row.moving_s)}
+								{#if isRide}
+									· {m.ride_elapsed()} {formatDistanceEffort(b.row.distance_m, b.row.elapsed_s)}
+								{/if}
+							</title>
 						</rect>
 					{/each}
 				</svg>
@@ -177,6 +189,9 @@
 							<th class="px-3 py-2 text-left font-medium">Date</th>
 							<th class="px-3 py-2 text-right font-medium">Distance</th>
 							<th class="px-3 py-2 text-right font-medium">Moving</th>
+							{#if isRide}
+								<th class="px-3 py-2 text-right font-medium">{m.ride_elapsed()}</th>
+							{/if}
 							<th class="px-3 py-2 text-right font-medium">Pace</th>
 							<th class="px-3 py-2 text-right font-medium">HR</th>
 							<th class="px-3 py-2 text-right font-medium">Power</th>
@@ -200,6 +215,11 @@
 											class="ml-1 text-emerald-400">★</span
 										>{/if}
 								</td>
+								{#if isRide}
+									<td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+										{formatDistanceEffort(r.distance_m, r.elapsed_s)}
+									</td>
+								{/if}
 								<td class="px-3 py-2 text-right tabular-nums">{pace(r.pace_s_per_km)}</td>
 								<td class="px-3 py-2 text-right tabular-nums">{r.avg_heart_rate ?? '—'}</td>
 								<td class="px-3 py-2 text-right tabular-nums">{r.avg_power ?? '—'}</td>
