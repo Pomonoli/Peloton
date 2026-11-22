@@ -4,6 +4,8 @@ Peloton is a private, self-hosted cycling platform for a small group of friends.
 
 ## Features
 
+- **Waasland route planner.** Public route planning for climbs, cobbles, gravel and uninterrupted riding, up to 200 km, with wind, named places, direction preferences and GPX export. [Planner documentation](docs/waasland-planner.md)
+
 - **Garmin Connect sync.** Connect a Garmin Personal API key in **Settings → Connections → Garmin Connect** to import available cycling history and check for new rides. Use **Sync Now** to start a check yourself. Garmin rides without a usable recording are imported as summaries. [Garmin Connect setup](docs/garmin-connect.md)
 - **Optional Strava sync.** Connect an authorized Strava account, import cycling history, and check for new rides. Peloton combines matching Garmin, Strava, and file recordings into one ride. [Strava setup and access requirements](docs/strava-connect.md)
 - **File imports.** Upload FIT, GPX or TCX files from **Activities**. File imports work independently of Garmin.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	oidcadapter "github.com/opencairn-org/cairn-core/internal/adapter/secondary/oidc"
 	"github.com/opencairn-org/cairn-core/internal/adapter/secondary/postgres"
 	s3adapter "github.com/opencairn-org/cairn-core/internal/adapter/secondary/s3"
+	waasadapter "github.com/opencairn-org/cairn-core/internal/adapter/secondary/waas"
 	webhookadapter "github.com/opencairn-org/cairn-core/internal/adapter/secondary/webhook"
 	"github.com/opencairn-org/cairn-core/internal/auth"
 	"github.com/opencairn-org/cairn-core/internal/config"
@@ -60,6 +62,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/trainingload"
 	"github.com/opencairn-org/cairn-core/internal/usecase/useradmin"
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
+	waasuc "github.com/opencairn-org/cairn-core/internal/usecase/waas"
 	"github.com/opencairn-org/cairn-core/internal/usecase/webhooks"
 )
 
@@ -70,6 +73,7 @@ import (
 // one place makes the binary's surface obvious and testable — every
 // production wire-up goes through here.
 type App struct {
+	WaasCatalog *waasuc.Catalog
 	// Adapters
 	QuotaMaxActivities int
 	Garmin             *garminsync.Connections
@@ -376,6 +380,7 @@ func newApp(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, logger 
 // wireRestUseCases builds the use cases the REST adapter needs beyond the
 // shared ones above.
 func wireRestUseCases(app *App, logger *slog.Logger) {
+	app.WaasCatalog = &waasuc.Catalog{Source: waasadapter.NewCatalog("https://waasland-klimlussen.seppevds.chatgpt.site", &http.Client{Timeout: 45 * time.Second})}
 	app.Orphans = &jobs.Orphans{Activities: app.Activities, LiveWorkers: liveWorkerNames(app, logger)}
 	if app.WorkerPools != nil {
 		app.Orphans.Pools = app.WorkerPools

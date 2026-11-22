@@ -19,3 +19,9 @@ func mountRestShare(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	(&rest.ShareHandlers{Auth: restAuth(app), Links: app.Shares, Feeds: app.Feeds, Log: logger}).Mount(mux)
 	logger.Info("share-link endpoints mounted")
 }
+
+func mountWaasPlanner(mux *http.ServeMux, app *App) {
+	if app.WaasCatalog != nil {
+		(&rest.WaasCatalog{Catalog: app.WaasCatalog}).Mount(mux)
+	}
+}
