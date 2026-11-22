@@ -1021,7 +1021,7 @@ func itestConnections(t *testing.T, alice *itestClient) {
 	}
 	alice.do(http.MethodGet, "/auth/oauth/strava/callback?state=wrong&code=good", nil, http.StatusBadRequest)
 	alice.do(http.MethodGet, "/auth/oauth/strava/callback?state="+state+"&code=bad", nil, http.StatusFound)
-	alice.do(http.MethodGet, "/auth/oauth/strava/callback?state="+state+"&code=good", nil, http.StatusFound)
+	alice.do(http.MethodGet, "/auth/oauth/strava/callback?state="+state+"&code=good&scope=read,activity:read_all", nil, http.StatusFound)
 	alice.do(http.MethodGet, "/auth/oauth/garmin/connect", nil, http.StatusBadRequest)
 	alice.do(http.MethodGet, "/api/connections", nil, http.StatusOK)
 

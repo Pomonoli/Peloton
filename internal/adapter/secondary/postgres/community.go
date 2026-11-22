@@ -12,7 +12,7 @@ import (
 )
 
 // Keep directory totals, the recent ride link and the profile history on the same visibility rule.
-const communityActivitySQL = "a.deleted_at IS NULL AND (a.hidden_by_admin = false OR a.user_id = $1)"
+const communityActivitySQL = "a.deleted_at IS NULL AND ((NOT a.hidden_by_admin AND NOT a.provider_restricted) OR a.user_id = $1)"
 
 func (r *ActivityRepo) ListCommunityMembers(ctx context.Context, viewer domain.UserID) ([]domain.CommunityMember, error) {
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
@@ -58,7 +58,7 @@ func (r *ActivityRepo) ListCommunityMembers(ctx context.Context, viewer domain.U
 // communityReadSQL applies to a subject's activity queries after a distinct viewer was authorized.
 func communityReadSQL(ctx context.Context, prefix string) string {
 	if port.IsCommunityActivityRead(ctx) {
-		return " AND " + prefix + "hidden_by_admin = false"
+		return " AND NOT " + prefix + "hidden_by_admin AND NOT " + prefix + "provider_restricted"
 	}
 	return ""
 }

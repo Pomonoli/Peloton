@@ -234,7 +234,7 @@ func activityReadToProto(a domain.Activity, sources []domain.ActivitySource, own
 	out := activityToProto(a, nil)
 	out.MergeProvenance = nil
 	for _, src := range sources {
-		if src.Status != domain.SourceStatusDetached {
+		if src.Status != domain.SourceStatusDetached && !domain.ProviderDataRestricted(src.Provider) {
 			out.Sources = append(out.Sources, &v1.ActivitySource{
 				Id: src.ID.String(), ActivityId: out.Id, Provider: src.Provider,
 				Status: v1.ActivitySourceStatus_ACTIVITY_SOURCE_STATUS_ACTIVE,
@@ -458,7 +458,7 @@ func (s *ActivityServer) GetActivityStream(
 	if err != nil {
 		return nil, err
 	}
-	if !viewer.IsOwner && src.Status == domain.SourceStatusDetached {
+	if !viewer.IsOwner && (src.Status == domain.SourceStatusDetached || domain.ProviderDataRestricted(src.Provider)) {
 		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 
@@ -490,12 +490,12 @@ func (s *ActivityServer) ListBestEfforts(
 	ctx context.Context,
 	req *v1.ListBestEffortsRequest,
 ) (*v1.ListBestEffortsResponse, error) {
-	activity, _, err := s.visibleActivity(ctx, req.GetActivityId())
+	activity, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
 
-	efforts, err := s.BestEfforts.ListForActivity(ctx, activity.ID)
+	efforts, err := s.BestEfforts.ListForActivity(viewer.ActivityReadContext(ctx), activity.ID)
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal,
 			fmt.Errorf("list best efforts: %w", err))

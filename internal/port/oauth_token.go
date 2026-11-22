@@ -56,7 +56,7 @@ type OAuthTokenRepo interface {
 	// Adapter decrypts before returning.
 	//
 	// Returns ErrTokenAccountNotFound when the account is unknown OR
-	// when status='needs_reauth' (in which case the worker should not
+	// when status='auth_invalid' (in which case the worker should not
 	// retry the underlying job; the SDK Term()s on this path).
 	GetToken(ctx context.Context, accountID domain.ExternalAccountID) (TokenState, error)
 
@@ -65,11 +65,10 @@ type OAuthTokenRepo interface {
 	// where the on-disk expires_at is >= PreviousExpiresAt + 1s are
 	// rejected with ErrTokenStaleStore.
 	//
-	// PreviousExpiresAt = zero is allowed for the initial OAuth-callback
-	// path where no prior state exists.
+	// ReplaceAuthorization is reserved for a successful OAuth callback.
 	StoreToken(ctx context.Context, accountID domain.ExternalAccountID, in StoreTokenInput) error
 
-	// MarkNeedsReauth flips status='needs_reauth' and records a reason.
+	// MarkNeedsReauth flips status='auth_invalid' and records a reason.
 	// Called by the worker when the provider returns invalid_grant or
 	// any other permanent refresh failure.
 	//
@@ -92,6 +91,7 @@ type TokenState struct {
 // StoreTokenInput is what workers send when they've successfully
 // refreshed (or initially obtained) a token.
 type StoreTokenInput struct {
-	State             TokenState
-	PreviousExpiresAt time.Time // for optimistic concurrency
+	State                TokenState
+	PreviousExpiresAt    time.Time // for optimistic concurrency
+	ReplaceAuthorization bool
 }

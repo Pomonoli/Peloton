@@ -22,6 +22,7 @@ export function memberLinks(member?: MemberView | null) {
 		{ href: '/analysis', label: m.nav_analysis() },
 		{ href: '/heatmap', label: m.member_heatmap() },
 		{ href: '/segments', label: m.nav_segments() },
+		...(member ? [{ href: '/head-to-head', label: m.comparison_title() }] : []),
 		{ href: '/athlete', label: m.nav_athlete() },
 		{ href: '/health', label: m.member_health() },
 		{ href: '/gear', label: m.nav_gear() }

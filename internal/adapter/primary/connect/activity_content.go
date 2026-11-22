@@ -74,7 +74,7 @@ func (s *ActivityServer) ListAttachments(ctx context.Context, req *v1.ListAttach
 	if !vw.IsOwner && !vw.Cats.Has(domain.CategoryPhotos) {
 		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
-	atts, err := s.Attachments.ListForActivity(ctx, act.ID)
+	atts, err := s.Attachments.ListForActivity(vw.ActivityReadContext(ctx), act.ID)
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal, fmt.Errorf("list attachments: %w", err))
 	}

@@ -74,6 +74,7 @@ export interface UserView {
 	email: string;
 	emailVerified: boolean;
 	displayName: string;
+	avatarUrl?: string;
 	role: 'user' | 'admin' | 'unknown';
 	units: 'metric' | 'imperial';
 	dateFormat: '' | 'iso' | 'us' | 'eu';
@@ -112,6 +113,7 @@ function userToView(u: User | undefined): UserView | null {
 		email: u.email,
 		emailVerified: u.emailVerified,
 		displayName: u.displayName,
+		avatarUrl: u.avatarUrl ?? '',
 		role: u.role === UserRole.ADMIN ? 'admin' : u.role === UserRole.USER ? 'user' : 'unknown',
 		units: u.units === UnitSystem.IMPERIAL ? 'imperial' : 'metric',
 		dateFormat: dateFmt(u.dateFormat),

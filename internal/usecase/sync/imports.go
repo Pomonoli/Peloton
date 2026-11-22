@@ -220,7 +220,7 @@ func (u *Imports) RunFullDiscovery(a domain.ExternalAccount, skipExisting bool) 
 	defer cancel()
 	log := u.log().With("component", "full_discovery", "account_id", a.ID)
 
-	_ = u.Accounts.UpdateAccountConfig(ctx, a.ID, map[string]any{"discovering": true})
+	_ = u.Accounts.UpdateAccountConfig(ctx, a.ID, map[string]any{"discovering": true, "discovery_failed": false})
 	defer func() {
 		_ = u.Accounts.UpdateAccountConfig(context.Background(), a.ID, map[string]any{"discovering": false})
 	}()
@@ -231,15 +231,34 @@ func (u *Imports) RunFullDiscovery(a domain.ExternalAccount, skipExisting bool) 
 	}
 
 	page := 1
-	discovered, enqueued := 0, 0
+	discovered, enqueued, failures := 0, 0, 0
 	for {
 		b, err := u.discoverBatch(ctx, a, page)
 		if err != nil {
+			if domain.ProviderDataRestricted(a.Provider) {
+				if isRateLimitErr(err) && u.waitRateLimit(ctx, log, a.ID, page) {
+					continue
+				}
+				current, accountErr := u.Accounts.GetExternalAccount(ctx, a.ID)
+				failures++
+				if accountErr == nil && current.Status == domain.ExternalAccountStatusActive && failures < 3 {
+					select {
+					case <-time.After(time.Duration(failures) * time.Second):
+						continue
+					case <-ctx.Done():
+					}
+				}
+				_ = u.Accounts.UpdateAccountConfig(ctx, a.ID, map[string]any{"discovery_failed": true})
+			}
 			log.Warn("discover batch failed; stopping", "page", page, "error", err)
 			break
 		}
+		failures = 0
 		discovered += len(b.Items)
-		enqueued += u.enqueueDiscovered(ctx, log, buildImportQueue(b.Items, a, skipExisting, existing), !skipExisting)
+		// With Skip Existing, discovered Strava IDs that have no source can
+		// restart a failed fetch from a previous run.
+		requeue := !skipExisting || domain.ProviderDataRestricted(a.Provider)
+		enqueued += u.enqueueDiscovered(ctx, log, buildImportQueue(b.Items, a, skipExisting, existing), requeue)
 		_ = u.Accounts.UpdateAccountConfig(ctx, a.ID, map[string]any{"last_discovered_total": discovered, "discovering": true})
 
 		if b.Complete {

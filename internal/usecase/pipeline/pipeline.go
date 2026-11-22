@@ -108,21 +108,33 @@ func (p *Pipeline) now() time.Time {
 	return p.Now()
 }
 
-// IngestSource persists a source, re-derives its grouping and dispatches the
-// follow-ups for the activity it ends up in. Only the persist step can fail
-// the call; re-clustering and follow-ups log and carry on (a failed
-// re-cluster is repaired by the recompute_activity_merges maintenance job).
+// IngestSource persists and re-clusters in one transaction, then dispatches
+// follow-ups against the committed canonical activity.
 func (p *Pipeline) IngestSource(ctx context.Context, in activity.IngestInput) (activity.IngestResult, error) {
-	out, err := p.Ingester.Execute(ctx, in)
+	var out activity.IngestResult
+	ingest := func(ctx context.Context) error {
+		var err error
+		out, err = p.Ingester.Execute(ctx, in)
+		if err != nil {
+			return err
+		}
+		if p.Recluster != nil {
+			if _, err := p.Recluster.Execute(ctx, match.Input{UserID: in.UserID, Around: in.Payload.StartTime}); err != nil {
+				return fmt.Errorf("recluster: %w", err)
+			}
+			out = p.followSource(ctx, out)
+		}
+		return nil
+	}
+	var err error
+	if p.Tx != nil {
+		err = p.Tx.InTx(ctx, ingest)
+	} else {
+		err = ingest(ctx)
+	}
 	if err != nil {
 		return activity.IngestResult{}, err
 	}
-	if p.Recluster != nil {
-		if _, err := p.Recluster.Execute(ctx, match.Input{UserID: in.UserID, Around: in.Payload.StartTime}); err != nil {
-			p.log().Warn("recluster failed", "user_id", in.UserID, "error", err)
-		}
-	}
-	out = p.followSource(ctx, out)
 	p.dispatch(ctx, ActivityChanged{Kind: ChangeIngested, UserID: in.UserID, ActivityID: out.ActivityID, SourceID: out.SourceID, Action: out.Action})
 	return out, nil
 }
@@ -132,7 +144,7 @@ func (p *Pipeline) IngestSource(ctx context.Context, in activity.IngestInput) (a
 // everything after ingest must address the surviving one.
 func (p *Pipeline) followSource(ctx context.Context, out activity.IngestResult) activity.IngestResult {
 	src, err := p.Activities.GetSource(ctx, out.SourceID)
-	if err != nil || src.ActivityID == out.ActivityID {
+	if err != nil {
 		return out
 	}
 	act, err := p.Activities.GetActivity(ctx, src.ActivityID)
@@ -140,8 +152,9 @@ func (p *Pipeline) followSource(ctx context.Context, out activity.IngestResult) 
 		p.log().Warn("ingest: load re-clustered activity failed", "activity_id", src.ActivityID, "error", err)
 		return out
 	}
+	moved := out.ActivityID != act.ID
 	out.ActivityID, out.Activity = act.ID, act
-	if out.Action == activity.IngestActionImportedNew {
+	if moved && out.Action == activity.IngestActionImportedNew {
 		out.Action = activity.IngestActionMergedIntoExisting // not a new activity: no created event, no federation
 	}
 	return out

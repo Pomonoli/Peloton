@@ -79,7 +79,7 @@
 	// The two credential slots are labelled by the provider's worker (a login
 	// for credential providers, an app's client id/secret for OAuth ones).
 	const connectionOptions = $derived(
-		providers.filter((p) => p.provider !== 'garmin' || p.worker_pools?.length)
+		providers.filter((p) => !['garmin', 'strava'].includes(p.provider) || p.worker_pools?.length)
 	);
 	const formProvider = $derived(providers.find((p) => p.provider === form.provider));
 	const formProviderOAuth = $derived(formProvider?.oauth ?? true);
@@ -107,6 +107,8 @@
 	const errorMessages: Record<string, string> = {
 		configure_first: m.connections_error_configure_first(),
 		exchange_failed: m.connections_error_exchange_failed(),
+		access_denied: m.strava_oauth_denied(),
+		missing_activity_scope: m.strava_oauth_scope_missing(),
 		no_connection: 'Pick a connection to connect.',
 		choose_worker:
 			'Several importers serve this provider. Choose which one this connection is for, then connect again.',
@@ -194,17 +196,13 @@
 	}
 
 	async function remove(id: string) {
-		if (
-			!confirm(
-				'Delete this connection? Imported activities stay; the connection can no longer refresh.'
-			)
-		)
-			return;
+		if (!confirm(m.connections_disconnect_confirm())) return;
 		try {
-			await fetch(`/api/connections/${id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/connections/${id}`, { method: 'DELETE' });
+			if (!res.ok) throw new Error(m.connections_disconnect_failed());
 			await load();
-		} catch {
-			/* ignore */
+		} catch (e) {
+			error = (e as Error).message;
 		}
 	}
 
@@ -330,6 +328,9 @@
 					</p>
 				</div>
 			{/if}
+			{#if form.provider === 'strava'}
+				<p class="text-xs text-zinc-500">{m.strava_connection_help()}</p>
+			{/if}
 			{#if fieldHelp(form.provider) || !formProviderOAuth || formProvider?.setup_docs_url}
 				<p class="text-xs text-zinc-500">
 					{fieldHelp(form.provider) ||
@@ -350,7 +351,7 @@
 				type="button"
 				disabled={busy ||
 					!form.client_id.trim() ||
-					(!formProviderOAuth && !form.client_secret) ||
+					((!formProviderOAuth || form.provider === 'strava') && !form.client_secret.trim()) ||
 					(!formProviderOAuth && poolsFor(form.provider).length > 1 && !form.worker)}
 				onclick={addConnection}
 				class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
@@ -408,7 +409,7 @@
 						onclick={() => remove(c.id)}
 						class="rounded border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:border-red-600 hover:text-red-300"
 					>
-						Delete
+						{c.provider === 'strava' ? m.strava_disconnect() : 'Delete'}
 					</button>
 				</div>
 			</div>

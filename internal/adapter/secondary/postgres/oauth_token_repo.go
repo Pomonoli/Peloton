@@ -30,7 +30,7 @@ func NewOAuthTokenRepo(pool *pgxpool.Pool, secrets *auth.SecretBox) *OAuthTokenR
 }
 
 // GetToken returns the decrypted token state. Returns ErrTokenAccountNotFound
-// when the account is unknown OR is in needs_reauth status.
+// when the account is unknown, disabled, or needs authorization.
 func (r *OAuthTokenRepo) GetToken(
 	ctx context.Context,
 	accountID domain.ExternalAccountID,
@@ -58,7 +58,7 @@ func (r *OAuthTokenRepo) GetToken(
 		return port.TokenState{}, fmt.Errorf("get oauth token %s: %w", accountID, err)
 	}
 
-	if status == "needs_reauth" || status == "revoked" {
+	if status == string(domain.ExternalAccountStatusAuthInvalid) || status == string(domain.ExternalAccountStatusDisabled) {
 		return port.TokenState{}, port.ErrTokenAccountNotFound
 	}
 	if len(accessEnc) == 0 {
@@ -109,8 +109,7 @@ func (r *OAuthTokenRepo) GetToken(
 //	  → B sees on-disk expiry E1 > B's PreviousExpiresAt E0 → reject
 //	  → B re-fetches → gets A's state → no work duplicated
 //
-// PreviousExpiresAt = zero (no prior state) is allowed for the initial
-// OAuth callback path.
+// A successful OAuth callback may replace the previous authorization.
 func (r *OAuthTokenRepo) StoreToken(
 	ctx context.Context,
 	accountID domain.ExternalAccountID,
@@ -141,8 +140,9 @@ func (r *OAuthTokenRepo) StoreToken(
 		        granted_scopes           = CASE WHEN $5::text[] IS NOT NULL THEN $5::text[] ELSE granted_scopes END,
 		        updated_at               = now()
 		  WHERE id = $1
+		    AND status <> 'disabled'
 		    AND (
-		         access_token_expires_at IS NULL
+		         $7 OR access_token_expires_at IS NULL
 		         OR access_token_expires_at <= $6
 		    )`,
 		accountID.UUID(),
@@ -150,7 +150,7 @@ func (r *OAuthTokenRepo) StoreToken(
 		nullableBytes(refreshEnc),
 		in.State.ExpiresAt,
 		scopeArrayOrNil(in.State.Scope),
-		casPreviousTime(in.PreviousExpiresAt),
+		in.PreviousExpiresAt, in.ReplaceAuthorization,
 	)
 	if err != nil {
 		return fmt.Errorf("store oauth token %s: %w", accountID, err)
@@ -173,7 +173,7 @@ func (r *OAuthTokenRepo) StoreToken(
 	return nil
 }
 
-// MarkNeedsReauth flips status='needs_reauth' and stamps the reason.
+// MarkNeedsReauth flips status='auth_invalid' and stamps the reason.
 // The caller (usecase layer) publishes the needs_reauth event; this
 // adapter is just the DB write.
 func (r *OAuthTokenRepo) MarkNeedsReauth(
@@ -184,11 +184,11 @@ func (r *OAuthTokenRepo) MarkNeedsReauth(
 	db := dbtx(ctx, r.pool)
 	tag, err := db.Exec(ctx,
 		`UPDATE external_accounts
-		    SET status         = 'needs_reauth',
+		    SET status         = 'auth_invalid',
 		        status_reason  = $2,
 		        updated_at     = now()
 		  WHERE id = $1
-		    AND status != 'needs_reauth'`,
+		    AND status NOT IN ('auth_invalid', 'disabled')`,
 		accountID.UUID(), reason,
 	)
 	if err != nil {
@@ -217,14 +217,6 @@ func nullableBytes(b []byte) any {
 		return nil
 	}
 	return b
-}
-
-func casPreviousTime(t time.Time) any {
-	if t.IsZero() {
-		// "Never previously had a token" — match the IS NULL arm.
-		return time.Time{}.Add(1) // a sentinel that's still <= any real value
-	}
-	return t
 }
 
 // scopeArrayOrNil parses a "read,activity:read_all"-style scope string

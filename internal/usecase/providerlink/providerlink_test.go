@@ -177,7 +177,7 @@ type fakeExchanger struct {
 
 func (e *fakeExchanger) ExchangeCode(_ context.Context, provider, pool string, conn domain.UserProviderConfig, in port.CodeExchange) (port.TokenState, string, error) {
 	e.provider, e.pool, e.conn, e.in = provider, pool, conn, in
-	return port.TokenState{AccessToken: "at"}, "4242", e.err
+	return port.TokenState{AccessToken: "at", RefreshToken: "rt", Scope: "read,activity:read_all"}, "4242", e.err
 }
 
 // testRegistry holds the two providers the seed migration ships.
@@ -359,7 +359,7 @@ func TestConnectRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	c, cfgs, accts, toks := newConnections()
 	user := domain.UserID(uuid.New())
-	id, _ := cfgs.Create(ctx, domain.UserProviderConfig{UserID: user, Provider: "strava", ClientID: "123"})
+	id, _ := cfgs.Create(ctx, domain.UserProviderConfig{UserID: user, Provider: "strava", ClientID: "123", ClientSecret: "mock-secret"})
 	strava, err := c.OAuthProvider(ctx, "strava")
 	if err != nil {
 		t.Fatal(err)

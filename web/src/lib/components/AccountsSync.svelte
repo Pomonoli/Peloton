@@ -32,6 +32,7 @@
 		rate_limited: boolean;
 		rate_limit_budget: { short?: BudgetWindow; daily?: BudgetWindow } | null;
 		discovering: boolean;
+		discovery_failed?: boolean;
 		poll_interval_seconds: number;
 		auto_import_enabled: boolean;
 		assigned_worker: string;
@@ -59,11 +60,19 @@
 	// right now.
 	type Tone = 'live' | 'warn' | 'err' | 'idle';
 	function connStatus(a: Account): { label: string; tone: Tone } {
-		if (a.status === 'needs_reauth') return { label: 'Needs reauth', tone: 'err' };
+		if (a.status === 'needs_reauth' || a.status === 'auth_invalid')
+			return { label: m.strava_reconnect_required(), tone: 'err' };
 		if (a.status && a.status !== 'active')
 			return { label: a.status.replace(/_/g, ' '), tone: 'warn' };
 		if (a.discovering) return { label: 'Discovering', tone: 'live' };
 		if (a.rate_limited) return { label: 'Rate limited', tone: 'warn' };
+		if (a.discovery_failed) return { label: m.strava_history_sync_failed(), tone: 'err' };
+		if (
+			a.provider === 'strava' &&
+			a.worker_pools?.length &&
+			!a.worker_pools.some((pool) => pool.online)
+		)
+			return { label: m.strava_importer_offline(), tone: 'warn' };
 		if (a.queue.in_progress > 0) return { label: 'Importing', tone: 'live' };
 		if (a.queue.pending > 0) return { label: 'Waiting', tone: 'warn' };
 		if (a.queue.failed > 0) return { label: 'Errors', tone: 'err' };
@@ -406,6 +415,22 @@
 		}
 	}
 
+	async function syncNow(id: string) {
+		busy = { ...busy, [id]: true };
+		error = null;
+		notice = null;
+		try {
+			const res = await fetch(`/api/accounts/${id}/sync/now`, { method: 'POST' });
+			if (!res.ok) throw new Error(m.strava_sync_unavailable());
+			notice = m.strava_sync_queued();
+			await loadAccounts();
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			busy = { ...busy, [id]: false };
+		}
+	}
+
 	async function start(id: string, skipExisting: boolean) {
 		busy = { ...busy, [id]: true };
 		error = null;
@@ -506,6 +531,16 @@
 								</span>
 							{/if}
 							{#if a.queue.failed > 0}<span class="text-red-400">{a.queue.failed} failed</span>{/if}
+							{#if a.provider === 'strava'}
+								<button
+									type="button"
+									disabled={busy[a.id]}
+									onclick={() => syncNow(a.id)}
+									class="rounded border border-zinc-700 px-2.5 py-1 text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50 max-md:py-2"
+								>
+									{m.strava_sync_now()}
+								</button>
+							{/if}
 							{#if !pv}
 								<button
 									type="button"

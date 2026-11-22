@@ -16,6 +16,7 @@ it('preserves activity filters when linking to a member', () => {
 		'/analysis',
 		'/heatmap',
 		'/segments',
+		'/head-to-head',
 		'/athlete',
 		'/health',
 		'/gear'

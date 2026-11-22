@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,9 +29,6 @@ import (
 //   - Streams are ~1Hz. Windows are interpreted as "this many consecutive
 //     samples". Sparse or variable-rate streams will produce approximate
 //     results; that's acceptable for v1 since most workers up-sample to 1Hz.
-//   - Only duration windows are computed. Distance-based pace windows
-//     (1km, 5k, marathon) need cumulative-distance traversal, which is
-//     a v2 feature.
 //   - Windows requiring more samples than the stream contains are skipped
 //     silently — short activities legitimately have no "20 minute power".
 type ComputeBestEffortsForSource struct {
@@ -134,9 +132,7 @@ var StandardWindows = []windowSpec{
 	{domain.BestEffortMetricVAM, domain.BestEffortWindowDuration, 3600},
 
 	// --- Distance windows (pace) ---
-	// Running's canonical PR distances. Computed for any activity whose
-	// stream carries cumulative distance — cyclists also get a "fastest
-	// 5km" record this way, which is harmless if useless.
+	// Shared PR distances for activities with cumulative distance.
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 400},
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 1000},
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 1609}, // 1 mile
@@ -144,6 +140,18 @@ var StandardWindows = []windowSpec{
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 10000},
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 21097}, // half marathon
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 42195}, // marathon
+}
+
+var longCyclingWindows = []windowSpec{
+	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 20000},
+	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 50000},
+}
+
+func standardWindowsFor(activityType domain.ActivityType) []windowSpec {
+	if activityType == domain.ActivityTypeRide {
+		return slices.Concat(StandardWindows, longCyclingWindows)
+	}
+	return StandardWindows
 }
 
 // ---------------------------------------------------------------------------
@@ -234,14 +242,15 @@ func newRecords(before, after []domain.PersonalRecord, activityID domain.Activit
 // windowsFor returns the standard windows plus the user's custom ones for
 // the activity's type; a failed custom lookup falls back to the standard set.
 func (uc *ComputeBestEffortsForSource) windowsFor(ctx context.Context, act domain.Activity) []windowSpec {
+	standard := standardWindowsFor(act.Type)
 	if uc.Customs == nil {
-		return StandardWindows
+		return standard
 	}
 	customs, err := uc.Customs.ListForUser(ctx, act.UserID, act.Type)
 	if err != nil {
-		return StandardWindows
+		return standard
 	}
-	return mergeWindows(StandardWindows, customs)
+	return mergeWindows(standard, customs)
 }
 
 // mergeWindows appends custom windows that are not already standard.

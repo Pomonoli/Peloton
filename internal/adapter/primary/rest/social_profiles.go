@@ -94,6 +94,7 @@ func (h *ProfileHandlers) getVisibility(w http.ResponseWriter, r *http.Request) 
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"policy":         domain.MarshalPolicy(p),
+		"default_policy": domain.MarshalPolicy(domain.DefaultVisibilityPolicy()),
 		"all_categories": socialCategoryStrings(),
 		"all_audiences":  []string{"public", "followers", "link"},
 	})

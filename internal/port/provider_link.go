@@ -23,6 +23,7 @@ type PoolCapabilities interface {
 type CodeExchange struct {
 	Code         string
 	RedirectURI  string
+	GrantedScope string // the scopes returned by the provider callback
 	CodeVerifier string // PKCE, "" when the provider does not use it
 }
 

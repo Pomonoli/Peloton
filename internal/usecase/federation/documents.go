@@ -42,7 +42,7 @@ type Audience interface {
 // publicCats is what an anonymous viewer may see of act; federated copies
 // are public, so they never carry more.
 func publicCats(ctx context.Context, aud Audience, act domain.Activity) domain.CategorySet {
-	if aud == nil {
+	if aud == nil || act.ProviderRestricted {
 		return domain.CategorySet{}
 	}
 	return aud.For(ctx, &act, nil, false)

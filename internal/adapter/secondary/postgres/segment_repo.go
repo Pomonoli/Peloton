@@ -375,24 +375,33 @@ func (r *SegmentRepo) DeleteEffortsForSource(ctx context.Context, sourceID domai
 	return nil
 }
 
-// catalogEffortSQL limits catalog results to locally matched stream efforts
-// on live activities. Prefer the activity's primary stream when it matched;
-// otherwise use one deterministic source. Keep repeat traversals on that source.
-const catalogEffortSQL = `(s.source <> 'strava_catalog' OR (
-	e.provider_effort_external_id IS NULL AND a.deleted_at IS NULL AND a.type = 'ride'
-	AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8 AND NOT EXISTS (
+// catalogEffortSQL selects a single recording per segment and ride,
+// preferring the canonical stream and retaining repeat traversals on it.
+const catalogEffortSQL = `
+	a.deleted_at IS NULL
+	AND ` + canonicalSegmentSourceSQL + `
+	AND (s.source <> 'strava_catalog' OR (
+		e.provider_effort_external_id IS NULL AND a.type = 'ride'
+		AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8
+	))
+	AND NOT EXISTS (
 		SELECT 1 FROM segment_efforts alt
+		JOIN activity_sources src ON src.id = alt.activity_source_id AND src.activity_id = a.id
 		WHERE alt.segment_id = e.segment_id AND alt.activity_id = e.activity_id
-		  AND alt.activity_source_id <> e.activity_source_id AND alt.provider_effort_external_id IS NULL
-		  AND alt.elapsed_s > 0 AND alt.elapsed_s < 'Infinity'::float8
-		  AND (
-		    alt.activity_source_id = a.primary_stream_source_id OR (
-		      e.activity_source_id IS DISTINCT FROM a.primary_stream_source_id
-		      AND alt.activity_source_id < e.activity_source_id
-		    )
-		  )
-	)
-))`
+		  AND alt.activity_source_id <> e.activity_source_id
+		  AND src.status <> 'detached' AND (src.provider <> 'strava' OR a.provider_restricted)
+		  AND (s.source <> 'strava_catalog' OR (
+		       alt.provider_effort_external_id IS NULL AND alt.elapsed_s > 0 AND alt.elapsed_s < 'Infinity'::float8))
+		  AND (alt.activity_source_id = a.primary_stream_source_id OR (
+		       e.activity_source_id IS DISTINCT FROM a.primary_stream_source_id
+		       AND alt.activity_source_id < e.activity_source_id))
+	)`
+
+const canonicalSegmentSourceSQL = `EXISTS (
+	SELECT 1 FROM activity_sources src
+	WHERE src.id = e.activity_source_id AND src.activity_id = a.id
+	  AND src.status <> 'detached' AND (src.provider <> 'strava' OR a.provider_restricted)
+)`
 
 // ListEffortsForActivity returns every effort across every source of the
 // activity. Ordered by start_time so the UI can render them along the
@@ -452,10 +461,11 @@ func (r *SegmentRepo) ListEffortsForSegment(
 		// instance-scope (Cairn) OR private but owned by the viewer, OR
 		// Strava but owned by one of the viewer's external accounts.
 		rows, err = db.Query(ctx,
-			`SELECT `+prefixedColumns(segmentEffortColumns, "se.")+`
-			   FROM segment_efforts se
-			   JOIN segments s ON s.id = se.segment_id
-			  WHERE se.segment_id = $1
+			`SELECT `+prefixedColumns(segmentEffortColumns, "e.")+`
+			   FROM segment_efforts e
+			   JOIN segments s ON s.id = e.segment_id
+			   JOIN activities a ON a.id = e.activity_id
+			  WHERE e.segment_id = $1 AND NOT a.provider_restricted AND `+catalogEffortSQL+`
 			    AND (
 			        (s.source = 'native' AND s.scope = 'instance')
 			        OR (s.source = 'native' AND s.scope = 'private' AND s.owner_user_id = $2)
@@ -463,7 +473,7 @@ func (r *SegmentRepo) ListEffortsForSegment(
 			            SELECT id FROM external_accounts WHERE user_id = $2
 			        ))
 			    )
-			  ORDER BY se.elapsed_s ASC
+			  ORDER BY e.elapsed_s ASC
 			  LIMIT $3 OFFSET $4`,
 			segmentID.UUID(), viewerUserID.UUID(), limit, offset,
 		)
@@ -503,8 +513,8 @@ func (r *SegmentRepo) RecomputeRanksForSegment(ctx context.Context, segmentID do
 			SELECT
 				e.id,
 				ROW_NUMBER() OVER (PARTITION BY e.user_id ORDER BY e.elapsed_s, e.start_time, e.id) AS personal_rank,
-				CASE WHEN s.source = 'strava_catalog' THEN 0
-				     ELSE ROW_NUMBER() OVER (ORDER BY e.elapsed_s, e.start_time, e.id) END AS instance_rank
+				CASE WHEN s.source = 'strava_catalog' OR a.provider_restricted THEN 0
+				     ELSE ROW_NUMBER() OVER (PARTITION BY a.provider_restricted ORDER BY e.elapsed_s, e.start_time, e.id) END AS instance_rank
 			  FROM segment_efforts e
 			  JOIN segments s ON s.id = e.segment_id
 			  JOIN activities a ON a.id = e.activity_id

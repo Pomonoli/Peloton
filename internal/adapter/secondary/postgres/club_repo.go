@@ -193,7 +193,7 @@ func (r *ClubRepo) ListClubFeed(ctx context.Context, clubID domain.ClubID, limit
 	db := dbtx(ctx, r.pool)
 	rows, err := db.Query(ctx,
 		`SELECT `+activityColumns+` FROM activities a
-		   WHERE a.deleted_at IS NULL AND a.privacy <> 'private' AND a.hidden_by_admin = false
+		   WHERE a.deleted_at IS NULL AND a.privacy <> 'private' AND NOT a.hidden_by_admin AND NOT a.provider_restricted
 		     AND a.user_id IN (SELECT user_id FROM club_members WHERE club_id = $1)
 		   ORDER BY a.start_time DESC, a.id DESC LIMIT $2 OFFSET $3`,
 		clubID.UUID(), limit, offset)

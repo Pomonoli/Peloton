@@ -1,0 +1,19 @@
+# Add to the existing Peloton Compose project. The worker talks only to NATS,
+# Strava HTTPS and the core-issued object-storage URLs.
+services:
+  strava-worker:
+    profiles: [strava]
+    build:
+      context: .
+      dockerfile: deploy/strava/Dockerfile
+    image: peloton-strava-worker:0.7.2
+    environment:
+      CAIRN_NATS_URL: ${PELOTON_STRAVA_NATS_URL:-nats://nats:4222}
+      CAIRN_WORKER_NAME: ${PELOTON_STRAVA_WORKER_NAME:-strava-fetcher}
+      CAIRN_WORKER_ENROLLMENT_TOKEN: ${PELOTON_STRAVA_ENROLLMENT_TOKEN:-}
+      CAIRN_STRAVA_CYCLING_ONLY: "true"
+    networks: [cairn]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]

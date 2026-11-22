@@ -308,7 +308,7 @@ func (h *ConnectionHandlers) callback(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(oauthPKCECookie); err == nil {
 		verifier = c.Value
 	}
-	in := port.CodeExchange{Code: code, RedirectURI: h.callbackURL(p), CodeVerifier: verifier}
+	in := port.CodeExchange{Code: code, RedirectURI: h.callbackURL(p), CodeVerifier: verifier, GrantedScope: r.URL.Query().Get("scope")}
 	if _, err := h.Connections.Complete(r.Context(), userID, p, connID, in, requested); err != nil {
 		var ce providerlink.ConnectError
 		if errors.As(err, &ce) {

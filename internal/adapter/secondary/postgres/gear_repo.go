@@ -36,7 +36,7 @@ func gearReadFrom(ctx context.Context) string {
 			SELECT COALESCE(sum(a.distance_m), 0) AS distance_m,
 			       COALESCE(sum(a.moving_duration_s), 0) AS moving_s, count(*) AS n
 			FROM activities a WHERE a.user_id = gear.user_id AND a.gear_id = gear.id
-			  AND a.deleted_at IS NULL AND a.hidden_by_admin = false
+			  AND a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted
 		) stats`
 }
 

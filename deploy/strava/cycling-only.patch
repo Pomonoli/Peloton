@@ -1,0 +1,265 @@
+diff --git a/cmd/worker-strava/handlers.go b/cmd/worker-strava/handlers.go
+index a809ecc..bfd7d0c 100644
+--- a/cmd/worker-strava/handlers.go
++++ b/cmd/worker-strava/handlers.go
+@@ -101,6 +101,11 @@ func discoverPages(ctx context.Context, w *workersdk.Worker, client *stravaClien
+ 		}
+ 		sums, err := client.ListAthleteActivities(ctx, accessToken, 0, page, perPage)
+ 		if err != nil {
++			var rl *StravaRateLimitError
++			if errors.As(err, &rl) {
++				_ = observe429(ctx, w, rl)
++				return discoverResponse{Items: items, NextPage: page, RateLimited: true}
++			}
+ 			if len(items) == 0 {
+ 				return discoverResponse{Error: err.Error()}
+ 			}
+@@ -114,6 +119,9 @@ func discoverPages(ctx context.Context, w *workersdk.Worker, client *stravaClien
+ 			return discoverResponse{Items: items, Complete: true}
+ 		}
+ 		for _, s := range sums {
++			if !importableSport(s.SportType, s.Type) {
++				continue
++			}
+ 			items = append(items, discoverItem{
+ 				ItemType:   "activity",
+ 				ExternalID: formatActivityID(s.ID),
+@@ -239,6 +247,13 @@ func fetchSourceOnce(ctx context.Context, w *workersdk.Worker, client *stravaCli
+ 		return mapStravaErr(ctx, w, job, in, err, "fetch_activity")
+ 	}
+ 
++	if !importableSport(activity.SportType, activity.Type) {
++		return &port.TerminalError{Reason: "not_cycling"}
++	}
++	if cyclingOnly {
++		in.FetchStreams = true
++		stripAncillaryData(activity)
++	}
+ 	rawStreams, err := fetchStreams(ctx, w, client, job, in, token.AccessToken, bucket)
+ 	if err != nil {
+ 		return err
+@@ -262,12 +277,14 @@ func fetchSourceOnce(ctx context.Context, w *workersdk.Worker, client *stravaCli
+ 
+ 	// Mirror the activity's photos into blob storage so Cairn owns the bytes
+ 	// (Strava photo URLs are short-lived CDN links). Best-effort.
+-	imported.Attachments = fetchActivityAttachments(ctx, w, client, token.AccessToken, bucket, in.UserID, in.ExtID, activity)
++	if !cyclingOnly {
++		imported.Attachments = fetchActivityAttachments(ctx, w, client, token.AccessToken, bucket, in.UserID, in.ExtID, activity)
++	}
+ 
+ 	events := activityEvents(in, activity, imported)
+ 
+ 	var segs segmentBatch
+-	if in.FetchStreams {
++	if in.FetchStreams && !cyclingOnly {
+ 		segs = collectSegments(ctx, w, client, segCache, token.AccessToken, bucket, in, activity)
+ 	}
+ 
+@@ -295,6 +312,12 @@ func fetchSourceOnce(ctx context.Context, w *workersdk.Worker, client *stravaCli
+ 	return nil
+ }
+ 
++// stripAncillaryData keeps provider gear and efforts out of the archive and payload.
++func stripAncillaryData(activity *stravaActivity) {
++	activity.SegmentEfforts = nil
++	activity.Gear, activity.GearID = nil, ""
++}
++
+ // fetchStreams pulls the activity's streams. They are optional: the reconcile
+ // path skips them by setting FetchStreams=false (the per-activity fetch pulls
+ // them on the user's first detail view), and Strava returns 404 when the
+@@ -564,6 +587,9 @@ func makeParseBlobHandler() func(context.Context, *workersdk.Worker, workersdk.J
+ 			return &port.TerminalError{Reason: "dataset_mismatch", Cause: fmt.Errorf("archive dataset %d, parser reads %d", arch.Version, datasetVersion)}
+ 		}
+ 
++		if !importableSport(arch.Activity.SportType, arch.Activity.Type) {
++			return &port.TerminalError{Reason: "not_cycling"}
++		}
+ 		ref := fetchSourceJob{UserID: in.UserID, AccountID: in.AccountID}
+ 		events := parseArchive(ref, in.ExtID, in.Blob.FallbackHandle, arch)
+ 		return publishResultViaBlob(ctx, w, job, "result:"+in.JobID, newJobResult(w, events...))
+@@ -576,8 +602,11 @@ func parseArchive(ref fetchSourceJob, extID, blobID string, arch archivedActivit
+ 	if extID == "" {
+ 		extID = formatActivityID(arch.Activity.ID)
+ 	}
+-	// Archived JSON carries the gear summary, so a reparse backfills gear
+-	// on old imports without spending API budget.
++	if cyclingOnly {
++		recording := *arch.Activity
++		stripAncillaryData(&recording)
++		arch.Activity = &recording
++	}
+ 	return activityEvents(ref, arch.Activity, &workerv1.ImportedActivity{
+ 		Ref:       externalRef(ref, extID),
+ 		Payload:   mapActivityToPayload(arch.Activity),
+@@ -651,6 +680,9 @@ func backfillEnqueue(ctx context.Context, w *workersdk.Worker, client *stravaCli
+ 	var enqueued int
+ 	err := listActivityPages(ctx, w, client, accessToken, after, perPage, func(summaries []stravaActivitySummary) (bool, error) {
+ 		for _, s := range summaries {
++			if !importableSport(s.SportType, s.Type) {
++				continue
++			}
+ 			if err := enqueueFetchSource(ctx, w, in.JobID, in.AccountID, in.UserID, "backfill", formatActivityID(s.ID)); err != nil {
+ 				return false, fmt.Errorf("enqueue fetch_source %d: %w", s.ID, err)
+ 			}
+@@ -686,7 +718,7 @@ func listActivityPages(ctx context.Context, w *workersdk.Worker, client *stravaC
+ 			return nil
+ 		}
+ 		more, err := visit(summaries)
+-		if err != nil || !more || len(summaries) < perPage {
++		if err != nil || !more || (!cyclingOnly && len(summaries) < perPage) {
+ 			return err
+ 		}
+ 	}
+@@ -782,9 +814,18 @@ func reconcileEnqueue(ctx context.Context, w *workersdk.Worker, client *stravaCl
+ 		highWaterMark = *in.Watermark
+ 	}
+ 	const perPage = 100
+-	after := workersdk.ReconcileWindowStart(in.Watermark, time.Now())
++	watermark := in.Watermark
++	if cyclingOnly && watermark != nil {
++		// Recheck a day for late uploads or a failed fetch behind the latest ride.
++		lateUploads := watermark.Add(-23 * time.Hour)
++		watermark = &lateUploads
++	}
++	after := workersdk.ReconcileWindowStart(watermark, time.Now())
+ 	err := listActivityPages(ctx, w, client, accessToken, after, perPage, func(summaries []stravaActivitySummary) (bool, error) {
+ 		for _, s := range summaries {
++			if !importableSport(s.SportType, s.Type) {
++				continue
++			}
+ 			extID := formatActivityID(s.ID)
+ 			if _, ok := known[extID]; ok {
+ 				continue
+@@ -796,6 +837,9 @@ func reconcileEnqueue(ctx context.Context, w *workersdk.Worker, client *stravaCl
+ 			if t := parseStravaTime(s.StartDate); !t.IsZero() && t.After(highWaterMark) {
+ 				highWaterMark = t
+ 			}
++			if cyclingOnly && newImports >= maxEnqueue {
++				return false, nil
++			}
+ 		}
+ 		return newImports < maxEnqueue, nil
+ 	})
+diff --git a/cmd/worker-strava/main.go b/cmd/worker-strava/main.go
+index 029eba6..d5815f3 100644
+--- a/cmd/worker-strava/main.go
++++ b/cmd/worker-strava/main.go
+@@ -49,7 +49,7 @@ import (
+ // yields activities, their laps, segment efforts, the segment definitions those
+ // efforts reference, gear, and provider-reported personal bests.
+ func stravaManifest() capability.Manifest {
+-	return capability.Manifest{
++	m := capability.Manifest{
+ 		capability.DataTypeActivity:      {Read: true, Backfill: true, Granularity: "per-activity"},
+ 		capability.DataTypeLap:           {Read: true, Backfill: true},
+ 		capability.DataTypeSegmentEffort: {Read: true, Backfill: true},
+@@ -57,6 +57,13 @@ func stravaManifest() capability.Manifest {
+ 		capability.DataTypePersonalBest:  {Read: true, Backfill: true},
+ 		capability.DataTypeGear:          {Read: true, Backfill: true, Granularity: "per-account"},
+ 	}
++	if cyclingOnly {
++		delete(m, capability.DataTypeSegmentEffort)
++		delete(m, capability.DataTypeSegment)
++		delete(m, capability.DataTypePersonalBest)
++		delete(m, capability.DataTypeGear)
++	}
++	return m
+ }
+ 
+ // stravaProviderMeta is what core needs to connect a Strava account: the
+@@ -64,6 +71,10 @@ func stravaManifest() capability.Manifest {
+ // StravaAuthHandler.Exchange) and the labels of the connection's app
+ // credentials.
+ func stravaProviderMeta() *workersdk.ProviderMeta {
++	scopes := []string{"read", "activity:read_all"}
++	if cyclingOnly {
++		scopes = []string{"activity:read_all"}
++	}
+ 	return &workersdk.ProviderMeta{
+ 		DisplayName:         "Strava",
+ 		ActivityURLTemplate: "https://www.strava.com/activities/{id}",
+@@ -71,7 +82,7 @@ func stravaProviderMeta() *workersdk.ProviderMeta {
+ 		AuthMethod:          workersdk.AuthMethodOAuth2,
+ 		OAuth: &workersdk.ProviderOAuth{
+ 			AuthorizeURL:   stravaOAuthBaseURL() + "/authorize",
+-			Scopes:         []string{"read", "activity:read_all"},
++			Scopes:         scopes,
+ 			ScopeSeparator: ",",
+ 			// Always show Strava's consent screen, so a user can pick a
+ 			// different athlete for a second connection.
+@@ -111,7 +122,6 @@ const (
+ 	// one. workerVersion is the parser version datasetVersion.M: bump M with
+ 	// EVERY change to the parsed output (TestParserGolden enforces it).
+ 	datasetVersion = 1
+-	workerVersion  = "1.1" // 1.1: gear id per activity
+ 	workerPackage  = "cairns.internal.strava-importer"
+ 
+ 	// Job kinds; the subjects are per pool (w.JobSubject, ADR 0006).
+@@ -128,6 +138,17 @@ const (
+ // back to the pool's bucket strava:<pool>:<window>.
+ var rateBucketPool = workerName
+ 
++// Cycling-only deployments import recordings and their streams.
++var cyclingOnly = os.Getenv("CAIRN_STRAVA_CYCLING_ONLY") == "true"
++var workerVersion = parserVersion(cyclingOnly)
++
++func parserVersion(onlyCycling bool) string {
++	if onlyCycling {
++		return "1.2" // cycling classification and activity-only payload
++	}
++	return "1.1"
++}
++
+ func rateBucket(app, window string) string {
+ 	if app == "" {
+ 		app = rateBucketPool
+@@ -253,6 +274,9 @@ func registerHandlers(w *workersdk.Worker, client *stravaClient, logger *slog.Lo
+ 		jobReconcile:   makeReconcileHandler(client),
+ 		jobImportGear:  makeImportGearHandler(client),
+ 	}
++	if cyclingOnly {
++		delete(handlers, jobImportGear)
++	}
+ 	for job, fn := range handlers {
+ 		if job == jobParseBlob {
+ 			// parser_too_old hands the job back parserTooOldAttempts times.
+diff --git a/cmd/worker-strava/mapping.go b/cmd/worker-strava/mapping.go
+index 40699dd..1c2c42d 100644
+--- a/cmd/worker-strava/mapping.go
++++ b/cmd/worker-strava/mapping.go
+@@ -203,6 +203,11 @@ func mapStreamsToProto(streams stravaStreamsResponse) *cairnv1.ActivityStream {
+ // Field-by-field helpers
+ // ---------------------------------------------------------------------------
+ 
++func importableSport(sportType, legacyType string) bool {
++	kind, _, _, _ := mapSportType(sportType, legacyType)
++	return !cyclingOnly || kind == cairnv1.ActivityType_ACTIVITY_TYPE_RIDE
++}
++
+ // mapSportType returns (type, discipline, isEbike, isVirtual). Strava's
+ // sport_type is preferred; legacy `type` is the fallback. Unknown
+ // sport_types fall back to (WORKOUT, UNSPECIFIED) so we never lose the
+@@ -212,6 +217,9 @@ func mapSportType(sportType, legacyType string) (typ cairnv1.ActivityType, disci
+ 	if src == "" {
+ 		src = legacyType
+ 	}
++	if cyclingOnly && src == "Handcycle" {
++		return cairnv1.ActivityType_ACTIVITY_TYPE_RIDE, cairnv1.Discipline_DISCIPLINE_UNSPECIFIED, false, false
++	}
+ 	if m, ok := sportTypes[src]; ok {
+ 		return m.typ, m.discipline, m.ebike, m.virtual
+ 	}
+diff --git a/cmd/worker-strava/strava_api.go b/cmd/worker-strava/strava_api.go
+index f840cb8..98942ec 100644
+--- a/cmd/worker-strava/strava_api.go
++++ b/cmd/worker-strava/strava_api.go
+@@ -397,6 +397,8 @@ type stravaActivitySummary struct {
+ 	ID        int64  `json:"id"`
+ 	Name      string `json:"name"`
+ 	StartDate string `json:"start_date"`
++	SportType string `json:"sport_type"`
++	Type      string `json:"type"`
+ }
+ 
+ // ListAthleteActivities returns one page of the athlete's activities.

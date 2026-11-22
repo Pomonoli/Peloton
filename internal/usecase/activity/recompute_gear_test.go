@@ -119,8 +119,8 @@ func TestAssignGear_FromWinningSourceRef(t *testing.T) {
 	f := newGearFixture(t)
 	t0 := time.Now()
 	aid := domain.ActivityID(uuid.New())
-	f.mapRef(t, "strava", "b1", f.bike)
-	f.acts.sources[aid] = []domain.ActivitySource{f.source(aid, "strava", "b1", t0)}
+	f.mapRef(t, "polar", "b1", f.bike)
+	f.acts.sources[aid] = []domain.ActivitySource{f.source(aid, "polar", "b1", t0)}
 
 	a := f.run(t, aid)
 	if a.GearID == nil || *a.GearID != f.bike || a.GearSetBy != domain.GearSetByMerge {
@@ -216,9 +216,9 @@ func TestAssignGear_PinWins(t *testing.T) {
 	f := newGearFixture(t)
 	t0 := time.Now()
 	aid := domain.ActivityID(uuid.New())
-	f.mapRef(t, "strava", "b1", f.bike)
+	f.mapRef(t, "polar", "b1", f.bike)
 	f.mapRef(t, "garmin", "77", f.shoe)
-	older := f.source(aid, "strava", "b1", t0)
+	older := f.source(aid, "polar", "b1", t0)
 	newer := f.source(aid, "garmin", "77", t0.Add(time.Hour))
 	f.acts.sources[aid] = []domain.ActivitySource{older, newer}
 	if a := f.run(t, aid); a.GearID == nil || *a.GearID != f.shoe {

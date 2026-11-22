@@ -42,6 +42,7 @@ func (d *Details) Laps(ctx context.Context, act domain.Activity) ([]domain.Activ
 	if err != nil {
 		return nil, nil, fmt.Errorf("list sources: %w", err)
 	}
+	sources, _ = domain.CanonicalSources(sources)
 	laps := domain.PickLaps(sources)
 	for _, s := range sources {
 		if len(s.Parsed.Laps) == len(laps) && len(laps) > 0 {
@@ -178,8 +179,9 @@ func (d *Details) MergedStream(ctx context.Context, act domain.Activity) (stream
 		return streamalign.MergedStream{}, false, fmt.Errorf("list sources: %w", err)
 	}
 	streams := map[domain.SourceID]domain.Stream{}
+	independent := map[domain.SourceID]domain.Stream{}
 	for _, s := range sources {
-		if !s.Parsed.HasStream || (port.IsCommunityActivityRead(ctx) && s.Status == domain.SourceStatusDetached) {
+		if !s.Parsed.HasStream || (port.IsCommunityActivityRead(ctx) && (s.Status == domain.SourceStatusDetached || domain.ProviderDataRestricted(s.Provider))) {
 			continue
 		}
 		st, err := d.streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: s.ID, Resolution: domain.StreamResolution5s})
@@ -187,11 +189,14 @@ func (d *Details) MergedStream(ctx context.Context, act domain.Activity) (stream
 			continue
 		}
 		streams[s.ID] = st
+		if !domain.ProviderDataRestricted(s.Provider) {
+			independent[s.ID] = st
+		}
 	}
 	if len(streams) == 0 {
 		return streamalign.MergedStream{}, false, nil
 	}
-	merged := streamalign.Build(streams, nil, streamalign.Options{})
+	merged := streamalign.Build(streams, streamalign.PreferredWinners(independent, streams), streamalign.Options{})
 	if act.PrimaryStreamSourceID != nil {
 		if st, ok := streams[*act.PrimaryStreamSourceID]; ok {
 			merged.PrimaryStart = st.Samples[0].Timestamp

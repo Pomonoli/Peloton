@@ -1,0 +1,161 @@
+// Run npm run build:static and npx playwright-core install chromium first.
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright-core';
+
+const origin = 'http://peloton-browser.test';
+const build = fileURLToPath(new URL('../build/', import.meta.url));
+const browser = await chromium.launch({
+	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+});
+const you = { id: 'ada', username: 'ada', display_name: 'Ada', avatar_url: '' };
+const rider = { id: 'mira', username: 'mira', display_name: 'Mira', avatar_url: '' };
+const effort = (value, activity_id) => ({ value, activity_id });
+const segment = (id, name, myTime, theirTime, winner) => ({
+	id,
+	name,
+	distance_m: 1200,
+	you: effort(myTime, 'ada-ride'),
+	opponent: effort(theirTime, 'mira-ride'),
+	you_speed_kmh: 4320 / myTime,
+	opponent_speed_kmh: 4320 / theirTime,
+	time_difference_s: Math.abs(theirTime - myTime),
+	speed_difference_kmh: Math.abs(4320 / myTime - 4320 / theirTime),
+	winner
+});
+const segments = [
+	segment('canal', 'Canal Sprint', 100, 120, 'you'),
+	segment('forest', 'Forest Climb', 150, 110, 'opponent'),
+	segment('village', 'Village Road', 120, 120, 'tie')
+];
+const distance = {
+	activity_type: 'ride',
+	metric: 'pace',
+	window_kind: 'distance',
+	window_value: 5000
+};
+const records = [
+	{
+		...distance,
+		you: effort(100, 'ada-ride'),
+		opponent: effort(125, 'mira-ride'),
+		winner: 'you',
+		difference: 125,
+		difference_percent: 25
+	},
+	{
+		...distance,
+		window_value: 20000,
+		you: null,
+		opponent: null,
+		winner: '',
+		difference: null,
+		difference_percent: null
+	}
+];
+
+try {
+	for (const width of [320, 1440]) {
+		const page = await browser.newPage({ viewport: { width, height: 940 } });
+		page.setDefaultTimeout(7500);
+		const errors = [];
+		let improved = false;
+		page.on('pageerror', (error) => errors.push(error.message));
+
+		await page.route('**/*', async (route) => {
+			const url = new URL(route.request().url());
+			if (url.origin !== origin) return route.abort();
+			const path = url.pathname;
+			const fixtures = {
+				'/cairn.v1.AuthService/GetCurrentUser': {
+					user: { id: you.id, username: you.username, displayName: you.display_name }
+				},
+				'/api/friends': { members: [you, rider] },
+				'/api/profiles/mira': { user: rider, is_self: false, activities: [], has_more: false },
+				'/api/head-to-head': {
+					opponent: rider,
+					segments: improved
+						? [segment('canal', 'Canal Sprint', 100, 90, 'opponent'), ...segments.slice(1)]
+						: segments,
+					records,
+					segment_score: improved
+						? { wins: 0, losses: 2, ties: 1, comparable: 3 }
+						: { wins: 1, losses: 1, ties: 1, comparable: 3 },
+					record_score: { wins: 1, losses: 0, ties: 0, comparable: 1 }
+				}
+			};
+			if (path.startsWith('/api/') || path.startsWith('/cairn.v1.')) {
+				return route.fulfill({ json: fixtures[path] ?? {} });
+			}
+			return route.fulfill({
+				path:
+					route.request().resourceType() === 'document'
+						? resolve(build, 'index.html')
+						: resolve(build, '.' + path)
+			});
+		});
+
+		await page.goto(origin + '/head-to-head');
+		const picker = page.getByLabel('Compare with', { exact: true });
+		await picker.selectOption('mira');
+		await page.waitForURL(origin + '/head-to-head?member=mira');
+		await page.getByRole('tabpanel', { name: 'Segments' }).getByText('Canal Sprint').waitFor();
+		assert.equal(await picker.locator('option[value="ada"]').count(), 0);
+
+		await page.goto(origin + '/u/mira');
+		await page.getByRole('main').getByRole('link', { name: 'Head-to-Head' }).click();
+		await page.waitForURL(origin + '/head-to-head?member=mira');
+		const panel = page.getByRole('tabpanel', { name: 'Segments' });
+		const canal = panel.getByRole('row').filter({ hasText: 'Canal Sprint' });
+		for (const label of ['1:40', '43.2 km/h', '2:00', '36.0 km/h', '20 sec', '7.2 km/h']) {
+			await canal.getByText(label, { exact: true }).waitFor();
+		}
+		assert.equal(
+			await canal.getByRole('link', { name: 'Canal Sprint' }).getAttribute('href'),
+			'/segment/canal'
+		);
+		assert.equal(
+			await canal.getByRole('link', { name: '2:00' }).getAttribute('href'),
+			'/activities/mira-ride'
+		);
+		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+		assert.equal(
+			await canal.evaluate((row) => getComputedStyle(row).display),
+			width === 320 ? 'grid' : 'table-row'
+		);
+
+		if (width === 320) {
+			await panel.getByLabel('Sort by', { exact: true }).selectOption('difference');
+			await panel.getByRole('button', { name: 'Ascending' }).click();
+		} else {
+			await panel.getByRole('button', { name: 'Difference' }).click();
+		}
+		assert.match(await panel.locator('tbody tr').first().innerText(), /Forest Climb/);
+		await panel.getByLabel('Filter by winner').selectOption('tie');
+		await panel.getByRole('link', { name: 'Village Road' }).waitFor();
+		assert.equal(await panel.locator('tbody tr').count(), 1);
+
+		await page.getByRole('tab', { name: 'Segments' }).focus();
+		await page.keyboard.press('ArrowRight');
+		const pr = page.getByRole('tabpanel', { name: 'Personal Records' });
+		await pr.getByLabel('Search record categories').fill('5 km');
+		await pr.getByText('8:20', { exact: true }).waitFor();
+		await pr.getByText('25%', { exact: true }).waitFor();
+		assert.equal(await pr.locator('tbody tr').count(), 1);
+		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
+		await page.getByRole('tab', { name: 'Segments' }).click();
+		assert.equal(await panel.getByLabel('Filter by winner').inputValue(), 'tie');
+		await panel.getByLabel('Filter by winner').selectOption('');
+		improved = true;
+		await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+		await canal.getByText('1:30', { exact: true }).waitFor();
+		assert.equal(await page.getByRole('main').locator('dl dd').first().textContent(), '0');
+		assert.deepEqual(errors, []);
+		await page.close();
+	}
+	console.log('Head-to-Head passed at 320px and 1440px.');
+} finally {
+	await browser.close();
+}

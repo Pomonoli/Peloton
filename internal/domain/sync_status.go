@@ -10,6 +10,7 @@ type AccountConfigView struct {
 	PollIntervalSeconds int
 	ProviderTotal       int // last_discovered_total
 	Discovering         bool
+	DiscoveryFailed     bool
 	RateLimited         bool // worker-reported budget exhaustion still in its cooldown
 }
 
@@ -32,6 +33,7 @@ func ParseAccountConfig(raw json.RawMessage, now time.Time) AccountConfigView {
 	if b, ok := cfg["discovering"].(bool); ok {
 		v.Discovering = b
 	}
+	v.DiscoveryFailed, _ = cfg["discovery_failed"].(bool)
 	if s, ok := cfg["rate_limited_until"].(string); ok && s != "" {
 		if until, err := time.Parse(time.RFC3339, s); err == nil && now.Before(until) {
 			v.RateLimited = true

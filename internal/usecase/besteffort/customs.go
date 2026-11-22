@@ -120,7 +120,7 @@ func (c *Customs) recomputeActivity(ctx context.Context, id domain.ActivityID) (
 
 func isStandard(c domain.CustomBestEffort) bool {
 	w := windowSpec{Metric: c.Metric, Kind: c.WindowKind, Value: c.WindowValue}
-	for _, s := range StandardWindows {
+	for _, s := range standardWindowsFor(c.ActivityType) {
 		if s == w {
 			return true
 		}

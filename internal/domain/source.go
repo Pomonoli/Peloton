@@ -343,3 +343,26 @@ func (p *ActivitySourcePayload) applySummaryTo(g FieldGroup, sum *ActivitySummar
 		sum.TotalStrokes = p.Summary.TotalStrokes
 	}
 }
+
+// ProviderDataRestricted identifies activity data that only its owner may view.
+func ProviderDataRestricted(provider string) bool {
+	return provider == "strava"
+}
+
+// CanonicalSources keeps restricted recordings out of a shareable aggregate.
+// They remain attached and available through owner-only source reads.
+func CanonicalSources(sources []ActivitySource) ([]ActivitySource, bool) {
+	var independent []ActivitySource
+	restricted := false
+	for _, src := range sources {
+		if ProviderDataRestricted(src.Provider) {
+			restricted = true
+		} else {
+			independent = append(independent, src)
+		}
+	}
+	if !restricted || len(independent) == 0 {
+		return sources, restricted
+	}
+	return independent, false
+}

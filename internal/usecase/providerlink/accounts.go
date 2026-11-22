@@ -15,16 +15,17 @@ var ErrUnavailable = port.NewActionError(port.ActionErrorUnavailable, "not avail
 // AccountRow is one provider account with its sync status
 // (ExternalAccountService.ListExternalAccounts, GET /api/accounts).
 type AccountRow struct {
-	Account       domain.ExternalAccount
-	Imported      int
-	ProviderTotal int
-	Discovering   bool
-	RateLimited   bool
-	PollInterval  int
-	Budget        domain.RateBudget
-	Queue         map[domain.ImportItemStatus]int
-	Pools         []domain.WorkerPoolInfo
-	OutOfDate     int
+	Account         domain.ExternalAccount
+	Imported        int
+	ProviderTotal   int
+	Discovering     bool
+	DiscoveryFailed bool
+	RateLimited     bool
+	PollInterval    int
+	Budget          domain.RateBudget
+	Queue           map[domain.ImportItemStatus]int
+	Pools           []domain.WorkerPoolInfo
+	OutOfDate       int
 }
 
 // SyncEventRow is one import-history event with its links.
@@ -95,6 +96,9 @@ func (a *Accounts) List(ctx context.Context, userID domain.UserID) ([]AccountRow
 		row := AccountRow{Account: acct}
 		if a.insight != nil {
 			key := acct.Provider + "/" + acct.AssignedWorkerName
+			if acct.ConnectionID != nil {
+				key += "/" + acct.ConnectionID.String()
+			}
 			if _, seen := budgets[key]; !seen {
 				budgets[key] = a.insight.Budget(ctx, acct)
 			}
@@ -114,7 +118,7 @@ func (a *Accounts) fillStatus(ctx context.Context, row *AccountRow) {
 		row.Imported = len(existing)
 	}
 	cfg := domain.ParseAccountConfig(acct.Config, a.now())
-	row.Discovering, row.PollInterval = cfg.Discovering, cfg.PollIntervalSeconds
+	row.Discovering, row.DiscoveryFailed, row.PollInterval = cfg.Discovering, cfg.DiscoveryFailed, cfg.PollIntervalSeconds
 	row.RateLimited = domain.RateLimitedNow(acct.RateLimit, a.now()) || row.Budget.Exhausted(a.now()) || cfg.RateLimited
 	// last_discovered_total is a snapshot; the live imported count can
 	// overtake it, so clamp instead of showing an impossible ratio. Zero

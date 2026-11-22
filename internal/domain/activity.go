@@ -69,6 +69,8 @@ type Activity struct {
 	// HiddenByAdmin hides the activity from all non-owner read paths
 	// (moderation). Independent of Privacy and soft-delete.
 	HiddenByAdmin bool
+	// ProviderRestricted marks a canonical activity based only on restricted API data.
+	ProviderRestricted bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
