@@ -400,6 +400,7 @@
 	"heatmap_insufficient": "Insufficient data",
 	"heatmap_loading": "Loading heatmap…",
 	"heatmap_preparing": "Preparing ride history ({count} remaining)…",
+	"heatmap_preparation_stalled": "Heatmap preparation stopped making progress. Reload to try again.",
 	"heatmap_load_failed": "Could not load the heatmap.",
 	"heatmap_open_activity": "Select a track to open its activity.",
 	"heatmap_passages": "Passages",

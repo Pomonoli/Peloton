@@ -118,6 +118,7 @@ func (r *PerformanceHeatmapRepo) SaveHeatmapBins(ctx context.Context, activity p
 		var current string
 		err = tx.QueryRow(ctx, `SELECT `+heatmapSignatureSQL+heatmapSourcesSQL+` WHERE a.id=$1 GROUP BY p.id`, id).Scan(&current)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && current != activity.Version) {
+			// The use case re-reads readiness after the batch, including any newer version.
 			return nil
 		}
 		if err != nil {
@@ -126,8 +127,22 @@ func (r *PerformanceHeatmapRepo) SaveHeatmapBins(ctx context.Context, activity p
 		tag, err := tx.Exec(ctx, `INSERT INTO performance_heatmap_cache(activity_id,signature,has_track) VALUES ($1,$2,$3)
 			ON CONFLICT (activity_id) DO UPDATE SET signature=EXCLUDED.signature,has_track=EXCLUDED.has_track
 			WHERE performance_heatmap_cache.signature <> EXCLUDED.signature`, id, current, len(tiles) > 0)
-		if err != nil || tag.RowsAffected() == 0 {
+		if err != nil {
 			return err
+		}
+		if tag.RowsAffected() == 0 {
+			// A concurrent request can already have cached this version. Verify
+			// that before treating a skipped write as a success.
+			var ready bool
+			err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM performance_heatmap_cache
+				WHERE activity_id=$1 AND signature=$2)`, id, current).Scan(&ready)
+			if err != nil {
+				return err
+			}
+			if !ready {
+				return fmt.Errorf("heatmap cache write skipped for activity %s", id)
+			}
+			return nil
 		}
 		if _, err = tx.Exec(ctx, `DELETE FROM performance_heatmap_tiles WHERE activity_id=$1`, id); err != nil {
 			return err
@@ -140,8 +155,14 @@ func (r *PerformanceHeatmapRepo) SaveHeatmapBins(ctx context.Context, activity p
 			}
 			rows = append(rows, []any{id, int16(key.level), int16(key.tile.X), int16(key.tile.Y), payload})
 		}
-		_, err = tx.CopyFrom(ctx, pgx.Identifier{"performance_heatmap_tiles"}, []string{"activity_id", "level", "tile_x", "tile_y", "bins"}, pgx.CopyFromRows(rows))
-		return err
+		written, err := tx.CopyFrom(ctx, pgx.Identifier{"performance_heatmap_tiles"}, []string{"activity_id", "level", "tile_x", "tile_y", "bins"}, pgx.CopyFromRows(rows))
+		if err != nil {
+			return err
+		}
+		if written != int64(len(rows)) {
+			return fmt.Errorf("heatmap cache wrote %d of %d tiles for activity %s", written, len(rows), id)
+		}
+		return nil
 	})
 }
 

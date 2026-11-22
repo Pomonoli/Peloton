@@ -41,24 +41,23 @@ func (m *PerformanceMaps) Get(ctx context.Context, member domain.UserID, filter 
 	if err != nil {
 		return PerformanceMap{}, err
 	}
-	out := PerformanceMap{Matched: len(rides)}
-	var incomplete []port.HeatmapActivity
-	for _, ride := range rides {
-		if ride.WithTrack {
-			out.WithTrack++
-		}
-		if !ride.Ready && ride.Version != "" {
-			incomplete = append(incomplete, ride)
-		}
-	}
+	out, incomplete := summarizeHeatmapActivities(rides)
 	if len(incomplete) > 0 {
-		if err := m.prepare(ctx, incomplete); err != nil {
+		prepared, err := m.prepare(ctx, incomplete)
+		if err != nil {
 			return PerformanceMap{}, err
 		}
-		// The client polls until every eligible activity has been indexed.
-		// Re-read versions on the next call in case an import won a race.
-		out.Pending = len(incomplete)
-		return out, nil
+		if prepared {
+			// Re-read persisted readiness and any source versions changed by an import.
+			rides, err = m.repo.HeatmapActivities(ctx, member, filter)
+			if err != nil {
+				return PerformanceMap{}, err
+			}
+			out, _ = summarizeHeatmapActivities(rides)
+		}
+		if out.Pending > 0 {
+			return out, nil
+		}
 	}
 	_, out.Disciplines, _, err = m.activities.ActivityFacets(ctx, member, filter)
 	if err != nil {
@@ -86,6 +85,21 @@ func (m *PerformanceMaps) Get(ctx context.Context, member domain.UserID, filter 
 	return out, nil
 }
 
+func summarizeHeatmapActivities(rides []port.HeatmapActivity) (PerformanceMap, []port.HeatmapActivity) {
+	out := PerformanceMap{Matched: len(rides)}
+	var incomplete []port.HeatmapActivity
+	for _, ride := range rides {
+		if ride.WithTrack {
+			out.WithTrack++
+		}
+		if !ride.Ready && ride.Version != "" {
+			incomplete = append(incomplete, ride)
+		}
+	}
+	out.Pending = len(incomplete)
+	return out, incomplete
+}
+
 func heatmapBoundsValid(bounds *domain.CatalogSegmentBounds) bool {
 	if bounds == nil {
 		return true
@@ -97,9 +111,10 @@ func heatmapBoundsValid(bounds *domain.CatalogSegmentBounds) bool {
 
 // Prepare in short, mutually exclusive batches. Cached rides are reused
 // across filters, so subsequent reads only touch the relevant map tiles.
-func (m *PerformanceMaps) prepare(ctx context.Context, rides []port.HeatmapActivity) error {
+// The boolean indicates whether this request acquired the preparation lock.
+func (m *PerformanceMaps) prepare(ctx context.Context, rides []port.HeatmapActivity) (bool, error) {
 	if !m.building.TryLock() {
-		return nil
+		return false, nil
 	}
 	defer m.building.Unlock()
 	deadline := time.Now().Add(2 * time.Second)
@@ -109,7 +124,7 @@ func (m *PerformanceMaps) prepare(ctx context.Context, rides []port.HeatmapActiv
 		}
 		primary, err := m.repo.HeatmapSamples(ctx, ride.Primary, true)
 		if err != nil {
-			return fmt.Errorf("load heatmap track: %w", err)
+			return true, fmt.Errorf("load heatmap track: %w", err)
 		}
 		if len(primary) > 1 {
 			for _, source := range ride.Sources {
@@ -118,16 +133,16 @@ func (m *PerformanceMaps) prepare(ctx context.Context, rides []port.HeatmapActiv
 				}
 				sensors, err := m.repo.HeatmapSamples(ctx, source, false)
 				if err != nil {
-					return fmt.Errorf("load heatmap sensors: %w", err)
+					return true, fmt.Errorf("load heatmap sensors: %w", err)
 				}
 				fillHeatmapSensors(primary, sensors)
 			}
 		}
 		if err := m.repo.SaveHeatmapBins(ctx, ride, heatmap.Aggregate(primary)); err != nil {
-			return fmt.Errorf("cache heatmap track: %w", err)
+			return true, fmt.Errorf("cache heatmap track: %w", err)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // A second source may supply a missing sensor at the same instant. It never

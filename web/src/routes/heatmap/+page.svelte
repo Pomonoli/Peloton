@@ -39,9 +39,10 @@
 		geojson: FeatureCollection;
 	};
 	const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
+	const PREPARATION_TIMEOUT_MS = 30_000;
 
 	const filter = new ActivityFilter(page.url.searchParams);
-	let overview = $state.raw<Heatmap | null>(null);
+	let overview = $state.raw<{ url: string; result: Heatmap } | null>(null);
 	let data = $state.raw<Heatmap | null>(null);
 	let facets = $state.raw<ActivityFacets | null>(null);
 	let loading = $state(false);
@@ -55,7 +56,7 @@
 			? fixedHeatmapScale(metric)
 			: adaptiveHeatmapScale(
 					metric,
-					overview?.geojson.features.map((f) => f.properties?.[metric]) ?? []
+					overview?.result.geojson.features.map((f) => f.properties?.[metric]) ?? []
 				)
 	);
 	let viewport = $state('');
@@ -146,12 +147,12 @@
 		(map.getSource('tracks') as GeoJSONSource | undefined)?.setData(fc);
 		// Frame the tracks on the first result only; later filter changes keep
 		// the viewport the user has set up.
-		if (!fitted && fc.features.length > 0) fitTracks();
+		if (!fitted && data) fitTracks();
 	}
 
 	function fitTracks() {
-		if (!map) return;
-		const b = bounds(data?.geojson ?? EMPTY);
+		if (!map || !overview) return;
+		const b = bounds(overview.result.geojson);
 		if (!b) return;
 		fitted = true;
 		map.fitBounds(b, { padding: 40, duration: 0, maxZoom: 14 });
@@ -168,13 +169,30 @@
 		loading = true;
 		error = null;
 		pending = 0;
+		let lowestPending = Infinity;
+		let progressDeadline = performance.now() + PREPARATION_TIMEOUT_MS;
 		try {
 			while (!signal.aborted) {
-				const res = await fetch(url, { signal });
+				const res = await fetch(url, {
+					signal: AbortSignal.any([signal, AbortSignal.timeout(PREPARATION_TIMEOUT_MS)])
+				});
 				if (!res.ok) throw new Error(m.heatmap_load_failed());
 				const result = await res.json();
 				if (signal.aborted) return;
 				if (res.status === 202) {
+					if (
+						Number.isInteger(result.pending) &&
+						result.pending > 0 &&
+						result.pending < lowestPending
+					) {
+						lowestPending = result.pending;
+						progressDeadline = performance.now() + PREPARATION_TIMEOUT_MS;
+					}
+					if (performance.now() >= progressDeadline) {
+						error = m.heatmap_preparation_stalled();
+						showData(null);
+						return;
+					}
 					pending = result.pending;
 					await new Promise((resolve) => setTimeout(resolve, 350));
 					continue;
@@ -190,15 +208,6 @@
 			}
 		} finally {
 			if (!signal.aborted) loading = false;
-		}
-	}
-
-	function fitAll() {
-		if (original || !viewport) {
-			fitTracks();
-		} else {
-			fitted = false;
-			viewport = '';
 		}
 	}
 
@@ -227,27 +236,29 @@
 		const url = overviewURL;
 		const ctrl = new AbortController();
 		overview = null;
-		untrack(() => showData(null));
-		void load(url, ctrl.signal, (result) => {
-			overview = result;
-			facets = result.facets;
+		untrack(() => {
+			showData(null);
+			void load(url, ctrl.signal, (result) => {
+				overview = { url, result };
+				facets = result.facets;
+			});
 		});
 		return () => ctrl.abort();
 	});
 	$effect(() => {
 		const base = overview;
-		if (!base) return;
-		const area = original ? '' : viewport;
+		if (!base || base.url !== overviewURL) return;
+		const area = original || !base.result.with_track ? '' : viewport;
 		if (!area) {
 			loading = false;
 			pending = 0;
 			error = null;
-			untrack(() => showData(base));
+			untrack(() => showData(base.result));
 			return;
 		}
-		const url = `${overviewURL}&${area}`;
+		const url = `${base.url}&${area}`;
 		const ctrl = new AbortController();
-		void load(url, ctrl.signal, showData);
+		untrack(() => void load(url, ctrl.signal, showData));
 		return () => ctrl.abort();
 	});
 
@@ -293,13 +304,14 @@
 		map.on('moveend', () => {
 			if (!map) return;
 			const bounds = map.getBounds();
-			viewport = heatmapViewport(
+			const next = heatmapViewport(
 				map.getZoom(),
 				bounds.getWest(),
 				bounds.getSouth(),
 				bounds.getEast(),
 				bounds.getNorth()
 			);
+			if (next !== viewport) viewport = next;
 		});
 		map.on('mousemove', 'tracks-line', (event) => {
 			if (map) map.getCanvas().style.cursor = 'pointer';
@@ -455,7 +467,7 @@
 			{/if}
 			<button
 				type="button"
-				onclick={fitAll}
+				onclick={fitTracks}
 				disabled={!data || data.with_track === 0}
 				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
 			>
@@ -467,7 +479,10 @@
 	<ActivityFilterBar {filter} {facets} showSort={false} member={pageData.member?.username} />
 
 	{#if error}
-		<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+		<div
+			role="alert"
+			class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300"
+		>
 			{error}
 		</div>
 	{/if}

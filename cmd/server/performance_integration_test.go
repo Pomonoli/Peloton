@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
@@ -30,6 +32,83 @@ type performanceResponse struct {
 	GeoJSON   struct {
 		Features []struct{ Properties performanceProperties }
 	}
+}
+
+func TestAPI_MemberHeatmapPreparation(t *testing.T) {
+	env := newITestEnv(t)
+	viewer := env.user("heatmap-viewer", domain.UserRoleUser)
+	rider := env.user("heatmap-rider", domain.UserRoleUser)
+	start := time.Date(2020, 3, 2, 10, 0, 0, 0, time.UTC)
+	viewer.upload("viewer.gpx", performanceGPX(start, time.Second, 155, 0))
+	const path = "/api/activities/heatmap/performance"
+	if got := readPerformanceMap(t, viewer, ""); got.WithTrack != 1 {
+		t.Fatalf("viewer cache did not warm up: %+v", got)
+	}
+
+	// One more ride than the maximum preparation batch, with distinct stream times.
+	const total = 25
+	for i := range total {
+		rider.upload("rider.gpx", performanceGPX(start.AddDate(0, 0, i), time.Second, 130, 0))
+	}
+	conn, err := pgx.Connect(t.Context(), os.Getenv("CAIRN_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(t.Context()) }()
+	cacheCount := func(want int) {
+		t.Helper()
+		var cached int
+		err := conn.QueryRow(t.Context(), `SELECT count(*) FROM performance_heatmap_cache h
+			JOIN activities a ON a.id=h.activity_id WHERE a.user_id=$1`, rider.userID.UUID()).Scan(&cached)
+		if err != nil || cached != want {
+			t.Fatalf("member cache has %d rows, want %d (error: %v)", cached, want, err)
+		}
+	}
+	cacheCount(0)
+	overview := path + "?member=" + rider.name
+	body := viewer.do(http.MethodGet, overview, nil, http.StatusAccepted)
+	var result performanceResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Matched != total || result.Pending <= 0 || result.Pending >= total {
+		t.Errorf("expected a decrease in pending rides after the first batch: %s", body)
+	} else {
+		cacheCount(total - result.Pending)
+	}
+	if got := readPerformanceMap(t, viewer, "member="+rider.name); got.WithTrack != total || len(got.GeoJSON.Features) == 0 {
+		t.Fatalf("cold member cache did not finish: %+v", got)
+	}
+	cacheCount(total)
+	body = viewer.do(http.MethodGet, overview+"&level=2&west=7.85&east=8.15&south=46.85&north=47.15&from=2020-03-03", nil, http.StatusOK)
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Matched != total-1 || result.WithTrack != total-1 || len(result.GeoJSON.Features) == 0 {
+		t.Fatalf("filtered member viewport did not use the member cache: %s", body)
+	}
+	if got := readPerformanceMap(t, viewer, ""); got.WithTrack != 1 {
+		t.Fatalf("switching back to the viewer returned the wrong cache: %+v", got)
+	}
+
+	rider.upload("uncached.gpx", performanceGPX(start.AddDate(0, 0, total), time.Second, 130, 0))
+	// A successful SQL command can skip the row entirely.
+	if _, err := conn.Exec(t.Context(), `
+		CREATE FUNCTION skip_heatmap_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+		CREATE TRIGGER skip_heatmap_write BEFORE INSERT ON performance_heatmap_cache
+		FOR EACH ROW EXECUTE FUNCTION skip_heatmap_write();
+	`); err != nil {
+		t.Fatal(err)
+	}
+	viewer.do(http.MethodGet, overview, nil, http.StatusInternalServerError)
+	cacheCount(total)
+	if _, err := conn.Exec(t.Context(), `DROP TRIGGER skip_heatmap_write ON performance_heatmap_cache`); err != nil {
+		t.Fatal(err)
+	}
+	if got := readPerformanceMap(t, viewer, "member="+rider.name); got.WithTrack != total+1 {
+		t.Fatalf("member cache did not recover: %+v", got)
+	}
+	cacheCount(total + 1)
 }
 
 func readPerformanceMap(t *testing.T, client *itestClient, query string) performanceResponse {

@@ -184,6 +184,7 @@
 	"heatmap_insufficient": "Unzureichende Daten",
 	"heatmap_loading": "Heatmap wird geladen…",
 	"heatmap_preparing": "Aktivitätsverlauf wird vorbereitet ({count} verbleibend)…",
+	"heatmap_preparation_stalled": "Die Heatmap-Vorbereitung kommt nicht weiter. Lade die Seite neu, um es erneut zu versuchen.",
 	"heatmap_load_failed": "Die Heatmap konnte nicht geladen werden.",
 	"heatmap_open_activity": "Wähle eine Strecke, um die Aktivität zu öffnen.",
 	"heatmap_passages": "Durchfahrten",
