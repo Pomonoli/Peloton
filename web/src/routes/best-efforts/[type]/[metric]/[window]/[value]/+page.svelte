@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { memberURL } from '#lib/member.js';
+
 	import { formatDateOnly } from '#lib/format.js';
 	import type { PageData } from './$types';
 
@@ -24,7 +25,7 @@
 	let payload = $state<Payload | null>(null);
 	let loadError = $state<string | null>(null);
 
-	onMount(async () => {
+	async function load(signal: AbortSignal) {
 		try {
 			const params = new URLSearchParams({
 				type: data.type,
@@ -32,12 +33,23 @@
 				window_kind: data.window,
 				window_value: String(data.value)
 			});
-			const res = await fetch(`/api/best-efforts/history?${params}`);
+			const res = await fetch(memberURL(`/api/best-efforts/history?${params}`, data.member), {
+				signal
+			});
 			if (!res.ok) throw new Error((await res.text()).trim());
-			payload = await res.json();
+			const result = await res.json();
+			if (!signal.aborted) payload = result;
 		} catch (e) {
-			loadError = (e as Error).message;
+			if (!signal.aborted) loadError = (e as Error).message;
 		}
+	}
+
+	$effect(() => {
+		const request = new AbortController();
+		payload = null;
+		loadError = null;
+		void load(request.signal);
+		return () => request.abort();
 	});
 
 	function fmtValue(v: number, metric: string): string {

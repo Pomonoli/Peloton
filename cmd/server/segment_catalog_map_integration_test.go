@@ -47,7 +47,7 @@ func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 		times          [2]float64
 	}{
 		{"Alpine Ridge", crossing, 800, [2]float64{50, 85}},
-		{"Corner Ridge", "g{z}G_ruo@od@_sN", 700, [2]float64{70, 0}}, // bbox overlaps but the route misses
+		{"Corner Ridge", "g{z}G_ruo@od@_sN", 700, [2]float64{70, 98}}, // bbox overlaps but the route misses
 		{"Percent% Ridge", "w`|}G_oyo@od@od@", 600, [2]float64{0, 60}},
 		{"Remote Under_score Ridge", "_uhuH_qrYo}@_|B", 1200, [2]float64{122, 0}},
 		{"Dateline Pass", dateline, 1500, [2]float64{0, 150}},
@@ -80,13 +80,15 @@ func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 	}
 
 	type resultRow struct {
-		Name      string
-		Polyline  string
-		Precision int `json:"polyline_precision"`
-		Start     [2]float64
-		BestTime  float64 `json:"best_elapsed_s"`
-		KOM       string  `json:"local_kom_holder"`
-		Members   int     `json:"member_count"`
+		ID         string
+		Name       string
+		Polyline   string
+		Precision  int `json:"polyline_precision"`
+		Start      [2]float64
+		BestTime   float64 `json:"best_elapsed_s"`
+		KOM        string  `json:"local_kom_holder"`
+		Members    int     `json:"member_count"`
+		MyAttempts int     `json:"my_attempts"`
 	}
 	catalog := func(c *itestClient, query string, more bool, names ...string) []resultRow {
 		t.Helper()
@@ -115,7 +117,7 @@ func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 	catalog(alice, "limit=1&offset=1&sort=distance_m&direction=desc&q=riDgE", true, "Alpine Ridge")
 	catalog(alice, "q=%25", false, "Percent% Ridge")
 	catalog(alice, "q=_", false, "Remote Under_score Ridge")
-	catalog(bob, "q=rIDGe&mine=true", false, "Alpine Ridge", "Percent% Ridge")
+	catalog(bob, "q=rIDGe&mine=true", false, "Alpine Ridge", "Corner Ridge", "Percent% Ridge")
 
 	const near = "min_lon=7.99&min_lat=47.005&max_lon=8.01&max_lat=47.015"
 	catalog(bob, near+"&limit=1", true, "Alpine Ridge")
@@ -129,9 +131,88 @@ func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 	if wrapped[0].Polyline != dateline {
 		t.Fatalf("wrong wrapped route: %+v", wrapped[0])
 	}
-	for _, query := range []string{"min_lon=7.99", "min_lon=NaN&min_lat=47&max_lon=8&max_lat=48",
+	// Alpine has a higher numeric speed. Corner, Percent and Dateline all
+	// average exactly 36 km/h, so time/distance sorts must operate across pages.
+	const speed = "sort=average_speed_kmh:desc&sort=member_count:desc&sort=best_elapsed_s:asc"
+	catalog(alice, speed+"&limit=2", true, "Alpine Ridge", "Corner Ridge")
+	catalog(alice, speed+"&limit=2&offset=2", true, "Percent% Ridge", "Dateline Pass")
+	catalog(alice, speed+"&limit=2&offset=4", false, "Remote Under_score Ridge")
+	catalog(alice, speed+"&q=ridge&mine=true&member=bob", false, "Alpine Ridge", "Corner Ridge", "Percent% Ridge")
+	catalog(alice, near+"&"+speed, false, "Alpine Ridge", "Percent% Ridge")
+	catalog(alice, "sort=average_speed_kmh:asc&sort=distance_m:desc", false,
+		"Remote Under_score Ridge", "Dateline Pass", "Corner Ridge", "Percent% Ridge", "Alpine Ridge")
+
+	for _, query := range []string{"sort=member_count:down", "sort=unknown:asc", "sort=name:asc&sort=name:desc", "min_lon=7.99", "min_lon=NaN&min_lat=47&max_lon=8&max_lat=48",
 		"min_lon=-180&min_lat=-90&max_lon=180&max_lat=90"} {
 		alice.do(http.MethodGet, "/api/segments/catalog?"+query, nil, http.StatusBadRequest)
 	}
+	for i, id := range []string{"00000000-0000-0000-0000-000000000002", "00000000-0000-0000-0000-000000000001"} {
+		externalID := fmt.Sprint(100 + i)
+		segment := domain.Segment{
+			ID: domain.SegmentID(uuid.MustParse(id)), Source: domain.SegmentSourceStravaCatalog,
+			ExternalID: &externalID, CatalogProvider: new("test-map"), Scope: domain.SegmentScopeInstance,
+			Name: "Exact tie", ActivityType: domain.ActivityTypeRide, DistanceM: 800, Polyline: crossing, PolylinePrecision: 5,
+		}
+		if err := env.app.Segments.SaveSegment(t.Context(), segment); err != nil {
+			t.Fatal(err)
+		}
+		ride := rides[0]
+		if err := env.app.Segments.SaveSegmentEffort(t.Context(), domain.SegmentEffort{
+			ID: domain.SegmentEffortID(uuid.New()), SegmentID: segment.ID, ActivityID: ride.id, ActivitySourceID: ride.source,
+			UserID: ride.owner, StartTime: start, ElapsedS: 80, MovingS: 80, EndOffset: 1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tied := speed + "&q=exact+tie&limit=1"
+	first, second := catalog(alice, tied, true, "Exact tie"), catalog(alice, tied+"&offset=1", false, "Exact tie")
+	if first[0].ID != "00000000-0000-0000-0000-000000000001" || second[0].ID != "00000000-0000-0000-0000-000000000002" {
+		t.Fatalf("identical sort keys did not page in ID order: %v %v", first, second)
+	}
+
+	// Two genuine traversals use distinct offsets within the same ride. A
+	// rescan updates the natural key and a merged source repeats both passes.
+	aliceRide := rides[0]
+	sharedSource, err := env.app.Activities.GetSource(t.Context(), aliceRide.source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sharedSource.ID = domain.SourceID(uuid.New())
+	sharedSource.ExternalID = "alternate-recording"
+	if err := env.app.Activities.SaveSource(t.Context(), sharedSource); err != nil {
+		t.Fatal(err)
+	}
+	target := domain.SegmentID(uuid.MustParse(second[0].ID))
+	for _, sid := range []domain.SourceID{aliceRide.source, sharedSource.ID} {
+		for _, offset := range []int{0, 120} {
+			effort := domain.SegmentEffort{
+				ID: domain.SegmentEffortID(uuid.New()), SegmentID: target, ActivityID: aliceRide.id, ActivitySourceID: sid,
+				UserID: aliceRide.owner, StartTime: start.Add(time.Duration(offset) * time.Second), ElapsedS: 80,
+				MovingS: 80, StartOffset: offset, EndOffset: offset + 80,
+			}
+			if err := env.app.Segments.SaveSegmentEffort(t.Context(), effort); err != nil {
+				t.Fatal(err)
+			}
+			effort.ID = domain.SegmentEffortID(uuid.New())
+			if err := env.app.Segments.SaveSegmentEffort(t.Context(), effort); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	stack := "q=exact+tie&sort=my_attempts:desc&sort=best_elapsed_s:asc&limit=1"
+	top := catalog(alice, stack, true, "Exact tie")[0]
+	next := catalog(alice, stack+"&offset=1", false, "Exact tie")[0]
+	if top.ID != target.String() || top.MyAttempts != 2 || next.MyAttempts != 1 {
+		t.Fatalf("attempt ordering, repeated attempts, or deduplication failed: %+v %+v", top, next)
+	}
+	ascending := catalog(alice, "q=exact+tie&sort=my_attempts:asc&sort=name:desc&limit=1", true, "Exact tie")[0]
+	if ascending.ID != next.ID {
+		t.Fatal("ascending attempt sort did not reverse the result")
+	}
+	peer := catalog(bob, "q=exact+tie&mine=true&member=alice&sort=my_attempts:desc", false, "Exact tie", "Exact tie")
+	if peer[0].MyAttempts != 0 || peer[1].MyAttempts != 0 {
+		t.Fatal("member filter overrode the viewer's attempts")
+	}
+
 	env.anon().do(http.MethodGet, "/api/segments/catalog?"+near, nil, http.StatusUnauthorized)
 }

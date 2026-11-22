@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { onMount } from 'svelte';
 
 	type Analysis = {
@@ -19,7 +20,7 @@
 	async function load() {
 		loading = true;
 		try {
-			const res = await fetch(`/api/analysis?days=${days}`);
+			const res = await fetch(memberURL(`/api/analysis?days=${days}`, data.member));
 			if (res.ok) a = await res.json();
 		} catch {
 			/* ignore */
@@ -108,8 +109,8 @@
 	<header>
 		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Analysis</h1>
 		<p class="mt-1 text-sm text-zinc-400">
-			Track real fitness progress over time. Fitness (CTL) is your chronic training load, Fatigue
-			(ATL) the acute load, and Form (TSB = CTL − ATL) tells you how fresh you are.
+			Fitness (CTL) measures chronic training load. Fatigue (ATL) measures acute load. Form (TSB) is
+			the difference.
 		</p>
 	</header>
 

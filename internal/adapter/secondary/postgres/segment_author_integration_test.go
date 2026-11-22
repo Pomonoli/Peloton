@@ -43,8 +43,8 @@ func TestSegmentRepoAuthoringReads(t *testing.T) {
 	}
 
 	list, total, err := repo.ListSegments(ctx, other, domain.SegmentListFilter{Query: owner.String()[:8], Sort: domain.SegmentSortCreatedAtDesc})
-	if err != nil || total != 1 || len(list) != 1 || list[0].ID != seg.ID {
-		t.Fatalf("other sees only the instance segment: %v total=%d %+v", err, total, list)
+	if err != nil || total != 2 || len(list) != 2 {
+		t.Fatalf("other sees the instance and personal segments: %v total=%d %+v", err, total, list)
 	}
 	list, total, err = repo.ListSegments(ctx, owner, domain.SegmentListFilter{Query: owner.String()[:8], Scopes: []domain.SegmentScope{domain.SegmentScopePrivate}})
 	if err != nil || total != 1 || list[0].ID != priv.ID {
@@ -54,17 +54,12 @@ func TestSegmentRepoAuthoringReads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hit := false
+	hits := map[domain.SegmentID]bool{}
 	for _, s := range found {
-		if s.ID == seg.ID {
-			hit = true
-		}
-		if s.ID == priv.ID {
-			t.Fatal("private segment leaked into another user's bbox search")
-		}
+		hits[s.ID] = true
 	}
-	if !hit {
-		t.Fatal("instance segment missing from bbox search")
+	if !hits[seg.ID] || !hits[priv.ID] {
+		t.Fatal("community segments missing from bbox search")
 	}
 	if n, err := repo.CountEffortsForSegment(ctx, seg.ID); err != nil || n != 0 {
 		t.Fatalf("count: %d %v", n, err)

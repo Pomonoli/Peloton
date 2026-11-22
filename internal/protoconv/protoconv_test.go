@@ -83,3 +83,22 @@ func TestActivitySummaryFromProto(t *testing.T) {
 		t.Error("nil payload")
 	}
 }
+
+func TestActivitySourcePowerProvenance(t *testing.T) {
+	for name, tc := range map[string]struct {
+		extra map[string]string
+		want  *bool
+	}{
+		"unknown":                              {},
+		"recorded":                             {map[string]string{"device_watts": "true"}, new(true)},
+		"estimated":                            {map[string]string{"device_watts": "false"}, new(false)},
+		"explicit estimate overrides recorder": {map[string]string{"power_recorded": "true", "power_estimated": "true"}, new(false)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := ActivitySourcePayloadFromProto(&cairnv1.ActivitySourcePayload{Extra: tc.extra}).PowerRecorded
+			if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
+				t.Fatalf("wrong power provenance: %+v", got)
+			}
+		})
+	}
+}

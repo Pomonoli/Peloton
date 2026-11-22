@@ -366,6 +366,8 @@ message ListHealthSeriesRequest {
   string type = 1;
   // Days back from today; default 90, max 3650.
   int32 days = 2;
+  // Local member username or ID. Empty selects the caller.
+  string member = 3;
 }
 message HealthSample {
   // YYYY-MM-DD, UTC.
@@ -380,7 +382,10 @@ message ListHealthSeriesResponse {
   repeated HealthSample series = 2;
 }
 
-message ListAthleteMetricsRequest {}
+message ListAthleteMetricsRequest {
+  // Local member username or ID. Empty selects the caller.
+  string member = 1;
+}
 message AthleteMetricSpec {
   string key = 1;
   string label = 2;

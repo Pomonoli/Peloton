@@ -17,23 +17,28 @@ import (
 //	GET /api/best-efforts/history?type=&metric=&window_kind=&window_value=
 //	  → { type, metric, window_kind, window_value, best, count, items:[...] }
 type RecordHandlers struct {
-	Auth  *Auth
-	Stats *dashboard.Stats
-	Log   *slog.Logger
+	Auth      *Auth
+	Stats     *dashboard.Stats
+	Community *besteffort.CommunityRecords
+	Log       *slog.Logger
 }
 
 // Mount registers the routes.
 func (h *RecordHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/records", h.records)
+	if h.Community != nil {
+		mux.HandleFunc("GET /api/records/leaderboards", h.communityRecords)
+		mux.HandleFunc("GET /api/records/leaderboards/{type}/{metric}/{kind}/{value}", h.communityRecord)
+	}
 	mux.HandleFunc("GET /api/best-efforts/history", h.history)
 }
 
 func (h *RecordHandlers) records(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
-	recs, err := h.Stats.PersonalRecords(r.Context(), userID)
+	recs, err := h.Stats.PersonalRecords(ctx, userID)
 	if err != nil {
 		h.Log.Error("list personal records failed", "user_id", userID, "error", err)
 		writeActionError(w, err, "load failed")
@@ -55,14 +60,14 @@ func (h *RecordHandlers) records(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RecordHandlers) history(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
 	q := r.URL.Query()
 	activityType, metric, windowKind := q.Get("type"), q.Get("metric"), q.Get("window_kind")
 	windowValue, _ := strconv.Atoi(q.Get("window_value"))
-	hist, err := h.Stats.BestEffortHistory(r.Context(), userID, activityType, metric, windowKind, windowValue)
+	hist, err := h.Stats.BestEffortHistory(ctx, userID, activityType, metric, windowKind, windowValue)
 	if err != nil {
 		h.Log.Error("best-effort history failed", "user", userID, "error", err)
 		writeActionError(w, err, "load failed")
@@ -109,11 +114,11 @@ func (h *CustomRecordHandlers) Mount(mux *http.ServeMux) {
 }
 
 func (h *CustomRecordHandlers) list(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
-	list, err := h.Customs.List(r.Context(), userID)
+	list, err := h.Customs.List(ctx, userID)
 	if err != nil {
 		writeActionError(w, err, "load failed")
 		return
@@ -182,4 +187,51 @@ func dashCustomBestEffortJSON(c domain.CustomBestEffort) map[string]any {
 		"window_kind": string(c.WindowKind), "window_value": c.WindowValue, "label": c.Label,
 		"created_at": c.CreatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func (h *RecordHandlers) communityRecords(w http.ResponseWriter, r *http.Request) {
+	viewer, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
+	rows, err := h.Community.List(r.Context(), viewer)
+	h.writeCommunityRecords(w, rows, err)
+}
+
+func (h *RecordHandlers) communityRecord(w http.ResponseWriter, r *http.Request) {
+	viewer, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
+	value, _ := strconv.Atoi(r.PathValue("value"))
+	rows, err := h.Community.Detail(r.Context(), viewer, domain.RecordBucket{
+		ActivityType: domain.ActivityType(r.PathValue("type")), Metric: domain.BestEffortMetric(r.PathValue("metric")),
+		WindowKind: domain.BestEffortWindowKind(r.PathValue("kind")), WindowValue: value,
+	})
+	h.writeCommunityRecords(w, rows, err)
+}
+
+func (h *RecordHandlers) writeCommunityRecords(w http.ResponseWriter, rows []domain.CommunityRecord, err error) {
+	if err != nil {
+		h.Log.Warn("load community records", "error", err)
+		writeActionError(w, err, "Unable to load the leaderboard")
+		return
+	}
+	results := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		item := map[string]any{
+			"activity_type": row.Bucket.ActivityType, "metric": row.Bucket.Metric,
+			"window_kind": row.Bucket.WindowKind, "window_value": row.Bucket.WindowValue,
+			"member_count": row.Members, "result": nil,
+		}
+		if row.Members > 0 {
+			item["result"] = map[string]any{
+				"rank": row.Rank, "username": row.Username, "display_name": row.DisplayName,
+				"activity_id": row.ActivityID.String(), "achieved_value": row.AchievedValue, "timestamp": row.Timestamp.UTC(),
+			}
+		}
+		results = append(results, item)
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"records": results})
 }

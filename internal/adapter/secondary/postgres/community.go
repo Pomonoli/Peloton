@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
 // Keep directory totals, the recent ride link and the profile history on the same visibility rule.
@@ -52,4 +53,12 @@ func (r *ActivityRepo) ListCommunityMembers(ctx context.Context, viewer domain.U
 		}
 		return member, nil
 	}, "scan community member", "iterate community directory")
+}
+
+// communityReadSQL applies to a subject's activity queries after a distinct viewer was authorized.
+func communityReadSQL(ctx context.Context, prefix string) string {
+	if port.IsCommunityActivityRead(ctx) {
+		return " AND " + prefix + "hidden_by_admin = false"
+	}
+	return ""
 }

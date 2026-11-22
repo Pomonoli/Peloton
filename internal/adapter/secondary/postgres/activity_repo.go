@@ -986,7 +986,7 @@ func (r *ActivityRepo) ListActivitiesForUser(
 		   FROM activities
 		  WHERE user_id = $1
 		    AND start_time BETWEEN $2 AND $3
-		    AND deleted_at IS NULL
+		    AND deleted_at IS NULL`+communityReadSQL(ctx, "")+`
 		  ORDER BY start_time ASC`,
 		userID.UUID(), start, end,
 	)
@@ -994,6 +994,15 @@ func (r *ActivityRepo) ListActivitiesForUser(
 		return nil, fmt.Errorf("list activities for %s: %w", userID, err)
 	}
 	return pgCollectRows(rows, scanActivityRow, "scan activity row", "iterate user activities")
+}
+
+func (r *ActivityRepo) HasHiddenTrainingStress(ctx context.Context, userID domain.UserID, before time.Time) (bool, error) {
+	var hidden bool
+	err := dbtx(ctx, r.pool).QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM activities WHERE user_id = $1 AND deleted_at IS NULL
+		AND hidden_by_admin AND tss IS NOT NULL AND start_time < $2
+	)`, userID.UUID(), before).Scan(&hidden)
+	return hidden, err
 }
 
 // ListRecentActivitiesForUser returns the user's newest `limit` activities
@@ -1012,7 +1021,7 @@ func (r *ActivityRepo) ListRecentActivitiesForUser(
 		`SELECT `+activityColumns+`
 		   FROM activities
 		  WHERE user_id = $1
-		    AND deleted_at IS NULL
+		    AND deleted_at IS NULL`+communityReadSQL(ctx, "")+`
 		  ORDER BY start_time DESC
 		  LIMIT $2`,
 		userID.UUID(), limit,
@@ -1082,7 +1091,7 @@ func (r *ActivityRepo) ActivityTotals(ctx context.Context, userID domain.UserID)
 		        COALESCE(sum(moving_duration_s), 0),
 		        COALESCE(sum(elevation_gain_m), 0)
 		   FROM activities
-		  WHERE user_id = $1 AND deleted_at IS NULL`,
+		  WHERE user_id = $1 AND deleted_at IS NULL`+communityReadSQL(ctx, ""),
 		userID.UUID()).Scan(&out.Count, &out.DistanceM, &out.MovingS, &out.ElevationGainM)
 	if err != nil {
 		return port.ActivityTotalsResult{}, fmt.Errorf("activity totals: %w", err)
@@ -1100,7 +1109,7 @@ func (r *ActivityRepo) ActivityYearStats(ctx context.Context, userID domain.User
 		        COALESCE(sum(moving_duration_s), 0),
 		        COALESCE(sum(elevation_gain_m), 0)
 		   FROM activities
-		  WHERE user_id = $1 AND deleted_at IS NULL
+		  WHERE user_id = $1 AND deleted_at IS NULL`+communityReadSQL(ctx, "")+`
 		  GROUP BY yr ORDER BY yr DESC`,
 		userID.UUID())
 	if err != nil {
@@ -1212,7 +1221,7 @@ func (r *ActivityRepo) ActivityFacets(
 			conds = append(conds, col+" <> ''")
 		}
 		rows, qerr := db.Query(ctx,
-			`SELECT `+col+`, count(*) FROM activities WHERE `+strings.Join(conds, " AND ")+
+			`SELECT `+col+`, count(*) FROM activities WHERE `+strings.Join(conds, " AND ")+communityReadSQL(ctx, "")+
 				` GROUP BY `+col+` ORDER BY count(*) DESC`, args...)
 		if qerr != nil {
 			return nil, qerr
@@ -1236,7 +1245,7 @@ func (r *ActivityRepo) ActivityFacets(
 		return nil, nil, 0, fmt.Errorf("facet discipline: %w", err)
 	}
 	if err = db.QueryRow(ctx,
-		`SELECT count(*) FROM activities WHERE user_id = $1 AND deleted_at IS NULL`,
+		`SELECT count(*) FROM activities WHERE user_id = $1 AND deleted_at IS NULL`+communityReadSQL(ctx, ""),
 		userID.UUID()).Scan(&total); err != nil {
 		return nil, nil, 0, fmt.Errorf("facet total: %w", err)
 	}
@@ -1272,7 +1281,7 @@ func (r *ActivityRepo) ListActivitiesFiltered(
 	db := dbtx(ctx, r.pool)
 
 	conds, args := activityFilterConds(userID, filter, "")
-	where := strings.Join(conds, " AND ")
+	where := strings.Join(conds, " AND ") + communityReadSQL(ctx, "")
 
 	var matched int
 	if err := db.QueryRow(ctx,
@@ -1516,7 +1525,7 @@ func (r *ActivityRepo) ActivityTotalsForRange(ctx context.Context, userID domain
 		        COALESCE(sum(moving_duration_s), 0),
 		        COALESCE(sum(elevation_gain_m), 0)
 		   FROM activities
-		  WHERE user_id = $1 AND deleted_at IS NULL
+		  WHERE user_id = $1 AND deleted_at IS NULL`+communityReadSQL(ctx, "")+`
 		    AND start_time >= $2 AND start_time < $3`,
 		userID.UUID(), start.UTC(), end.UTC()).Scan(&out.Count, &out.DistanceM, &out.MovingS, &out.ElevationGainM)
 	if err != nil {

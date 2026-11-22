@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { invalidateAll } from '$app/navigation';
 	import { m } from '#lib/paraglide/messages.js';
 	import { clients } from '#lib/connect.js';
@@ -238,9 +239,11 @@
 			<h1 class="text-2xl font-semibold tracking-tight">{m.gear_title()}</h1>
 			<p class="mt-1 text-sm text-zinc-400">{m.gear_intro()}</p>
 		</div>
-		<button type="button" class={btnPrimary} onclick={openCreate}>
-			{editingId === '' ? m.cancel() : m.gear_add()}
-		</button>
+		{#if !data.member}
+			<button type="button" class={btnPrimary} onclick={openCreate}>
+				{editingId === '' ? m.cancel() : m.gear_add()}
+			</button>
+		{/if}
 	</header>
 
 	{#if error}
@@ -345,7 +348,7 @@
 									<p class="mt-1 text-sm text-zinc-400">
 										{formatDistance(g.totalDistanceM)} · {formatDuration(g.totalMovingS)} ·
 										<a
-											href={`/activities?gear_id=${g.id}`}
+											href={memberURL(`/activities?gear_id=${g.id}`, data.member)}
 											class="text-accent-400 hover:text-accent-300"
 										>
 											{m.gear_activity_count({ count: g.activityCount })}
@@ -356,22 +359,24 @@
 									</p>
 									{#if g.notes}<p class="mt-1 text-xs text-zinc-500">{g.notes}</p>{/if}
 								</div>
-								<div class="flex shrink-0 flex-wrap items-center gap-2">
-									<button type="button" class={btn} onclick={() => openEdit(g)}
-										>{m.gear_edit()}</button
-									>
-									<button
-										type="button"
-										class={btn}
-										disabled={busy}
-										onclick={() => setRetired(g, true)}>{m.gear_retire()}</button
-									>
-									<button type="button" class={btn} disabled={busy} onclick={() => remove(g)}
-										>{m.gear_delete()}</button
-									>
-								</div>
+								{#if !data.member}
+									<div class="flex shrink-0 flex-wrap items-center gap-2">
+										<button type="button" class={btn} onclick={() => openEdit(g)}
+											>{m.gear_edit()}</button
+										>
+										<button
+											type="button"
+											class={btn}
+											disabled={busy}
+											onclick={() => setRetired(g, true)}>{m.gear_retire()}</button
+										>
+										<button type="button" class={btn} disabled={busy} onclick={() => remove(g)}
+											>{m.gear_delete()}</button
+										>
+									</div>
+								{/if}
 							</div>
-							{#if data.gear.length > 1}
+							{#if !data.member && data.gear.length > 1}
 								<div class="mt-3 flex items-center gap-2 text-xs text-zinc-500">
 									<span>{m.gear_merge_label()}</span>
 									<select bind:value={mergeInto[g.id]} class={select}>
@@ -397,7 +402,7 @@
 		{/if}
 	</div>
 
-	{#if data.gear.length > 0}
+	{#if !data.member && data.gear.length > 0}
 		<div class="rounded-xl border border-zinc-800 bg-panel p-5">
 			<h2 class="text-lg font-semibold">{m.gear_section_defaults()}</h2>
 			<p class="mt-1 text-sm text-zinc-500">{m.gear_defaults_intro()}</p>
@@ -439,14 +444,19 @@
 							>
 							{#if g.retiredAt}<span class="text-quiet"> · {formatDateOnly(g.retiredAt)}</span>{/if}
 						</span>
-						<span class="flex gap-2">
-							<button type="button" class={btn} disabled={busy} onclick={() => setRetired(g, false)}
-								>{m.gear_unretire()}</button
-							>
-							<button type="button" class={btn} disabled={busy} onclick={() => remove(g)}
-								>{m.gear_delete()}</button
-							>
-						</span>
+						{#if !data.member}
+							<span class="flex gap-2">
+								<button
+									type="button"
+									class={btn}
+									disabled={busy}
+									onclick={() => setRetired(g, false)}>{m.gear_unretire()}</button
+								>
+								<button type="button" class={btn} disabled={busy} onclick={() => remove(g)}
+									>{m.gear_delete()}</button
+								>
+							</span>
+						{/if}
 					</li>
 				{/each}
 			</ul>

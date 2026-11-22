@@ -157,13 +157,13 @@ func (s *ActivityServer) GetExportOptions(ctx context.Context, req *v1.GetExport
 	return &v1.GetExportOptionsResponse{Available: available}, nil
 }
 
-// ExportActivity: owner only; validates the request so the signed URL is
+// ExportActivity validates the request so the signed URL is
 // known to render, then hands out the URL.
 func (s *ActivityServer) ExportActivity(ctx context.Context, req *v1.ExportActivityRequest) (*v1.ExportActivityResponse, error) {
 	if s.Exports == nil || s.Content == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeUnavailable, "export is not available on this instance")
 	}
-	act, err := s.activityUpdateLoad(ctx, req.GetActivityId())
+	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}

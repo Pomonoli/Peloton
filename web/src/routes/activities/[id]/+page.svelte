@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
 		formatDate,
@@ -346,7 +347,7 @@
 
 <section class="space-y-8">
 	<header>
-		<ActivityNav id={a.id} isOwner={data.isOwner} />
+		<ActivityNav id={a.id} isOwner={data.isOwner} member={data.activityOwner} />
 		<div class="mt-2 flex items-start gap-4">
 			<span
 				class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-accent-300"
@@ -369,8 +370,9 @@
 				{/if}
 				{#if a.gearId}
 					<p class="mt-1 text-sm text-zinc-400">
-						<a href="/gear" class="text-zinc-300 hover:text-accent-300"
-							>{a.gearName || m.gear_title()}</a
+						<a
+							href={memberURL('/gear', data.activityOwner)}
+							class="text-zinc-300 hover:text-accent-300">{a.gearName || m.gear_title()}</a
 						>
 						<span class="text-quiet">
 							· {a.gearSetBy === 'user' ? m.gear_set_by_user() : m.gear_set_by_merge()}</span
@@ -468,15 +470,15 @@
 		</section>
 	{/if}
 
-	{#if data.isOwner && a.type === 'ride' && !a.isEbike && !a.isVirtual && a.primaryStreamSourceId && track.length > 1 && a.summary.avgPowerW == null && a.summary.maxPowerW == null && a.summary.normalizedPowerW == null && !stream?.power && !data.mergedStream?.power}
+	{#if a.type === 'ride' && !a.isEbike && !a.isVirtual && a.primaryStreamSourceId && track.length > 1 && a.summary.avgPowerW == null && a.summary.maxPowerW == null && a.summary.normalizedPowerW == null && !stream?.power && !data.mergedStream?.power}
 		{#key a.id}
 			<EstimatedPower
 				sourceId={a.primaryStreamSourceId}
 				otherSourceIds={a.sources
 					.filter((source) => source.status === 'active' && !source.isPrimary)
 					.map((source) => source.id)}
-				startTime={a.startTime}
-				userId={data.viewerId}
+				activityId={a.id}
+				userId={data.isOwner ? data.viewerId : null}
 				{hoverT}
 				onHover={(t) => (hoverT = t)}
 			/>
@@ -602,7 +604,12 @@
 							<tr
 								class="cursor-pointer bg-zinc-900/30 transition-colors hover:bg-zinc-800/60"
 								onclick={() =>
-									goto(`/best-efforts/${a.type}/${b.metric}/${b.windowKind}/${b.windowValue}`)}
+									goto(
+										memberURL(
+											`/best-efforts/${a.type}/${b.metric}/${b.windowKind}/${b.windowValue}`,
+											data.activityOwner
+										)
+									)}
 							>
 								<td class="px-4 py-2 font-mono text-xs uppercase text-accent-400">{b.metric}</td>
 								<td class="px-4 py-2 text-zinc-300">{formatEffortWindow(b)}</td>
@@ -817,7 +824,7 @@
 								>
 									<td class="px-4 py-2">
 										<a
-											href={`/segment/${s.segment_id}`}
+											href={memberURL(`/segment/${s.segment_id}`, data.activityOwner)}
 											class="text-accent-400 hover:text-accent-300 hover:underline"
 										>
 											{s.segment_name}

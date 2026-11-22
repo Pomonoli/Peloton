@@ -22,7 +22,7 @@ import (
 // MountMine:
 //
 //	GET    /api/segments                         ?type=&limit=&offset=
-//	GET    /api/segments/catalog                 ?q=&mine=&sort=&direction=asc|desc&limit=&offset=&min_lon=&min_lat=&max_lon=&max_lat=
+//	GET    /api/segments/catalog                 ?q=&mine=&sort=column:asc&sort=column:desc&limit=&offset=&min_lon=&min_lat=&max_lon=&max_lat=
 //	GET    /api/segments/{id}
 //	GET    /api/activities/{id}/segment-efforts
 //	POST   /api/activities/{id}/rescan-segments
@@ -88,12 +88,12 @@ func (h *SegmentHandlers) segmentID(w http.ResponseWriter, r *http.Request) (dom
 }
 
 func (h *SegmentHandlers) list(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
 	limit, offset := segListPaging(r)
-	page, err := h.Views.Mine(r.Context(), userID, r.URL.Query().Get("type"), limit, offset)
+	page, err := h.Views.Mine(ctx, userID, r.URL.Query().Get("type"), limit, offset)
 	if err != nil {
 		h.Log.Error("list segments failed", "user", userID, "error", err)
 		writeActionError(w, err, "load failed")
@@ -127,11 +127,37 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	limit, offset := segListPaging(r)
 	q := domain.CatalogSegmentQuery{
-		Sort: domain.CatalogSegmentSort(query.Get("sort")), Descending: query.Get("direction") == "desc",
-		Name: query.Get("q"), Limit: limit, Offset: offset,
+		Viewer: me, Name: query.Get("q"), Limit: limit, Offset: offset,
+	}
+	for _, value := range query["sort"] {
+		column, direction, hasDirection := strings.Cut(value, ":")
+		if !hasDirection && len(query["sort"]) == 1 {
+			// Preserve the original single-column query contract.
+			direction = "asc"
+			if query.Get("direction") == "desc" {
+				direction = "desc"
+			}
+			if !domain.CatalogSegmentSort(column).Valid() {
+				column = string(domain.CatalogSortName)
+			}
+		}
+		if direction != "asc" && direction != "desc" {
+			http.Error(w, "invalid segment sort direction", http.StatusBadRequest)
+			return
+		}
+		q.Order = append(q.Order, domain.CatalogSegmentOrder{Column: domain.CatalogSegmentSort(column), Descending: direction == "desc"})
+	}
+
+	if len(q.Order) == 0 && query.Get("direction") == "desc" {
+		q.Order = []domain.CatalogSegmentOrder{{Column: domain.CatalogSortName, Descending: true}}
 	}
 	if query.Get("mine") == "true" {
-		q.Member = &me
+		_, member, err := h.Auth.Members.Read(r.Context(), me, query.Get("member"))
+		if err != nil {
+			writeActionError(w, err, "Unable to load the member")
+			return
+		}
+		q.Member = &member
 	}
 	if query.Has("min_lon") || query.Has("min_lat") || query.Has("max_lon") || query.Has("max_lat") {
 		bounds := domain.CatalogSegmentBounds{}
@@ -162,6 +188,7 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 		row := map[string]any{
 			"id": item.ID.String(), "name": item.Name, "distance_m": item.DistanceM,
 			"best_elapsed_s": item.BestElapsedS, "local_kom_holder": item.LocalKOMHolder, "member_count": item.MemberCount,
+			"my_attempts":       item.MyAttempts,
 			"average_speed_kmh": domain.SegmentAverageSpeedKmh(item.DistanceM, item.BestElapsedS),
 			"start":             [2]float64{item.Start.Lon, item.Start.Lat},
 		}
@@ -174,7 +201,7 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SegmentHandlers) detail(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
@@ -182,7 +209,7 @@ func (h *SegmentHandlers) detail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	seg, efforts, err := h.Views.Detail(r.Context(), userID, id)
+	seg, efforts, err := h.Views.Detail(ctx, userID, id)
 	if err != nil {
 		writeActionError(w, err, "load failed")
 		return
@@ -234,7 +261,7 @@ func (h *SegmentHandlers) activityEfforts(w http.ResponseWriter, r *http.Request
 		if row.Segment.Source == domain.SegmentSourceStravaCatalog {
 			record, ok := records[row.Segment.ID]
 			if !ok {
-				_, record, err = h.Views.Leaderboard(r.Context(), act.UserID, row.Segment.ID, domain.LeaderboardQuery{Limit: 1})
+				_, record, err = h.Views.Leaderboard(viewer.ActivityReadContext(r.Context()), act.UserID, row.Segment.ID, domain.LeaderboardQuery{Limit: 1})
 				if err != nil {
 					h.Log.Warn("load Local KOM position", "segment_id", row.Segment.ID, "error", err)
 				}
@@ -360,7 +387,7 @@ func (h *SegmentHandlers) efforts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SegmentHandlers) leaderboard(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
@@ -371,7 +398,7 @@ func (h *SegmentHandlers) leaderboard(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	lq := domain.LeaderboardQuery{Limit: parseIntQuery(r, "limit", segmentview.SegmentsDefaultLimit), Offset: parseIntQuery(r, "offset", 0)}
 	lq.From, lq.To = segTime(q.Get("from")), segTime(q.Get("to"))
-	entries, mine, err := h.Views.Leaderboard(r.Context(), userID, id, lq)
+	entries, mine, err := h.Views.Leaderboard(ctx, userID, id, lq)
 	if err != nil {
 		writeActionError(w, err, "load failed")
 		return

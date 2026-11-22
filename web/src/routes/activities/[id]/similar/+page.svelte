@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { formatDistance, formatDuration, formatDateOnly } from '#lib/format.js';
 	import type { PageData } from './$types';
 
@@ -36,14 +35,23 @@
 	let payload = $state<Payload | null>(null);
 	let loadError = $state<string | null>(null);
 
-	onMount(async () => {
+	async function load(id: string, signal: AbortSignal) {
 		try {
-			const res = await fetch(`/api/activities/${a.id}/similar`);
+			const res = await fetch(`/api/activities/${id}/similar`, { signal });
 			if (!res.ok) throw new Error((await res.text()).trim());
-			payload = await res.json();
+			const result = await res.json();
+			if (!signal.aborted) payload = result;
 		} catch (e) {
-			loadError = (e as Error).message;
+			if (!signal.aborted) loadError = (e as Error).message;
 		}
+	}
+
+	$effect(() => {
+		const request = new AbortController();
+		payload = null;
+		loadError = null;
+		void load(a.id, request.signal);
+		return () => request.abort();
 	});
 
 	function pace(sPerKm: number | null): string {
@@ -97,8 +105,7 @@
 		</a>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Similar routes</h1>
 		<p class="mt-1 text-sm text-zinc-400">
-			Other times you've covered roughly the same route — matched by start location, distance and
-			sport.
+			Other activities on roughly the same route, matched by start location, distance and sport.
 		</p>
 	</header>
 

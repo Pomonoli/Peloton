@@ -1,31 +1,37 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { untrack, onMount } from 'svelte';
+	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { formatMetricDistance, formatDuration, formatSpeedKmh, intlLocale } from '#lib/format.js';
 
 	import {
 		fetchSegmentCatalog,
+		defaultCatalogSort,
+		nextCatalogSort,
+		type CatalogSort,
+		type SortColumn,
 		type CatalogSegment,
 		type MapCamera
 	} from '#lib/segment-catalog.js';
 
-	type SortColumn = Exclude<
-		keyof CatalogSegment,
-		'id' | 'start' | 'polyline' | 'polyline_precision'
-	>;
+	let { data } = $props();
 	const columns = $derived([
 		{ key: 'name', label: m.segment_column_name(), align: 'text-left' },
 		{ key: 'distance_m', label: m.detail_stat_distance(), align: 'text-right' },
 		{ key: 'best_elapsed_s', label: m.segment_leaderboard_time(), align: 'text-right' },
 		{ key: 'average_speed_kmh', label: m.segment_avg_speed(), align: 'text-right' },
 		{ key: 'local_kom_holder', label: m.segment_local_kom(), align: 'text-left' },
-		{ key: 'member_count', label: m.segment_column_members(), align: 'text-right' }
+		{ key: 'member_count', label: m.segment_column_members(), align: 'text-right' },
+		{ key: 'my_attempts', label: m.segment_my_attempts(), align: 'text-right' }
 	] satisfies { key: SortColumn; label: string; align: string }[]);
 
 	let segments = $state<CatalogSegment[]>([]);
-	let mine = $state(false);
-	let sort = $state<SortColumn>('name');
-	let direction = $state<'asc' | 'desc'>('asc');
+	let mine = $state(untrack(() => !!data.member));
+	let selectedOrder = $state<CatalogSort[] | null>(null);
+	const order = $derived(selectedOrder ?? defaultCatalogSort(mine && !data.member));
+	const unusedColumns = $derived(
+		columns.filter(({ key }) => !order.some((item) => item.column === key))
+	);
 	let sorting = $state(false);
 	let hasMore = $state(false);
 	let loading = $state(true);
@@ -50,11 +56,12 @@
 				{
 					limit: '50',
 					offset: String(offset),
-					sort,
-					direction,
-					...(mine ? { mine: 'true' } : {}),
+					...(mine
+						? { mine: 'true', ...(data.member ? { member: data.member.username } : {}) }
+						: {}),
 					...(name ? { q: name } : {})
 				},
+				order,
 				controller.signal
 			);
 			if (controller.signal.aborted) return;
@@ -80,13 +87,19 @@
 		}
 	}
 
-	function setSort(column: SortColumn) {
-		if (loading) return;
-		direction = sort === column && direction === 'asc' ? 'desc' : 'asc';
-		sort = column;
-		// Keep the headers mounted so the active button retains keyboard focus.
-		sorting = true;
-		reload();
+	function setOrder(next: CatalogSort[]) {
+		selectedOrder = next;
+		if (view === 'list') {
+			// Keep the headers mounted so the active button retains focus.
+			sorting = true;
+			reload();
+		}
+	}
+
+	function moveUp(index: number) {
+		const next = [...order];
+		[next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
+		setOrder(next);
 	}
 
 	function cancelLoad() {
@@ -134,7 +147,7 @@
 	</header>
 
 	<div class="flex gap-2" role="group" aria-label={m.segment_filter_label()}>
-		{#each [{ mine: false, label: m.segment_filter_all() }, { mine: true, label: m.segment_filter_mine() }] as filter (filter.label)}
+		{#each [{ mine: false, label: m.segment_filter_all() }, { mine: true, label: data.member ? m.member_segments() : m.segment_filter_mine() }] as filter (filter.label)}
 			<button
 				type="button"
 				aria-pressed={mine === filter.mine}
@@ -194,6 +207,63 @@
 		</div>
 	</div>
 
+	<details class="rounded-md border border-zinc-700 bg-panel px-3">
+		<summary class="cursor-pointer py-2.5 text-sm">{m.segment_sort_title()}</summary>
+		<div class="space-y-2 pb-3">
+			<p class="text-sm text-quiet">{m.segment_sort_help()}</p>
+			<ol class="space-y-1">
+				{#each order as item, index (item.column)}
+					{@const label = columns.find(({ key }) => key === item.column)?.label ?? ''}
+					<li class="flex flex-wrap items-center gap-x-2 text-sm">
+						<span class="min-w-36 tabular-nums">{index + 1}. {label}</span>
+						<button
+							type="button"
+							class="min-h-11 px-2 text-accent-400 hover:underline"
+							onclick={() => setOrder(nextCatalogSort(order, item.column, true))}
+						>
+							{item.direction === 'asc' ? m.segment_sort_ascending() : m.segment_sort_descending()}
+						</button>
+						{#if index > 0}
+							<button
+								type="button"
+								class="min-h-11 px-2 text-accent-400 hover:underline"
+								aria-label={m.segment_sort_move_up_column({ column: label })}
+								onclick={() => moveUp(index)}>{m.segment_sort_move_up()}</button
+							>
+						{/if}
+						{#if order.length > 1}
+							<button
+								type="button"
+								class="min-h-11 px-2 text-accent-400 hover:underline"
+								aria-label={m.segment_sort_remove_column({ column: label })}
+								onclick={() => setOrder(order.filter(({ column }) => column !== item.column))}
+							>
+								{m.segment_sort_remove()}
+							</button>
+						{/if}
+					</li>
+				{/each}
+			</ol>
+			{#if unusedColumns.length > 0}
+				<select
+					aria-label={m.segment_sort_add()}
+					class="min-h-11 rounded border border-zinc-700 bg-panel px-2 text-sm"
+					onchange={(event) => {
+						const column = event.currentTarget.value as SortColumn | '';
+						if (!column) return;
+						setOrder(nextCatalogSort(order, column, true));
+						event.currentTarget.value = '';
+					}}
+				>
+					<option value="">{m.segment_sort_add()}</option>
+					{#each unusedColumns as column (column.key)}
+						<option value={column.key}>{column.label}</option>
+					{/each}
+				</select>
+			{/if}
+		</div>
+	</details>
+
 	{#if view === 'map'}
 		{#await import('#lib/components/SegmentCatalogMap.svelte')}
 			<p role="status" class="text-sm text-quiet">{m.community_loading()}</p>
@@ -201,6 +271,8 @@
 			<SegmentCatalogMap
 				{name}
 				{mine}
+				{order}
+				member={data.member}
 				center={mapCenter}
 				{camera}
 				onCamera={(value) => (camera = value)}
@@ -215,10 +287,12 @@
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							{#each columns as column (column.key)}
+								{@const index = order.findIndex((item) => item.column === column.key)}
+								{@const active = order[index]}
 								<th
 									scope="col"
-									aria-sort={sort === column.key
-										? direction === 'asc'
+									aria-sort={index === 0
+										? active?.direction === 'asc'
 											? 'ascending'
 											: 'descending'
 										: undefined}
@@ -226,17 +300,24 @@
 									<button
 										type="button"
 										class="w-full cursor-pointer px-4 py-2 uppercase hover:text-zinc-300 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-400 {column.align}"
-										aria-disabled={loading}
-										onclick={() => setSort(column.key)}
+										onclick={(event) =>
+											setOrder(nextCatalogSort(order, column.key, event.shiftKey))}
 									>
-										<span class="relative">
-											{column.label}
-											{#if sort === column.key}
-												<span aria-hidden="true" class="absolute top-0 left-full ml-1 text-zinc-400"
-													>{direction === 'asc' ? '↑' : '↓'}</span
-												>
-											{/if}
-										</span>
+										{column.label}
+										{#if active}
+											<span aria-hidden="true" class="ml-1 text-zinc-400">
+												{active.direction === 'asc' ? '↑' : '↓'}{index + 1}
+											</span>
+											<span class="sr-only">
+												{m.segment_sort_priority({
+													position: index + 1,
+													direction:
+														active.direction === 'asc'
+															? m.segment_sort_ascending()
+															: m.segment_sort_descending()
+												})}
+											</span>
+										{/if}
 									</button>
 								</th>
 							{/each}
@@ -246,7 +327,10 @@
 						{#each segments as segment (segment.id)}
 							<tr class="hover:bg-panel">
 								<th scope="row" class="px-4 py-3 text-left font-medium">
-									<a href={`/segment/${segment.id}`} class="text-accent-400 hover:underline">
+									<a
+										href={memberURL(`/segment/${segment.id}`, data.member)}
+										class="text-accent-400 hover:underline"
+									>
 										{segment.name}
 									</a>
 								</th>
@@ -263,12 +347,16 @@
 								<td class="px-4 py-3 text-right tabular-nums">
 									{segment.member_count.toLocaleString(intlLocale())}
 								</td>
+								<td class="px-4 py-3 text-right tabular-nums"
+									>{segment.my_attempts.toLocaleString(intlLocale())}</td
+								>
 							</tr>
 						{/each}
 					</tbody>
 				</table>
 			</div>
-		{:else if !loading && !failed}
+		{/if}
+		{#if segments.length === 0 && !loading && !failed}
 			<p
 				class="rounded-lg border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400"
 			>

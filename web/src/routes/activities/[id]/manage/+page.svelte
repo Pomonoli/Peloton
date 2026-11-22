@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$app/env/public';
 	import { m } from '#lib/paraglide/messages.js';
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 	import { formatDate } from '#lib/format.js';
 	import ActivityNav from '#lib/components/ActivityNav.svelte';
 	import type { PageData } from './$types';
@@ -14,9 +14,13 @@
 	let shareLinks = $state<ShareLink[]>([]);
 	let shareBusy = $state(false);
 	async function loadShares() {
+		const id = a.id;
 		try {
-			const res = await fetch(`/api/activities/${a.id}/shares`);
-			if (res.ok) shareLinks = (await res.json()).links ?? [];
+			const res = await fetch(`/api/activities/${id}/shares`);
+			if (res.ok) {
+				const next = await res.json();
+				if (id === a.id) shareLinks = next.links ?? [];
+			}
 		} catch {
 			/* ignore */
 		}
@@ -90,13 +94,15 @@
 	let actionMsg = $state<{ ok: boolean; text: string } | null>(null);
 
 	async function loadManage() {
+		const id = a.id;
 		loadError = null;
 		try {
-			const res = await fetch(`/api/activities/${a.id}/manage`);
+			const res = await fetch(`/api/activities/${id}/manage`);
 			if (!res.ok) throw new Error(await res.text());
-			payload = await res.json();
+			const next = await res.json();
+			if (id === a.id) payload = next;
 		} catch (e) {
-			loadError = (e as Error).message || 'failed to load';
+			if (id === a.id) loadError = (e as Error).message || 'failed to load';
 		}
 	}
 	// --- export customization ---
@@ -116,10 +122,12 @@
 	let exportAvail = $state<Record<string, boolean> | null>(null);
 	let exportSel = $state<Record<string, boolean>>({});
 	async function loadExportOptions() {
+		const id = a.id;
 		try {
-			const res = await fetch(`/api/activities/${a.id}/export/options`);
+			const res = await fetch(`/api/activities/${id}/export/options`);
 			if (!res.ok) return; // no stream to export — keep plain buttons
 			const av = (await res.json()).available ?? {};
+			if (id !== a.id) return;
 			exportAvail = av;
 			const sel: Record<string, boolean> = {};
 			for (const [key] of exportFeatures) if (av[key]) sel[key] = true;
@@ -137,10 +145,16 @@
 	// GPX is position-only; without the GPS track the file would be empty.
 	const gpxDisabled = $derived(exportAvail != null && (!exportAvail.gps || !exportSel.gps));
 
-	onMount(() => {
-		loadManage();
-		loadShares();
-		loadExportOptions();
+	$effect(() => {
+		void a.id;
+		payload = null;
+		exportAvail = null;
+		shareLinks = [];
+		untrack(() => {
+			void loadManage();
+			if (data.isOwner) void loadShares();
+			void loadExportOptions();
+		});
 	});
 
 	function fmtBytes(n: number): string {
@@ -332,10 +346,14 @@
 
 <section class="space-y-8">
 	<header>
-		<ActivityNav id={a.id} title={a.title} />
-		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Manage &amp; insights</h1>
+		<ActivityNav id={a.id} title={a.title} isOwner={data.isOwner} member={data.activityOwner} />
+		<h1 class="mt-2 text-2xl font-semibold tracking-tight">
+			{data.isOwner ? 'Manage & insights' : m.member_activity_insights()}
+		</h1>
 		<p class="mt-1 text-sm text-zinc-400">
-			Technical provenance and maintenance actions for this activity.
+			{data.isOwner
+				? 'Technical provenance and maintenance actions for this activity.'
+				: m.member_activity_insights_description()}
 		</p>
 	</header>
 
@@ -398,99 +416,100 @@
 		</div>
 	</section>
 
-	<!-- Share links -->
-	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
-		<h2 class="mb-1 text-sm font-medium text-zinc-300">Share</h2>
-		<p class="mb-4 text-xs text-zinc-500">
-			{m.community_share_link_help()}
-		</p>
-		<div class="mb-3">
-			<button
-				type="button"
-				disabled={shareBusy}
-				onclick={createShare}
-				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
-			>
-				{shareBusy ? 'Creating…' : 'Create share link'}
-			</button>
-		</div>
-		<ul class="space-y-2">
-			{#each shareLinks as l (l.token)}
-				<li class="flex items-center gap-2 rounded border border-zinc-800 px-3 py-2 text-xs">
-					<input
-						readonly
-						value={shareURL(l.path)}
-						class="flex-1 bg-transparent text-zinc-300 outline-none max-md:min-w-0"
-						onclick={(e) => (e.currentTarget as HTMLInputElement).select()}
-					/>
-					<button
-						type="button"
-						onclick={() => navigator.clipboard?.writeText(shareURL(l.path))}
-						class="text-zinc-400 hover:text-accent-300">Copy</button
-					>
-					<button
-						type="button"
-						onclick={() => revokeShare(l.token)}
-						class="text-zinc-500 hover:text-red-400">Revoke</button
-					>
-				</li>
-			{/each}
-			{#if shareLinks.length === 0}
-				<li class="text-xs text-quiet">No active share links.</li>
-			{/if}
-		</ul>
-	</section>
-
-	<!-- Maintenance actions -->
-	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
-		<h2 class="mb-1 text-sm font-medium text-zinc-300">Maintenance</h2>
-		<p class="mb-4 text-xs text-zinc-500">
-			These re-run the internal calculations in {APP_NAME} from the data already stored — they don't contact
-			any external provider.
-		</p>
-		<div class="flex flex-wrap gap-3">
-			<button
-				type="button"
-				disabled={!!busy}
-				onclick={() =>
-					runAction('recompute', 'Re-merge', 'Re-merge this activity from its current sources?')}
-				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
-			>
-				{busy === 'Re-merge' ? 'Re-merging…' : 'Re-merge from sources'}
-			</button>
-			<button
-				type="button"
-				disabled={!!busy}
-				onclick={() => runAction('recompute-derived', 'Recompute derived')}
-				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
-			>
-				{busy === 'Recompute derived'
-					? 'Recomputing…'
-					: 'Recompute best-efforts, segments & training load'}
-			</button>
-			<button
-				type="button"
-				disabled={!!busy}
-				onclick={regenerateMap}
-				title="Re-render the static map snapshot used in feeds and shares"
-				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
-			>
-				{busy === 'Regenerate map' ? 'Regenerating…' : 'Regenerate map snapshot'}
-			</button>
-		</div>
-		<img
-			src={`/api/activities/${a.id}/map.png${mapBust ? `?v=${mapBust}` : ''}`}
-			alt=""
-			class="mt-3 h-20 rounded border border-zinc-800 object-cover"
-			onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-		/>
-		{#if actionMsg}
-			<p class="mt-3 text-xs {actionMsg.ok ? 'text-emerald-400' : 'text-red-400'}">
-				{actionMsg.text}
+	{#if data.isOwner}
+		<!-- Share links -->
+		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+			<h2 class="mb-1 text-sm font-medium text-zinc-300">Share</h2>
+			<p class="mb-4 text-xs text-zinc-500">
+				{m.community_share_link_help()}
 			</p>
-		{/if}
-	</section>
+			<div class="mb-3">
+				<button
+					type="button"
+					disabled={shareBusy}
+					onclick={createShare}
+					class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
+				>
+					{shareBusy ? 'Creating…' : 'Create share link'}
+				</button>
+			</div>
+			<ul class="space-y-2">
+				{#each shareLinks as l (l.token)}
+					<li class="flex items-center gap-2 rounded border border-zinc-800 px-3 py-2 text-xs">
+						<input
+							readonly
+							value={shareURL(l.path)}
+							class="flex-1 bg-transparent text-zinc-300 outline-none max-md:min-w-0"
+							onclick={(e) => (e.currentTarget as HTMLInputElement).select()}
+						/>
+						<button
+							type="button"
+							onclick={() => navigator.clipboard?.writeText(shareURL(l.path))}
+							class="text-zinc-400 hover:text-accent-300">Copy</button
+						>
+						<button
+							type="button"
+							onclick={() => revokeShare(l.token)}
+							class="text-zinc-500 hover:text-red-400">Revoke</button
+						>
+					</li>
+				{/each}
+				{#if shareLinks.length === 0}
+					<li class="text-xs text-quiet">No active share links.</li>
+				{/if}
+			</ul>
+		</section>
 
+		<!-- Maintenance actions -->
+		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+			<h2 class="mb-1 text-sm font-medium text-zinc-300">Maintenance</h2>
+			<p class="mb-4 text-xs text-zinc-500">
+				These re-run the internal calculations in {APP_NAME} from the data already stored — they don't
+				contact any external provider.
+			</p>
+			<div class="flex flex-wrap gap-3">
+				<button
+					type="button"
+					disabled={!!busy}
+					onclick={() =>
+						runAction('recompute', 'Re-merge', 'Re-merge this activity from its current sources?')}
+					class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
+				>
+					{busy === 'Re-merge' ? 'Re-merging…' : 'Re-merge from sources'}
+				</button>
+				<button
+					type="button"
+					disabled={!!busy}
+					onclick={() => runAction('recompute-derived', 'Recompute derived')}
+					class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
+				>
+					{busy === 'Recompute derived'
+						? 'Recomputing…'
+						: 'Recompute best-efforts, segments & training load'}
+				</button>
+				<button
+					type="button"
+					disabled={!!busy}
+					onclick={regenerateMap}
+					title="Re-render the static map snapshot used in feeds and shares"
+					class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
+				>
+					{busy === 'Regenerate map' ? 'Regenerating…' : 'Regenerate map snapshot'}
+				</button>
+			</div>
+			<img
+				src={`/api/activities/${a.id}/map.png${mapBust ? `?v=${mapBust}` : ''}`}
+				alt=""
+				class="mt-3 h-20 rounded border border-zinc-800 object-cover"
+				onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+			/>
+			{#if actionMsg}
+				<p class="mt-3 text-xs {actionMsg.ok ? 'text-emerald-400' : 'text-red-400'}">
+					{actionMsg.text}
+				</p>
+			{/if}
+		</section>
+	{/if}
 	<!-- Per-field provenance: which source won each field, and whether by rule or a manual pin -->
 	{#if payload && payload.provenance && payload.provenance.length > 0}
 		<section>
@@ -526,165 +545,175 @@
 						<div class="flex flex-wrap items-center justify-between gap-2">
 							<div class="flex items-center gap-2">
 								<span class="font-medium text-zinc-200">{s.provider}</span>
-								<span class="rounded px-1.5 py-0.5 text-[10px] uppercase {statusColor(s.status)}">
-									{s.status}
-								</span>
+								{#if data.isOwner}
+									<span class="rounded px-1.5 py-0.5 text-[10px] uppercase {statusColor(s.status)}">
+										{s.status}
+									</span>
+								{/if}
 								{#if s.is_primary}
 									<span
 										class="rounded bg-accent-500/15 px-1.5 py-0.5 text-[10px] uppercase text-accent-300"
 										>primary stream</span
 									>
 								{/if}
-								{#if s.reparse_eligible}
-									<span
-										class="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] uppercase text-sky-300"
-										title={`A worker with parser ${s.reparse_with} (dataset v${s.dataset_version}) is online — this source can be re-parsed from its archive`}
-										>re-parsable</span
-									>
-								{/if}
-								{#if s.upgrade === 'new_parser'}
-									<span
-										class="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] uppercase text-sky-300"
-										title={`Parsed by ${s.parser_version}; a newer parser is online. Re-parse from the archive to pick up its changes (no provider quota).`}
-										>newer parser</span
-									>
-								{:else if s.upgrade === 'new_dataset'}
-									<span
-										class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] uppercase text-amber-300"
-										title={`Imported as dataset v${s.dataset_version}; the online worker uses a newer archive format and cannot read it. Re-fetch from the provider.`}
-										>new dataset</span
-									>
-								{/if}
-								{#if s.reimport_status && s.reimport_status !== 'current'}
-									<span
-										class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] uppercase text-amber-300"
-										>{s.reimport_status}</span
-									>
+								{#if data.isOwner}
+									{#if s.reparse_eligible}
+										<span
+											class="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] uppercase text-sky-300"
+											title={`A worker with parser ${s.reparse_with} (dataset v${s.dataset_version}) is online — this source can be re-parsed from its archive`}
+											>re-parsable</span
+										>
+									{/if}
+									{#if s.upgrade === 'new_parser'}
+										<span
+											class="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] uppercase text-sky-300"
+											title={`Parsed by ${s.parser_version}; a newer parser is online. Re-parse from the archive to pick up its changes (no provider quota).`}
+											>newer parser</span
+										>
+									{:else if s.upgrade === 'new_dataset'}
+										<span
+											class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] uppercase text-amber-300"
+											title={`Imported as dataset v${s.dataset_version}; the online worker uses a newer archive format and cannot read it. Re-fetch from the provider.`}
+											>new dataset</span
+										>
+									{/if}
+									{#if s.reimport_status && s.reimport_status !== 'current'}
+										<span
+											class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] uppercase text-amber-300"
+											>{s.reimport_status}</span
+										>
+									{/if}
 								{/if}
 							</div>
-							<div class="flex flex-wrap items-center justify-end gap-3">
-								{#if s.has_blob}
-									<a
-										href={`/api/activities/${a.id}/sources/${s.id}/download`}
-										class="text-xs text-accent-400 hover:text-accent-300"
-									>
-										Download original ↓
-									</a>
-								{/if}
-								{#if s.status !== 'detached' && s.external_account}
-									<button
-										type="button"
-										disabled={!!busy || s.reimport_status === 'updating'}
-										onclick={() => refetchSource(s)}
-										class="text-xs text-accent-400 hover:text-accent-300 disabled:opacity-50"
-									>
-										{busy === `refetch-${s.id}`
-											? 'Queuing…'
-											: s.reimport_status === 'updating'
-												? 'Re-fetching…'
-												: 'Re-fetch from provider'}
-									</button>
-								{/if}
-								{#if s.status !== 'detached' && s.reparse_eligible}
-									<button
-										type="button"
-										disabled={!!busy || s.reimport_status === 'updating'}
-										onclick={() => reparseSource(s)}
-										class="text-xs text-accent-400 hover:text-accent-300 disabled:opacity-50"
-									>
-										{busy === `reparse-${s.id}`
-											? 'Queuing…'
-											: s.reparse_with && s.reparse_with !== s.parser_version
-												? `Re-parse with ${s.reparse_with}`
-												: 'Re-parse from archive'}
-									</button>
-								{:else if s.status !== 'detached'}
-									<span
-										class="inline-flex items-center gap-1 text-xs text-quiet"
-										title={s.has_blob
-											? `Re-parse needs a ${s.provider} worker online that reads dataset v${s.dataset_version || '?'} with parser ${s.parser_version || '?'} or newer.`
-											: 'No archived original to re-parse — re-fetch from the provider to create one.'}
-									>
-										<span class="cursor-not-allowed line-through decoration-zinc-700"
-											>Re-parse from archive</span
+							{#if data.isOwner}
+								<div class="flex flex-wrap items-center justify-end gap-3">
+									{#if s.has_blob}
+										<a
+											href={`/api/activities/${a.id}/sources/${s.id}/download`}
+											class="text-xs text-accent-400 hover:text-accent-300"
 										>
-										<span class="text-[10px] not-italic text-zinc-500">
-											{s.has_blob
-												? `· needs ${s.provider} parser ≥ ${s.parser_version || s.worker_version} online`
-												: '· no archived original yet'}
+											Download original ↓
+										</a>
+									{/if}
+									{#if s.status !== 'detached' && s.external_account}
+										<button
+											type="button"
+											disabled={!!busy || s.reimport_status === 'updating'}
+											onclick={() => refetchSource(s)}
+											class="text-xs text-accent-400 hover:text-accent-300 disabled:opacity-50"
+										>
+											{busy === `refetch-${s.id}`
+												? 'Queuing…'
+												: s.reimport_status === 'updating'
+													? 'Re-fetching…'
+													: 'Re-fetch from provider'}
+										</button>
+									{/if}
+									{#if s.status !== 'detached' && s.reparse_eligible}
+										<button
+											type="button"
+											disabled={!!busy || s.reimport_status === 'updating'}
+											onclick={() => reparseSource(s)}
+											class="text-xs text-accent-400 hover:text-accent-300 disabled:opacity-50"
+										>
+											{busy === `reparse-${s.id}`
+												? 'Queuing…'
+												: s.reparse_with && s.reparse_with !== s.parser_version
+													? `Re-parse with ${s.reparse_with}`
+													: 'Re-parse from archive'}
+										</button>
+									{:else if s.status !== 'detached'}
+										<span
+											class="inline-flex items-center gap-1 text-xs text-quiet"
+											title={s.has_blob
+												? `Re-parse needs a ${s.provider} worker online that reads dataset v${s.dataset_version || '?'} with parser ${s.parser_version || '?'} or newer.`
+												: 'No archived original to re-parse — re-fetch from the provider to create one.'}
+										>
+											<span class="cursor-not-allowed line-through decoration-zinc-700"
+												>Re-parse from archive</span
+											>
+											<span class="text-[10px] not-italic text-zinc-500">
+												{s.has_blob
+													? `· needs ${s.provider} parser ≥ ${s.parser_version || s.worker_version} online`
+													: '· no archived original yet'}
+											</span>
 										</span>
-									</span>
-								{/if}
-								{#if s.status !== 'detached'}
-									{#if payload && payload.sources.filter((x) => x.status !== 'detached').length > 1}
+									{/if}
+									{#if s.status !== 'detached'}
+										{#if payload && payload.sources.filter((x) => x.status !== 'detached').length > 1}
+											<button
+												type="button"
+												disabled={!!busy}
+												onclick={() => splitSource(s)}
+												class="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50"
+												title="Move this source to its own activity (it's a different workout, not a duplicate)"
+											>
+												{busy === `split-${s.id}` ? 'Splitting…' : 'Split off'}
+											</button>
+										{/if}
 										<button
 											type="button"
 											disabled={!!busy}
-											onclick={() => splitSource(s)}
-											class="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50"
-											title="Move this source to its own activity (it's a different workout, not a duplicate)"
+											onclick={() => detachSource(s)}
+											class="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
 										>
-											{busy === `split-${s.id}` ? 'Splitting…' : 'Split off'}
+											{busy === `detach-${s.id}` ? 'Detaching…' : 'Detach'}
 										</button>
 									{/if}
-									<button
-										type="button"
-										disabled={!!busy}
-										onclick={() => detachSource(s)}
-										class="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
-									>
-										{busy === `detach-${s.id}` ? 'Detaching…' : 'Detach'}
-									</button>
-								{/if}
-							</div>
+								</div>
+							{/if}
 						</div>
 
 						<dl
 							class="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2 lg:grid-cols-3"
 						>
-							<div class="flex justify-between gap-2">
-								<dt class="text-zinc-500">External ID</dt>
-								<dd class="truncate font-mono text-zinc-300">{s.external_id || '—'}</dd>
-							</div>
-							<div class="flex justify-between gap-2">
-								<dt class="text-zinc-500">Imported</dt>
-								<dd class="text-zinc-300">{formatDate(s.imported_at)}</dd>
-							</div>
-							<div class="flex justify-between gap-2">
-								<dt class="text-zinc-500">Last parsed</dt>
-								<dd class="text-zinc-300">
-									{s.last_reimported_at ? formatDate(s.last_reimported_at) : '—'}
-								</dd>
-							</div>
-							<div class="flex justify-between gap-2">
-								<dt class="text-zinc-500" title="Archive format the source was imported as">
-									Dataset
-								</dt>
-								<dd class="text-zinc-300">{s.dataset_version ? `v${s.dataset_version}` : '—'}</dd>
-							</div>
-							<div class="flex justify-between gap-2">
-								<dt class="text-zinc-500" title="Parser that produced the current data">Parser</dt>
-								<dd class="text-zinc-300">
-									{s.parser_version || '—'}
-									<span class="text-zinc-500"
-										>{s.worker_name || ''}{s.worker_release ? ` ${s.worker_release}` : ''}</span
-									>
-								</dd>
-							</div>
-							<div class="flex justify-between gap-2">
-								<dt class="text-zinc-500">Package</dt>
-								<dd class="font-mono text-xs text-zinc-300" title={s.worker_package}>
-									{s.worker_package || '—'}
-								</dd>
-							</div>
-							<div class="flex justify-between gap-2">
-								<dt class="text-zinc-500">Archived original</dt>
-								<dd class="text-zinc-300">
-									{s.has_blob
-										? `${fmtBytes(s.raw_size_bytes)} (${s.raw_content_type || '?'})`
-										: 'none'}
-								</dd>
-							</div>
+							{#if data.isOwner}
+								<div class="flex justify-between gap-2">
+									<dt class="text-zinc-500">External ID</dt>
+									<dd class="truncate font-mono text-zinc-300">{s.external_id || '—'}</dd>
+								</div>
+								<div class="flex justify-between gap-2">
+									<dt class="text-zinc-500">Imported</dt>
+									<dd class="text-zinc-300">{formatDate(s.imported_at)}</dd>
+								</div>
+								<div class="flex justify-between gap-2">
+									<dt class="text-zinc-500">Last parsed</dt>
+									<dd class="text-zinc-300">
+										{s.last_reimported_at ? formatDate(s.last_reimported_at) : '—'}
+									</dd>
+								</div>
+								<div class="flex justify-between gap-2">
+									<dt class="text-zinc-500" title="Archive format the source was imported as">
+										Dataset
+									</dt>
+									<dd class="text-zinc-300">{s.dataset_version ? `v${s.dataset_version}` : '—'}</dd>
+								</div>
+								<div class="flex justify-between gap-2">
+									<dt class="text-zinc-500" title="Parser that produced the current data">
+										Parser
+									</dt>
+									<dd class="text-zinc-300">
+										{s.parser_version || '—'}
+										<span class="text-zinc-500"
+											>{s.worker_name || ''}{s.worker_release ? ` ${s.worker_release}` : ''}</span
+										>
+									</dd>
+								</div>
+								<div class="flex justify-between gap-2">
+									<dt class="text-zinc-500">Package</dt>
+									<dd class="font-mono text-xs text-zinc-300" title={s.worker_package}>
+										{s.worker_package || '—'}
+									</dd>
+								</div>
+								<div class="flex justify-between gap-2">
+									<dt class="text-zinc-500">Archived original</dt>
+									<dd class="text-zinc-300">
+										{s.has_blob
+											? `${fmtBytes(s.raw_size_bytes)} (${s.raw_content_type || '?'})`
+											: 'none'}
+									</dd>
+								</div>
+							{/if}
 							<div class="flex justify-between gap-2">
 								<dt class="text-zinc-500">Stream</dt>
 								<dd class="text-zinc-300">{s.has_stream ? 'yes' : 'no'}</dd>
@@ -716,21 +745,23 @@
 							</div>
 						{/if}
 
-						<div class="mt-3 border-t border-zinc-800 pt-3">
-							<button
-								type="button"
-								onclick={() => toggleParsed(s)}
-								class="text-xs text-accent-400 hover:text-accent-300"
-							>
-								{parsedOpen[s.id] ? 'Hide' : 'View'} parsed data
-							</button>
-							{#if parsedOpen[s.id]}
-								<pre
-									class="mt-2 max-h-80 overflow-auto rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300">{parsedJson[
-										s.id
-									]}</pre>
-							{/if}
-						</div>
+						{#if data.isOwner}
+							<div class="mt-3 border-t border-zinc-800 pt-3">
+								<button
+									type="button"
+									onclick={() => toggleParsed(s)}
+									class="text-xs text-accent-400 hover:text-accent-300"
+								>
+									{parsedOpen[s.id] ? 'Hide' : 'View'} parsed data
+								</button>
+								{#if parsedOpen[s.id]}
+									<pre
+										class="mt-2 max-h-80 overflow-auto rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300">{parsedJson[
+											s.id
+										]}</pre>
+								{/if}
+							</div>
+						{/if}
 					</li>
 				{/each}
 			</ul>

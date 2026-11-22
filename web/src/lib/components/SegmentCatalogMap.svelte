@@ -10,24 +10,30 @@
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { basemapStyle } from '#lib/basemap.js';
 	import { formatDuration, formatMetricDistance } from '#lib/format.js';
+	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
 		catalogFeatures,
 		catalogViewport,
 		fetchSegmentCatalog,
 		type CatalogSegment,
+		type CatalogSort,
 		type MapCamera
 	} from '#lib/segment-catalog.js';
 
 	let {
 		name,
 		mine,
+		order,
+		member,
 		center,
 		camera,
 		onCamera
 	}: {
 		name: string;
 		mine: boolean;
+		order: CatalogSort[];
+		member: MemberView | null;
 		center: [number, number] | undefined;
 		camera: MapCamera | undefined;
 		onCamera: (value: MapCamera) => void;
@@ -197,6 +203,8 @@
 		const bounds = viewport;
 		const query = name;
 		const onlyMine = mine;
+		const criteria = order;
+		const subject = member?.username;
 		void retry;
 		if (!bounds || !ready || unavailable) {
 			if (!bounds) {
@@ -208,7 +216,7 @@
 			failed = false;
 			return;
 		}
-		const filters = JSON.stringify([query, onlyMine]);
+		const filters = JSON.stringify([query, onlyMine, criteria, subject]);
 		if (lastFilters !== filters) {
 			lastFilters = filters;
 			rows = [];
@@ -224,11 +232,10 @@
 					{
 						...bounds,
 						limit: '150',
-						sort: 'member_count',
-						direction: 'desc',
 						...(query ? { q: query } : {}),
-						...(onlyMine ? { mine: 'true' } : {})
+						...(onlyMine ? { mine: 'true', ...(subject ? { member: subject } : {}) } : {})
 					},
+					criteria,
 					request.signal
 				);
 				if (request.signal.aborted) return;
@@ -322,7 +329,7 @@
 							</div>
 						</dl>
 						<a
-							href={`/segment/${selected.id}`}
+							href={memberURL(`/segment/${selected.id}`, member)}
 							class="inline-flex min-h-8 items-center text-sm text-accent-300 hover:underline"
 							>{m.segment_map_details()}</a
 						>

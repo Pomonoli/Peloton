@@ -12,6 +12,7 @@ import {
 	ReimportStatus
 } from '#lib/proto/cairn/v1/activity_pb.js';
 import { enumName, protoDurationToSeconds, protoTimestampToISO } from '#lib/proto-helpers.js';
+import { findMember } from '#lib/member.js';
 import { gearToView, type GearView } from '#lib/gear.js';
 import { alignTrackSensors, streamToView, type ActivityStreamView } from '#lib/ride-stream.js';
 export type { ActivityStreamView } from '#lib/ride-stream.js';
@@ -46,7 +47,7 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 	// Streams and best-efforts are independent — run them in parallel.
 	const a = activity;
 	const isOwner = a.userId === user.id;
-	const [streamResult, bestEfforts, gear] = await Promise.all([
+	const [streamResult, bestEfforts, gear, activityOwner] = await Promise.all([
 		loadStream(clients, a),
 		clients.activity
 			.listBestEfforts({ activityId: a.id })
@@ -61,7 +62,8 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 					.listGear({ includeRetired: false })
 					.then((res) => res.gear.map(gearToView))
 					.catch(() => [] as GearView[])
-			: []
+			: [],
+		isOwner ? null : findMember(fetch, a.userId)
 	]);
 
 	// Per-channel merged stream (best field from best source) — only worth
@@ -74,6 +76,7 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 
 	return {
 		activity: activityToView(a),
+		activityOwner,
 		viewerId: user.id,
 		isOwner,
 		stream: streamResult.stream,

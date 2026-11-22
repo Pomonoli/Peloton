@@ -1011,8 +1011,10 @@ type GetSegmentRequest struct {
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// If true, include effort previews (top N) in the response.
 	IncludeTopEfforts bool `protobuf:"varint,2,opt,name=include_top_efforts,json=includeTopEfforts,proto3" json:"include_top_efforts,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetSegmentRequest) Reset() {
@@ -1057,6 +1059,13 @@ func (x *GetSegmentRequest) GetIncludeTopEfforts() bool {
 		return x.IncludeTopEfforts
 	}
 	return false
+}
+
+func (x *GetSegmentRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type GetSegmentResponse struct {
@@ -1792,10 +1801,12 @@ func (x *ListSegmentEffortsResponse) GetPage() *PageResponse {
 }
 
 type ListMySegmentEffortsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SegmentId     string                 `protobuf:"bytes,1,opt,name=segment_id,json=segmentId,proto3" json:"segment_id,omitempty"`
-	TimeRange     *TimeRange             `protobuf:"bytes,2,opt,name=time_range,json=timeRange,proto3" json:"time_range,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SegmentId string                 `protobuf:"bytes,1,opt,name=segment_id,json=segmentId,proto3" json:"segment_id,omitempty"`
+	TimeRange *TimeRange             `protobuf:"bytes,2,opt,name=time_range,json=timeRange,proto3" json:"time_range,omitempty"`
+	Page      *PageRequest           `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,4,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1849,6 +1860,13 @@ func (x *ListMySegmentEffortsRequest) GetPage() *PageRequest {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *ListMySegmentEffortsRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type ListMySegmentEffortsResponse struct {
@@ -1923,6 +1941,8 @@ type GetSegmentLeaderboardRequest struct {
 	// sex/age, otherwise ignored.
 	BiologicalSex *BiologicalSex `protobuf:"varint,3,opt,name=biological_sex,json=biologicalSex,proto3,enum=cairn.v1.BiologicalSex,oneof" json:"biological_sex,omitempty"`
 	Page          *PageRequest   `protobuf:"bytes,4,opt,name=page,proto3" json:"page,omitempty"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,5,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1983,6 +2003,13 @@ func (x *GetSegmentLeaderboardRequest) GetPage() *PageRequest {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *GetSegmentLeaderboardRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type LeaderboardEntry struct {
@@ -2353,7 +2380,9 @@ type ListMySegmentsRequest struct {
 	// Restrict to one activity type; unset = all.
 	ActivityType ActivityType `protobuf:"varint,1,opt,name=activity_type,json=activityType,proto3,enum=cairn.v1.ActivityType" json:"activity_type,omitempty"`
 	// limit default 50, max 200.
-	Page          *PageRequest `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	Page *PageRequest `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2400,6 +2429,13 @@ func (x *ListMySegmentsRequest) GetPage() *PageRequest {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *ListMySegmentsRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type UserSegmentStats struct {
@@ -2795,10 +2831,11 @@ const file_cairn_v1_segment_proto_rawDesc = "" +
 	"\x04page\x18\b \x01(\v2\x15.cairn.v1.PageRequestR\x04page\"q\n" +
 	"\x14ListSegmentsResponse\x12-\n" +
 	"\bsegments\x18\x01 \x03(\v2\x11.cairn.v1.SegmentR\bsegments\x12*\n" +
-	"\x04page\x18\x02 \x01(\v2\x16.cairn.v1.PageResponseR\x04page\"S\n" +
+	"\x04page\x18\x02 \x01(\v2\x16.cairn.v1.PageResponseR\x04page\"k\n" +
 	"\x11GetSegmentRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12.\n" +
-	"\x13include_top_efforts\x18\x02 \x01(\bR\x11includeTopEfforts\"{\n" +
+	"\x13include_top_efforts\x18\x02 \x01(\bR\x11includeTopEfforts\x12\x16\n" +
+	"\x06member\x18\x03 \x01(\tR\x06member\"{\n" +
 	"\x12GetSegmentResponse\x12+\n" +
 	"\asegment\x18\x01 \x01(\v2\x11.cairn.v1.SegmentR\asegment\x128\n" +
 	"\vtop_efforts\x18\x02 \x03(\v2\x17.cairn.v1.SegmentEffortR\n" +
@@ -2871,25 +2908,27 @@ const file_cairn_v1_segment_proto_rawDesc = "" +
 	"\b_user_id\"{\n" +
 	"\x1aListSegmentEffortsResponse\x121\n" +
 	"\aefforts\x18\x01 \x03(\v2\x17.cairn.v1.SegmentEffortR\aefforts\x12*\n" +
-	"\x04page\x18\x02 \x01(\v2\x16.cairn.v1.PageResponseR\x04page\"\x9b\x01\n" +
+	"\x04page\x18\x02 \x01(\v2\x16.cairn.v1.PageResponseR\x04page\"\xb3\x01\n" +
 	"\x1bListMySegmentEffortsRequest\x12\x1d\n" +
 	"\n" +
 	"segment_id\x18\x01 \x01(\tR\tsegmentId\x122\n" +
 	"\n" +
 	"time_range\x18\x02 \x01(\v2\x13.cairn.v1.TimeRangeR\ttimeRange\x12)\n" +
-	"\x04page\x18\x03 \x01(\v2\x15.cairn.v1.PageRequestR\x04page\"\xd8\x01\n" +
+	"\x04page\x18\x03 \x01(\v2\x15.cairn.v1.PageRequestR\x04page\x12\x16\n" +
+	"\x06member\x18\x04 \x01(\tR\x06member\"\xd8\x01\n" +
 	"\x1cListMySegmentEffortsResponse\x121\n" +
 	"\aefforts\x18\x01 \x03(\v2\x17.cairn.v1.SegmentEffortR\aefforts\x12*\n" +
 	"\x04page\x18\x02 \x01(\v2\x16.cairn.v1.PageResponseR\x04page\x12E\n" +
 	"\x0fpersonal_record\x18\x03 \x01(\v2\x17.cairn.v1.SegmentEffortH\x00R\x0epersonalRecord\x88\x01\x01B\x12\n" +
-	"\x10_personal_record\"\xf4\x01\n" +
+	"\x10_personal_record\"\x8c\x02\n" +
 	"\x1cGetSegmentLeaderboardRequest\x12\x1d\n" +
 	"\n" +
 	"segment_id\x18\x01 \x01(\tR\tsegmentId\x122\n" +
 	"\n" +
 	"time_range\x18\x02 \x01(\v2\x13.cairn.v1.TimeRangeR\ttimeRange\x12C\n" +
 	"\x0ebiological_sex\x18\x03 \x01(\x0e2\x17.cairn.v1.BiologicalSexH\x00R\rbiologicalSex\x88\x01\x01\x12)\n" +
-	"\x04page\x18\x04 \x01(\v2\x15.cairn.v1.PageRequestR\x04pageB\x11\n" +
+	"\x04page\x18\x04 \x01(\v2\x15.cairn.v1.PageRequestR\x04page\x12\x16\n" +
+	"\x06member\x18\x05 \x01(\tR\x06memberB\x11\n" +
 	"\x0f_biological_sex\"\xda\x02\n" +
 	"\x10LeaderboardEntry\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\x05R\x04rank\x12\x17\n" +
@@ -2924,10 +2963,11 @@ const file_cairn_v1_segment_proto_rawDesc = "" +
 	"\n" +
 	"time_range\x18\x02 \x01(\v2\x13.cairn.v1.TimeRangeR\ttimeRange\"/\n" +
 	"\x16RematchSegmentResponse\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\x7f\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\x97\x01\n" +
 	"\x15ListMySegmentsRequest\x12;\n" +
 	"\ractivity_type\x18\x01 \x01(\x0e2\x16.cairn.v1.ActivityTypeR\factivityType\x12)\n" +
-	"\x04page\x18\x02 \x01(\v2\x15.cairn.v1.PageRequestR\x04page\"\xa0\x01\n" +
+	"\x04page\x18\x02 \x01(\v2\x15.cairn.v1.PageRequestR\x04page\x12\x16\n" +
+	"\x06member\x18\x03 \x01(\tR\x06member\"\xa0\x01\n" +
 	"\x10UserSegmentStats\x12\x1a\n" +
 	"\bsegments\x18\x01 \x01(\x05R\bsegments\x12\x18\n" +
 	"\aefforts\x18\x02 \x01(\x05R\aefforts\x12\x10\n" +

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import MemberNav from '#lib/components/MemberNav.svelte';
 	import { onMount } from 'svelte';
 	import { formatDateOnly, formatDistance, intlLocale } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -110,6 +112,12 @@
 							<span class="block truncate text-sm text-quiet">@{member.username}</span>
 						</span>
 					</a>
+					<details class="border-t border-zinc-800 pt-2">
+						<summary class="cursor-pointer text-sm text-accent-400"
+							>{m.member_cycling_data()}</summary
+						>
+						<MemberNav member={page.data.user?.id === member.id ? null : member} />
+					</details>
 					<dl class="grid grid-cols-2 gap-3 text-sm">
 						<div>
 							<dt class="text-quiet">{m.friends_cycling_distance()}</dt>

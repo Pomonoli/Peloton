@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
 	import SegmentRivalries from '#lib/components/SegmentRivalries.svelte';
@@ -12,11 +13,12 @@
 		formatElevation
 	} from '#lib/format.js';
 
+	let { data } = $props();
+
 	type Segment = {
 		id: string;
 		name: string;
 		source: string;
-		instance_shared: boolean;
 		distance_m: number;
 		activity_type: string;
 		climb_category: string | null;
@@ -45,7 +47,7 @@
 
 	async function loadSegment(id: string, signal: AbortSignal) {
 		try {
-			const res = await fetch(`/api/segments/${id}`, { signal });
+			const res = await fetch(memberURL(`/api/segments/${id}`, data.member), { signal });
 			if (!res.ok) throw new Error();
 			const result = await res.json();
 			if (signal.aborted) return;
@@ -144,9 +146,7 @@
 			</section>
 		{/if}
 
-		{#if segment.instance_shared}
-			<SegmentRivalries id={segment.id} />
-		{/if}
+		<SegmentRivalries id={segment.id} member={data.member} />
 
 		{#if chrono.length > 1}
 			<section>
@@ -185,16 +185,20 @@
 						{/each}
 					</svg>
 					<p class="mt-1 text-center text-[10px] text-quiet">
-						Each point is one effort, oldest → newest. Green = your best.
+						Each point is one effort, oldest → newest. Green marks the personal best.
 					</p>
 				</div>
 			</section>
 		{/if}
 
 		<section>
-			<h2 class="mb-3 text-sm font-medium text-zinc-300">{m.segment_leaderboard_only_yours()}</h2>
+			<h2 class="mb-3 text-sm font-medium text-zinc-300">
+				{data.member ? m.member_segment_efforts() : m.segment_leaderboard_only_yours()}
+			</h2>
 			{#if efforts.length === 0}
-				<p class="text-sm text-quiet">{m.segment_no_personal_efforts()}</p>
+				<p class="text-sm text-quiet">
+					{data.member ? m.member_segment_no_efforts() : m.segment_no_personal_efforts()}
+				</p>
 			{:else}
 				<div class="overflow-x-auto rounded-xl border border-zinc-800">
 					<table class="w-full text-sm">

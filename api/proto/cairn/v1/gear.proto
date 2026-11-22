@@ -82,6 +82,8 @@ message GearDefault {
 
 message ListGearRequest {
   bool include_retired = 1;
+  // Local member username or ID. Empty selects the caller.
+  string member = 2;
 }
 message ListGearResponse {
   repeated Gear gear = 1;
@@ -89,6 +91,8 @@ message ListGearResponse {
 
 message GetGearRequest {
   string id = 1;
+  // Local member username or ID. Empty selects the caller.
+  string member = 2;
 }
 message GetGearResponse {
   Gear gear = 1;

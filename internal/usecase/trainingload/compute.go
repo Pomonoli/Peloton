@@ -91,12 +91,6 @@ type Result struct {
 	EndDay         time.Time
 }
 
-// CTL and ATL time constants.
-const (
-	ctlDays = 42
-	atlDays = 7
-)
-
 // trainingLoadTSSByDay buckets TSS by UTC day. Activities without TSS contribute 0.
 func trainingLoadTSSByDay(activities []domain.Activity) (map[time.Time]float64, int) {
 	tssByDay := make(map[time.Time]float64, 128)
@@ -115,16 +109,11 @@ func trainingLoadTSSByDay(activities []domain.Activity) (map[time.Time]float64, 
 // trainingLoadRows walks the window day-by-day, applying the EWMA recurrence.
 func (uc *ComputeTrainingLoadForUser) trainingLoadRows(userID domain.UserID, startDay, endDay time.Time, tssByDay map[time.Time]float64) ([]domain.Metric, int) {
 	var (
-		ctl, atl float64
-		rows     []domain.Metric
-		now      = uc.now()
-		days     = 0
+		rows []domain.Metric
+		now  = uc.now()
+		days = 0
 	)
-	for d := startDay; !d.After(endDay); d = d.AddDate(0, 0, 1) {
-		tss := tssByDay[d]
-		ctl += (tss - ctl) / ctlDays
-		atl += (tss - atl) / atlDays
-		tsb := ctl - atl
+	for d, load := range dailyLoad(startDay, endDay, tssByDay) {
 
 		// Emit four metric rows per day. The external_id is
 		// deterministic ("computed:YYYY-MM-DD") so re-runs upsert via
@@ -140,14 +129,54 @@ func (uc *ComputeTrainingLoadForUser) trainingLoadRows(userID domain.UserID, sta
 			UpdatedAt:     now,
 		}
 		rows = append(rows,
-			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadTSS, tss),
-			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadCTL, ctl),
-			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadATL, atl),
-			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadTSB, tsb),
+			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadTSS, load.TSS),
+			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadCTL, load.CTL),
+			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadATL, load.ATL),
+			withKeyAndValue(base, uc.newID, domain.MetricKeyTrainingLoadTSB, load.TSB),
 		)
 		days++
 	}
 	return rows, days
+}
+
+// dailyLoad walks the UTC days and applies the same recurrence for persisted and community reads.
+func dailyLoad(start, end time.Time, tssByDay map[time.Time]float64) func(func(time.Time, domain.TrainingLoadDay) bool) {
+	return func(yield func(time.Time, domain.TrainingLoadDay) bool) {
+		var ctl, atl float64
+		for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+			tss := tssByDay[day]
+			ctl += (tss - ctl) / 42
+			atl += (tss - atl) / 7
+			if !yield(day, domain.TrainingLoadDay{TSS: tss, CTL: ctl, ATL: atl, TSB: ctl - atl}) {
+				return
+			}
+		}
+	}
+}
+
+// CommunitySeries reconstructs the curve from the activities this viewer may see.
+func CommunitySeries(ctx context.Context, reader port.ActivityReader, userID domain.UserID, start, end time.Time) ([]domain.TrainingLoadDay, error) {
+	startDay, endDay := truncateUTCDay(start), truncateUTCDay(end.Add(-time.Nanosecond))
+	if start.After(startDay) {
+		startDay = startDay.AddDate(0, 0, 1)
+	}
+	warmup := startDay.AddDate(0, 0, -180)
+	activities, err := reader.ListActivitiesForUser(ctx, userID, warmup, endDay.AddDate(0, 0, 1).Add(-time.Nanosecond))
+	if err != nil {
+		return nil, err
+	}
+	tss, used := trainingLoadTSSByDay(activities)
+	if used == 0 {
+		return nil, nil
+	}
+	var days []domain.TrainingLoadDay
+	for day, load := range dailyLoad(warmup, endDay, tss) {
+		if !day.Before(startDay) {
+			days = append(days, domain.TrainingLoadDay{Date: day.Format("2006-01-02"), CTL: domain.Round1(load.CTL),
+				ATL: domain.Round1(load.ATL), TSB: domain.Round1(load.TSB), TSS: domain.Round1(load.TSS)})
+		}
+	}
+	return days, nil
 }
 
 // Execute runs the compute. Activities are loaded fresh each call; the

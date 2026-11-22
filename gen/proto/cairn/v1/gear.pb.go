@@ -460,8 +460,10 @@ func (x *GearDefault) GetGearId() string {
 type ListGearRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	IncludeRetired bool                   `protobuf:"varint,1,opt,name=include_retired,json=includeRetired,proto3" json:"include_retired,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,2,opt,name=member,proto3" json:"member,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListGearRequest) Reset() {
@@ -499,6 +501,13 @@ func (x *ListGearRequest) GetIncludeRetired() bool {
 		return x.IncludeRetired
 	}
 	return false
+}
+
+func (x *ListGearRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type ListGearResponse struct {
@@ -546,8 +555,10 @@ func (x *ListGearResponse) GetGear() []*Gear {
 }
 
 type GetGearRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,2,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -585,6 +596,13 @@ func (*GetGearRequest) Descriptor() ([]byte, []int) {
 func (x *GetGearRequest) GetId() string {
 	if x != nil {
 		return x.Id
+	}
+	return ""
+}
+
+func (x *GetGearRequest) GetMember() string {
+	if x != nil {
+		return x.Member
 	}
 	return ""
 }
@@ -1694,13 +1712,15 @@ const file_cairn_v1_gear_proto_rawDesc = "" +
 	"\x14_provider_distance_m\"c\n" +
 	"\vGearDefault\x12;\n" +
 	"\ractivity_type\x18\x01 \x01(\x0e2\x16.cairn.v1.ActivityTypeR\factivityType\x12\x17\n" +
-	"\agear_id\x18\x02 \x01(\tR\x06gearId\":\n" +
+	"\agear_id\x18\x02 \x01(\tR\x06gearId\"R\n" +
 	"\x0fListGearRequest\x12'\n" +
-	"\x0finclude_retired\x18\x01 \x01(\bR\x0eincludeRetired\"6\n" +
+	"\x0finclude_retired\x18\x01 \x01(\bR\x0eincludeRetired\x12\x16\n" +
+	"\x06member\x18\x02 \x01(\tR\x06member\"6\n" +
 	"\x10ListGearResponse\x12\"\n" +
-	"\x04gear\x18\x01 \x03(\v2\x0e.cairn.v1.GearR\x04gear\" \n" +
+	"\x04gear\x18\x01 \x03(\v2\x0e.cairn.v1.GearR\x04gear\"8\n" +
 	"\x0eGetGearRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"5\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06member\x18\x02 \x01(\tR\x06member\"5\n" +
 	"\x0fGetGearResponse\x12\"\n" +
 	"\x04gear\x18\x01 \x01(\v2\x0e.cairn.v1.GearR\x04gear\"\xb6\x01\n" +
 	"\x11CreateGearRequest\x12&\n" +

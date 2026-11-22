@@ -151,11 +151,11 @@ func (s *ActivityServer) ListSimilarActivities(ctx context.Context, req *v1.List
 	if err != nil {
 		return nil, err
 	}
-	act, err := s.activityUpdateLoad(ctx, req.GetActivityId())
+	act, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
-	g, err := d.Similar(ctx, act)
+	g, err := d.Similar(viewer.ActivityReadContext(ctx), act)
 	if err != nil {
 		return nil, actionErr(err)
 	}
@@ -192,11 +192,11 @@ func (s *ActivityServer) GetMergedStream(ctx context.Context, req *v1.GetMergedS
 	if err != nil {
 		return nil, err
 	}
-	act, err := s.activityUpdateLoad(ctx, req.GetActivityId())
+	act, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
-	merged, has, err := d.MergedStream(ctx, act)
+	merged, has, err := d.MergedStream(viewer.ActivityReadContext(ctx), act)
 	if err != nil {
 		return nil, actionErr(err)
 	}
@@ -298,11 +298,11 @@ func (s *ActivityServer) GetActivityManageInfo(ctx context.Context, req *v1.GetA
 	if err != nil {
 		return nil, err
 	}
-	act, err := s.activityUpdateLoad(ctx, req.GetActivityId())
+	act, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
-	info, err := d.Manage(ctx, act)
+	info, err := d.Manage(viewer.ActivityReadContext(ctx), act)
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal, fmt.Errorf("manage info: %w", err))
 	}

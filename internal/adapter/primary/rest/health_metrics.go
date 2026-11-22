@@ -24,13 +24,13 @@ func (h *HealthMetricsHandlers) Mount(mux *http.ServeMux) {
 }
 
 func (h *HealthMetricsHandlers) series(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
 	dt := r.URL.Query().Get("type")
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
-	merged, err := h.Health.Series(r.Context(), userID, dt, days)
+	merged, err := h.Health.Series(ctx, userID, dt, days)
 	if err != nil {
 		h.Log.Error("list health samples failed", "user_id", userID, "type", dt, "error", err)
 		writeActionError(w, err, "load failed")

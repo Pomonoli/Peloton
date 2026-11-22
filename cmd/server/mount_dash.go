@@ -9,15 +9,16 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/adapter/primary/rest"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/usecase/activity"
+	"github.com/opencairn-org/cairn-core/internal/usecase/besteffort"
 )
 
 // mountRestDash mounts the owner dashboards, records and the review queue.
 func mountRestDash(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	auth := restAuth(app)
-	(&rest.DashboardHandlers{Auth: auth, Overviews: app.Overviews, Searches: app.Searches, Stats: app.Stats, Log: logger}).Mount(mux)
+	(&rest.DashboardHandlers{Auth: auth, Overviews: app.Overviews, Searches: app.Searches, Stats: app.Stats, PerformanceMaps: app.PerformanceMaps, Log: logger}).Mount(mux)
 	(&rest.ReviewHandlers{Auth: auth, Queue: &activity.ReviewQueue{Activities: app.Activities}, Links: app.SourceLinks, Log: logger}).Mount(mux)
 	if app.BestEfforts != nil {
-		(&rest.RecordHandlers{Auth: auth, Stats: app.Stats, Log: logger}).Mount(mux)
+		(&rest.RecordHandlers{Auth: auth, Stats: app.Stats, Community: &besteffort.CommunityRecords{Reader: app.BestEfforts}, Log: logger}).Mount(mux)
 	}
 	if app.CustomBestEfforts != nil {
 		(&rest.CustomRecordHandlers{

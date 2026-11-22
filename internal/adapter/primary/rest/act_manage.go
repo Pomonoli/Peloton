@@ -19,6 +19,7 @@ import (
 type ActivityManageHandlers struct {
 	Auth     *Auth
 	Actions  *activity.SourceActions
+	Access   *view.ActivityAccess
 	Details  *view.Details
 	Pipeline *pipeline.Pipeline
 	Log      *slog.Logger
@@ -51,11 +52,11 @@ func actOwnedActivity(w http.ResponseWriter, r *http.Request, auth *Auth, action
 }
 
 func (h *ActivityManageHandlers) insights(w http.ResponseWriter, r *http.Request) {
-	act, ok := actOwnedActivity(w, r, h.Auth, h.Actions)
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategorySummary, "bad activity id")
 	if !ok {
 		return
 	}
-	info, err := h.Details.Manage(r.Context(), act)
+	info, err := h.Details.Manage(viewer.ActivityReadContext(r.Context()), act)
 	if err != nil {
 		h.Log.Error("manage: list sources failed", "activity_id", act.ID, "error", err)
 		http.Error(w, "load failed", http.StatusInternalServerError)

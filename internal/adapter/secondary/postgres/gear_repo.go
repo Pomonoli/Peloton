@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
 // GearRepo implements port.GearRepo over gear, gear_external_refs and
@@ -22,21 +23,35 @@ func NewGearRepo(pool *pgxpool.Pool) *GearRepo {
 	return &GearRepo{pool: pool}
 }
 
-const gearColumns = `
+const gearIdentityColumns = `
 	id, user_id, kind, name, COALESCE(brand, ''), COALESCE(model, ''), COALESCE(notes, ''),
-	purchase_date, retired, retired_at,
-	total_distance_m, total_moving_s, activity_count,
-	created_at, updated_at`
+	purchase_date, retired, retired_at, `
+
+func gearReadFrom(ctx context.Context) string {
+	if !port.IsCommunityActivityRead(ctx) {
+		return gearIdentityColumns + "total_distance_m, total_moving_s, activity_count, created_at, updated_at FROM gear"
+	}
+	return gearIdentityColumns + `stats.distance_m, stats.moving_s, stats.n, created_at, updated_at FROM gear
+		CROSS JOIN LATERAL (
+			SELECT COALESCE(sum(a.distance_m), 0) AS distance_m,
+			       COALESCE(sum(a.moving_duration_s), 0) AS moving_s, count(*) AS n
+			FROM activities a WHERE a.user_id = gear.user_id AND a.gear_id = gear.id
+			  AND a.deleted_at IS NULL AND a.hidden_by_admin = false
+		) stats`
+}
 
 func (r *GearRepo) Get(ctx context.Context, id domain.GearID) (domain.Gear, error) {
 	db := dbtx(ctx, r.pool)
-	row := db.QueryRow(ctx, `SELECT `+gearColumns+` FROM gear WHERE id = $1`, id.UUID())
+	row := db.QueryRow(ctx, `SELECT `+gearReadFrom(ctx)+` WHERE id = $1`, id.UUID())
 	g, err := scanGear(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Gear{}, fmt.Errorf("get gear %s: %w", id, domain.ErrNotFound)
 	}
 	if err != nil {
 		return domain.Gear{}, fmt.Errorf("get gear %s: %w", id, err)
+	}
+	if port.IsCommunityActivityRead(ctx) {
+		return g, nil
 	}
 	refs, err := r.listRefs(ctx, []domain.GearID{id})
 	if err != nil {
@@ -49,8 +64,7 @@ func (r *GearRepo) Get(ctx context.Context, id domain.GearID) (domain.Gear, erro
 func (r *GearRepo) ListForUser(ctx context.Context, userID domain.UserID, includeRetired bool) ([]domain.Gear, error) {
 	db := dbtx(ctx, r.pool)
 	rows, err := db.Query(ctx,
-		`SELECT `+gearColumns+` FROM gear
-		  WHERE user_id = $1 AND ($2 OR NOT retired)
+		`SELECT `+gearReadFrom(ctx)+` WHERE user_id = $1 AND ($2 OR NOT retired)
 		  ORDER BY retired, kind, lower(name), id`,
 		userID.UUID(), includeRetired)
 	if err != nil {
@@ -69,6 +83,9 @@ func (r *GearRepo) ListForUser(ctx context.Context, userID domain.UserID, includ
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if port.IsCommunityActivityRead(ctx) {
+		return out, nil
 	}
 	refs, err := r.listRefs(ctx, ids)
 	if err != nil {

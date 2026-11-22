@@ -472,17 +472,17 @@ func extractChannel(samples []domain.StreamSample, metric domain.BestEffortMetri
 func readMetric(s domain.StreamSample, metric domain.BestEffortMetric) (float64, bool) {
 	switch metric {
 	case domain.BestEffortMetricPower:
-		if s.PowerW == nil {
+		if s.PowerW == nil || *s.PowerW < 0 || *s.PowerW > 3000 {
 			return 0, false
 		}
 		return float64(*s.PowerW), true
 	case domain.BestEffortMetricHeartRate:
-		if s.HeartRateBpm == nil {
+		if s.HeartRateBpm == nil || *s.HeartRateBpm < 25 || *s.HeartRateBpm > 250 {
 			return 0, false
 		}
 		return float64(*s.HeartRateBpm), true
 	case domain.BestEffortMetricSpeed:
-		if s.SpeedMps == nil {
+		if s.SpeedMps == nil || !(*s.SpeedMps >= 0 && *s.SpeedMps <= 50) {
 			return 0, false
 		}
 		return *s.SpeedMps, true

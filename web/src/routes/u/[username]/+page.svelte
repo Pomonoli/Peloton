@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { APP_NAME } from '$app/env/public';
 	import { m } from '#lib/paraglide/messages.js';
+	import MemberNav from '#lib/components/MemberNav.svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
 
@@ -147,6 +148,9 @@
 			{/if}
 		</header>
 
+		<div class="mb-6 border-y border-zinc-800 py-2">
+			<MemberNav member={profile.is_self ? null : profile.user} />
+		</div>
 		<h2
 			id="activity-history"
 			class="mb-3 scroll-mt-16 text-sm font-semibold uppercase tracking-wide text-zinc-400"

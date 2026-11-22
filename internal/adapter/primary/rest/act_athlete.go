@@ -31,11 +31,11 @@ func (h *AthleteHandlers) Mount(mux *http.ServeMux) {
 
 // list returns the metric registry (for the UI form) plus the user's entries.
 func (h *AthleteHandlers) list(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
+	ctx, me, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
-	entries, err := h.Profile.Entries(r.Context(), me)
+	entries, err := h.Profile.Entries(ctx, me)
 	if err != nil {
 		http.Error(w, "load failed", http.StatusInternalServerError)
 		return

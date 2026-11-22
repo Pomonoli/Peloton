@@ -2,7 +2,6 @@ package segmentview
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -72,17 +71,17 @@ func TestSegmentsEffortsAndLeaderboardScope(t *testing.T) {
 	}
 	s := NewSegments(f)
 
-	// Private: efforts are pinned to the viewer and the board is just them.
-	if got, err := s.Efforts(t.Context(), viewer, segID, domain.SegmentEffortQuery{}); err != nil || f.gotQ.UserID == nil || *f.gotQ.UserID != viewer || len(got) != 1 {
-		t.Fatalf("private efforts: %v %+v %d", err, f.gotQ, len(got))
+	// Community reads include efforts on a legacy private segment.
+	got, err := s.Efforts(t.Context(), viewer, segID, domain.SegmentEffortQuery{UserID: &other})
+	if err != nil || len(got) != 4 || f.gotQ.UserID == nil || *f.gotQ.UserID != other {
+		t.Fatalf("member efforts: %v %+v %d", err, f.gotQ, len(got))
 	}
 	entries, mine, err := s.Leaderboard(t.Context(), viewer, segID, domain.LeaderboardQuery{})
-	if err != nil || len(entries) != 1 || entries[0].Rank != 1 || entries[0].UserID != viewer || mine == nil {
-		t.Fatalf("private board: %v %+v", err, entries)
+	if err != nil || len(entries) != 3 || entries[0].UserID != other || mine == nil || mine.Rank != 3 {
+		t.Fatalf("community board: %v %+v %+v", err, entries, mine)
 	}
-	// Instance: everyone's efforts the viewer may see, ranked per athlete.
 	f.seg.Scope = domain.SegmentScopeInstance
-	got, err := s.Efforts(t.Context(), viewer, segID, domain.SegmentEffortQuery{Limit: 5000})
+	got, err = s.Efforts(t.Context(), viewer, segID, domain.SegmentEffortQuery{Limit: 5000})
 	if err != nil || f.gotQ.UserID != nil || len(got) != 7 {
 		t.Fatalf("instance efforts: %v %+v %d", err, f.gotQ, len(got))
 	}
@@ -100,14 +99,10 @@ func TestSegmentsEffortsAndLeaderboardScope(t *testing.T) {
 	if len(entries) != 1 || entries[0].UserID != friend || entries[0].Rank != 2 {
 		t.Fatalf("paged board: %+v", entries)
 	}
-	// A mirror of someone else's account is invisible.
+	// A member can read a segment mirrored from another member’s account.
 	f.seg = domain.Segment{ID: segID, Source: domain.SegmentSourceExternal, ExternalAccountID: &[]domain.ExternalAccountID{domain.ExternalAccountID(uuid.New())}[0]}
-	if _, err := s.Visible(t.Context(), viewer, segID); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("foreign mirror: %v", err)
-	}
-	f.owns = true
 	if _, err := s.Visible(t.Context(), viewer, segID); err != nil {
-		t.Fatalf("own mirror: %v", err)
+		t.Fatalf("foreign mirror: %v", err)
 	}
 	if _, err := s.SearchBBox(t.Context(), viewer, port.BoundingBox{MinLat: 2, MaxLat: 1}, nil, true, 10); err == nil {
 		t.Fatal("inverted bbox must fail")

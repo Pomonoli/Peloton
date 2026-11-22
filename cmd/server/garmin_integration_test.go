@@ -9,13 +9,17 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/domain/capability"
+	"github.com/opencairn-org/cairn-core/internal/domain/health"
 	"github.com/opencairn-org/cairn-core/internal/export"
 	"github.com/opencairn-org/cairn-core/internal/port"
+	"github.com/opencairn-org/cairn-core/internal/usecase/trainingload"
 )
 
 type fixtureGarminAPI struct {
@@ -140,6 +144,12 @@ func TestAPI_GarminConnectHistoryAndSegmentDiscovery(t *testing.T) {
 
 	alice := env.user("garmin-alice", domain.UserRoleUser)
 	bob := env.user("garmin-bob", domain.UserRoleUser)
+	weight := alice.put("/api/athlete/metrics", map[string]any{
+		"key": "weight_kg", "effective_date": "2021-01-01", "value": 73.5,
+	}, http.StatusOK)
+	alice.put("/api/athlete/metrics", map[string]any{
+		"key": "ftp_watts", "effective_date": "2021-01-01", "value": 250,
+	}, http.StatusOK)
 	const path = "/api/connections/garmin"
 	env.anon().do(http.MethodGet, path, nil, http.StatusUnauthorized)
 	alice.do(http.MethodPut, path, map[string]string{"key": "invalid-fixture"}, http.StatusBadRequest)
@@ -256,6 +266,13 @@ func TestAPI_GarminConnectHistoryAndSegmentDiscovery(t *testing.T) {
 		t.Fatalf("manual and Garmin sources did not merge: %v", err)
 	}
 
+	if _, err := env.app.ComputeTrainingLoad.Execute(ctx, trainingload.Input{
+		UserID: alice.userID, Start: newRide.StartTime.AddDate(0, 0, -30), End: now, WarmUpDays: 42,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	verifyGarminCommunityReads(t, env, alice, bob, src, newSource, efforts[0].SegmentID, str(weight, "id"))
+
 	alice.do(http.MethodPost, path+"/sync", map[string]any{}, http.StatusAccepted)
 	runPage()
 	runPage()
@@ -272,5 +289,144 @@ func TestAPI_GarminConnectHistoryAndSegmentDiscovery(t *testing.T) {
 	runPage()
 	if _, err := env.app.Activities.FindOwnedSourceByExternalID(ctx, alice.userID, garminProvider, nil, newRide.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("Garmin sync restored a removed ride: %v", err)
+	}
+}
+
+func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestClient, old, recent domain.ActivitySource, segmentID, metricID string) {
+	t.Helper()
+	activity := "/api/activities/" + old.ActivityID.String()
+	segment := "/api/segments/" + segmentID
+	query := "?member=" + url.QueryEscape(alice.name)
+	const activityRPC = "/cairn.v1.ActivityService/"
+	const gearRPC = "/cairn.v1.GearService/"
+	alice.rpc(activityRPC+"UpdateActivity", map[string]any{
+		"id": old.ActivityID.String(), "field_mask": []string{"privacy"}, "privacy": "PRIVACY_PRIVATE",
+	}, http.StatusOK)
+	bike := alice.post(gearRPC+"CreateGear", map[string]any{"kind": "GEAR_KIND_BIKE", "name": "Garmin Test Bike"}, http.StatusOK)["gear"].(map[string]any)
+	gearID := str(bike, "id")
+	alice.rpc(activityRPC+"UpdateActivity", map[string]any{
+		"id": recent.ActivityID.String(), "field_mask": []string{"gear_id"}, "gear_id": gearID,
+	}, http.StatusOK)
+	if err := env.app.Health.SaveSamples(t.Context(), alice.userID, nil, []health.Sample{{
+		DataType: capability.DataTypeHRV, Timestamp: time.Now().Add(-time.Hour), Value: new(57.5), Unit: "ms", Provider: "garmin",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	requireBody := func(path, want string) []byte {
+		t.Helper()
+		body := bob.do(http.MethodGet, path, nil, http.StatusOK)
+		if !bytes.Contains(body, []byte(want)) {
+			t.Fatalf("%s missing %q: %.600s", path, want, body)
+		}
+		return body
+	}
+	for _, req := range []struct{ path, want string }{
+		{"/api/members/" + alice.name, alice.userID.String()},
+		{"/api/profiles/" + alice.name, old.ActivityID.String()},
+		{"/api/overview" + query, recent.ActivityID.String()},
+		{"/api/activities/feed" + query, old.ActivityID.String()},
+		{"/api/stats" + query, `"year":2022`},
+		{"/api/records" + query, `"achieved_value":225`},
+		{"/api/best-efforts/history" + query + "&type=ride&metric=power&window_kind=duration&window_value=300", old.ActivityID.String()},
+		{"/api/analysis" + query + "&days=30", `"ctl":[`},
+		{"/api/activities/heatmap" + query, old.ActivityID.String()},
+		{"/api/athlete/metrics" + query, metricID},
+		{"/api/health" + query + "&type=HRV", `"value":57.5`},
+		{"/api/segments" + query, segmentID},
+		{"/api/segments/catalog" + query + "&mine=true", segmentID},
+		{segment + query, old.ActivityID.String()},
+		{segment + "/efforts?user_id=" + alice.userID.String(), old.ActivityID.String()},
+		{segment + "/leaderboard" + query, `"my_rank":`},
+		{activity + "/segment-efforts", segmentID},
+		{activity + "/merged-stream", `"heart_rate"`},
+		{activity + "/similar", old.ActivityID.String()},
+		{activity + "/zones", `"power":{`},
+		{activity + "/laps", `"laps":[`},
+		{activity + "/manage", `"provider":"garmin"`},
+		{activity + "/power-inputs", `"weight_kg":73.5`},
+		{activity + "/export/options", `"gps":true`},
+		{activity + "/export.gpx", "<trkpt"},
+	} {
+		requireBody(req.path, req.want)
+		env.anon().do(http.MethodGet, req.path, nil, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound)
+	}
+	performance := readPerformanceMap(t, bob, "level=2&member="+alice.name)
+	if performance.WithTrack < 2 || !slices.ContainsFunc(performance.GeoJSON.Features, func(row struct{ Properties performanceProperties }) bool {
+		return row.Properties.Power != nil && *row.Properties.Power == 225
+	}) {
+		t.Fatalf("community performance map did not include recorded Garmin watts: %d tracks", performance.WithTrack)
+	}
+	garminPower := readRecordBoard(t, bob, "/api/records/leaderboards/ride/power/duration/300")
+	if !slices.ContainsFunc(garminPower, func(row rankedRecord) bool {
+		return row.Result != nil && row.Result.Username == alice.name && row.Result.AchievedValue == 225
+	}) {
+		t.Fatal("community power board omitted the Garmin recording")
+	}
+
+	bob.do(http.MethodGet, activity+"/map.png", nil, http.StatusOK)
+	env.anon().do(http.MethodGet, activity+"/map.png", nil, http.StatusUnauthorized, http.StatusNotFound)
+	if payload := bob.do(http.MethodGet, "/api/activities/feed?member="+bob.name, nil, http.StatusOK); bytes.Contains(payload, []byte(old.ActivityID.String())) {
+		t.Fatal("switching to Bob still returned Alice's activity")
+	}
+	bob.do(http.MethodGet, "/api/stats?member=unknown-test-rider", nil, http.StatusNotFound)
+	aid := old.ActivityID.String()
+	getActivity := bob.post("/cairn.v1.ActivityService/GetActivity", map[string]any{"id": aid}, http.StatusOK)
+	row := getActivity["activity"].(map[string]any)
+	sources := row["sources"].([]any)
+	source := sources[0].(map[string]any)
+	if row["userId"] != alice.userID.String() || source["provider"] != "garmin" ||
+		source["externalAccountId"] != nil || source["rawBlobId"] != nil || source["externalId"] != nil {
+		t.Fatalf("incorrect activity or unredacted source: %+v", row)
+	}
+	env.anon().rpc("/cairn.v1.ActivityService/GetActivity", map[string]any{"id": aid}, http.StatusUnauthorized)
+	bob.rpc("/cairn.v1.ActivityService/GetActivityStream", map[string]any{"activitySourceId": old.ID.String()}, http.StatusOK)
+	bob.rpc("/cairn.v1.ActivityService/ListBestEfforts", map[string]any{"activityId": aid}, http.StatusOK)
+	bob.rpc("/cairn.v1.ActivityService/ListSimilarActivities", map[string]any{"activityId": aid}, http.StatusOK)
+	bob.rpc("/cairn.v1.ActivityService/GetMergedStream", map[string]any{"activityId": aid}, http.StatusOK)
+	bob.rpc("/cairn.v1.StatsService/GetStats", map[string]any{"member": alice.name}, http.StatusOK)
+	bob.rpc("/cairn.v1.StatsService/GetHeatmap", map[string]any{"member": alice.name}, http.StatusOK)
+	gear := bob.post(gearRPC+"ListGear", map[string]any{"member": alice.name}, http.StatusOK)["gear"].([]any)
+	if len(gear) != 1 || gear[0].(map[string]any)["id"] != gearID {
+		t.Fatalf("wrong member gear: %v", gear)
+	}
+	bob.rpc(gearRPC+"DeleteGear", map[string]any{"id": gearID}, http.StatusNotFound, http.StatusForbidden)
+	bob.rpc(gearRPC+"GetGear", map[string]any{"id": gearID, "member": alice.name}, http.StatusOK)
+	bob.rpc("/cairn.v1.ActivityService/UpdateActivity", map[string]any{
+		"id": aid, "field_mask": []string{"title"}, "title": "unauthorized change",
+	}, http.StatusNotFound, http.StatusForbidden)
+	bob.rpc("/cairn.v1.ActivityService/DeleteActivity", map[string]any{"id": aid}, http.StatusNotFound, http.StatusForbidden)
+	bob.do(http.MethodPost, activity+"/recompute", nil, http.StatusNotFound)
+	bob.do(http.MethodPost, activity+"/rescan-segments", nil, http.StatusNotFound)
+	bob.do(http.MethodGet, activity+"/sources/"+old.ID.String()+"/parsed", nil, http.StatusNotFound)
+	bob.do(http.MethodDelete, "/api/athlete/metrics/"+metricID, nil, http.StatusOK)
+	requireBody("/api/athlete/metrics"+query, metricID)
+	requireBody("/api/activities/feed"+query, "Garmin historical ride")
+	connection := requireBody("/api/connections/garmin"+query, `"connected":false`)
+	if bytes.Contains(connection, []byte("fixture-alice")) {
+		t.Fatal("Garmin credentials leaked through the member selector")
+	}
+
+	analysis := func(c *itestClient, path string) float64 {
+		t.Helper()
+		var data struct{ TSS []float64 }
+		if err := json.Unmarshal(c.do(http.MethodGet, path, nil, http.StatusOK), &data); err != nil {
+			t.Fatal(err)
+		}
+		var peak float64
+		for _, v := range data.TSS {
+			peak = max(peak, v)
+		}
+		return peak
+	}
+	if peak := analysis(bob, "/api/analysis"+query+"&days=30"); peak <= 0 {
+		t.Fatal("the recent Garmin ride did not contribute to Alice's visible training load")
+	}
+	admin := env.user("garmin-admin", domain.UserRoleAdmin)
+	admin.post("/api/admin/activities/"+recent.ActivityID.String()+"/hide", map[string]any{"hidden": true}, http.StatusOK)
+	if analysis(bob, "/api/analysis"+query+"&days=30") != 0 || analysis(alice, "/api/analysis?days=30") <= 0 {
+		t.Fatal("administratively hidden ride contributed to the member's training load")
+	}
+	if body := bob.do(http.MethodGet, "/api/activities/feed"+query, nil, http.StatusOK); bytes.Contains(body, []byte(recent.ActivityID.String())) {
+		t.Fatal("administratively hidden ride appeared on the member's activity list")
 	}
 }

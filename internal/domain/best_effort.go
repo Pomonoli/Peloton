@@ -106,3 +106,34 @@ const (
 	BestEffortWindowDistance BestEffortWindowKind = "distance"
 	BestEffortWindowDuration BestEffortWindowKind = "duration"
 )
+
+// RecordBucket identifies a comparable personal-best category.
+type RecordBucket struct {
+	ActivityType ActivityType
+	Metric       BestEffortMetric
+	WindowKind   BestEffortWindowKind
+	WindowValue  int
+}
+
+func (b RecordBucket) Valid() bool {
+	if !b.ActivityType.Valid() || b.WindowValue <= 0 || b.WindowValue > 2147483647 {
+		return false
+	}
+	if b.Metric == BestEffortMetricPace {
+		return b.WindowKind == BestEffortWindowDistance
+	}
+	return b.WindowKind == BestEffortWindowDuration && BestEffortHistoryMetrics[string(b.Metric)]
+}
+
+// CommunityRecord is one ranked member result and the size of its category.
+type CommunityRecord struct {
+	Bucket        RecordBucket
+	Rank          int
+	Members       int
+	MemberID      UserID
+	Username      string
+	DisplayName   string
+	ActivityID    ActivityID
+	AchievedValue float64
+	Timestamp     time.Time
+}

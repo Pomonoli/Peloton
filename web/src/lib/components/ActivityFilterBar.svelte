@@ -18,8 +18,14 @@
 	let {
 		filter,
 		facets,
-		showSort = true
-	}: { filter: ActivityFilter; facets: ActivityFacets | null; showSort?: boolean } = $props();
+		showSort = true,
+		member
+	}: {
+		filter: ActivityFilter;
+		facets: ActivityFacets | null;
+		showSort?: boolean;
+		member?: string | undefined;
+	} = $props();
 
 	// Another filter can shrink a facet row mid-interaction. Keep a row visible
 	// once it has appeared, or the bar jumps around while filtering.
@@ -30,7 +36,9 @@
 	let gear = $state<GearView[]>([]);
 	onMount(async () => {
 		try {
-			gear = (await clients.gear.listGear({ includeRetired: true })).gear.map(gearToView);
+			gear = (
+				await clients.gear.listGear({ includeRetired: true, ...(member ? { member } : {}) })
+			).gear.map(gearToView);
 		} catch {
 			/* filter bar works without gear */
 		}

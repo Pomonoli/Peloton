@@ -14,6 +14,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	segmentuc "github.com/opencairn-org/cairn-core/internal/usecase/segment"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segmentview"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // SegmentServer implements cairnv1connect.SegmentServiceHandler: the
@@ -26,6 +27,7 @@ type SegmentServer struct {
 	// (optional) starts the background rematch and returns its job id.
 	Authoring *segmentuc.Authoring
 	Backfill  func(userID domain.UserID, id domain.SegmentID, from, to time.Time) string
+	Members   *view.Members
 }
 
 var _ cairnv1connect.SegmentServiceHandler = (*SegmentServer)(nil)
@@ -51,7 +53,7 @@ func parseSegmentID(raw string) (domain.SegmentID, error) {
 }
 
 func (s *SegmentServer) ListMySegments(ctx context.Context, req *v1.ListMySegmentsRequest) (*v1.ListMySegmentsResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +92,7 @@ func (s *SegmentServer) ListMySegments(ctx context.Context, req *v1.ListMySegmen
 // GetSegment returns a segment the caller may see (has efforts on, or owns)
 // with their own efforts as top_efforts when asked.
 func (s *SegmentServer) GetSegment(ctx context.Context, req *v1.GetSegmentRequest) (*v1.GetSegmentResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +118,7 @@ func (s *SegmentServer) GetSegment(ctx context.Context, req *v1.GetSegmentReques
 }
 
 func (s *SegmentServer) ListMySegmentEfforts(ctx context.Context, req *v1.ListMySegmentEffortsRequest) (*v1.ListMySegmentEffortsResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}

@@ -16,6 +16,7 @@ import (
 	connectadapter "github.com/opencairn-org/cairn-core/internal/adapter/primary/connect"
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // mountConnectRPC registers every cairn.v1.* Connect-RPC service the
@@ -37,7 +38,9 @@ func mountConnectRPC(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	activitySvc.Details = app.Details
 	activitySvc.MapETag = mapImageETag
 	cairnv1connect.RegisterActivityServiceHandler(server, activitySvc)
-	cairnv1connect.RegisterGearServiceHandler(server, connectadapter.NewGearServer(app.Gear))
+	gearSvc := connectadapter.NewGearServer(app.Gear)
+	gearSvc.Members = communityMembers(app)
+	cairnv1connect.RegisterGearServiceHandler(server, gearSvc)
 	notifSvc := connectadapter.NewNotificationServer(app.Notifications)
 	notifSvc.Hub = app.NotificationHub
 	notifSvc.Preferences = app.NotificationPreferences
@@ -167,9 +170,11 @@ func newAuthServer(app *App, logger *slog.Logger) *connectadapter.AuthServer {
 func registerReadServices(server *connectrpc.Server, app *App, logger *slog.Logger) {
 	statsSvc := connectadapter.NewStatsServer(app.Overviews, app.Content, app.Gear, mapImageETag)
 	statsSvc.Stats = app.Stats
+	statsSvc.Members = communityMembers(app)
 	cairnv1connect.RegisterStatsServiceHandler(server, statsSvc)
 	segmentSvc := connectadapter.NewSegmentServer(app.SegmentViews)
 	segmentSvc.Authoring = app.SegmentAuthoring
+	segmentSvc.Members = communityMembers(app)
 	segmentSvc.Backfill = func(userID domain.UserID, id domain.SegmentID, from, to time.Time) string {
 		return backfillSegment(app, logger, userID, id, from, to)
 	}
@@ -182,7 +187,9 @@ func registerReadServices(server *connectrpc.Server, app *App, logger *slog.Logg
 	if app.UserSettings != nil {
 		settings = app.UserSettings
 	}
-	cairnv1connect.RegisterMetricsServiceHandler(server, connectadapter.NewMetricsServer(app.MetricStore, app.HealthViews, athlete, settings))
+	metricsSvc := connectadapter.NewMetricsServer(app.MetricStore, app.HealthViews, athlete, settings)
+	metricsSvc.Members = communityMembers(app)
+	cairnv1connect.RegisterMetricsServiceHandler(server, metricsSvc)
 	cairnv1connect.RegisterSettingsServiceHandler(server, connectadapter.NewSettingsServer(settings))
 }
 
@@ -192,6 +199,7 @@ func registerReadServices(server *connectrpc.Server, app *App, logger *slog.Logg
 func newActivityServer(app *App, logger *slog.Logger) *connectadapter.ActivityServer {
 	activitySvc := connectadapter.NewActivityServer(app.Activities, app.Streams, app.BestEfforts, app.RecomputeActivity, app.Gear)
 	activitySvc.Editor = app.ActivityEditor
+	activitySvc.Members = communityMembers(app)
 	activitySvc.SourceActions = app.SourceActions
 	activitySvc.SourceLinks = app.SourceLinks
 	activitySvc.Events = app.ActivityEvents
@@ -238,4 +246,11 @@ func newAdminServer(app *App, logger *slog.Logger) *connectadapter.AdminServer {
 		adminSvc.Health = app.SystemHealth
 	}
 	return adminSvc
+}
+
+func communityMembers(app *App) *view.Members {
+	if app.Users == nil {
+		return nil
+	}
+	return &view.Members{Users: app.Users}
 }

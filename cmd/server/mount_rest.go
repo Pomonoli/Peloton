@@ -8,7 +8,9 @@ import (
 )
 
 // restAuth is the REST adapter's view of the credential resolver.
-func restAuth(app *App) *rest.Auth { return &rest.Auth{Callers: app.Callers} }
+func restAuth(app *App) *rest.Auth {
+	return &rest.Auth{Callers: app.Callers, Members: communityMembers(app)}
+}
 
 func mountRestShare(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	if app.ShareLinks == nil {

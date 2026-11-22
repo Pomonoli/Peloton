@@ -1,28 +1,24 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { APP_NAME } from '$app/env/public';
+	import { page } from '$app/state';
+	import { m } from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
+	import RecordLeaderboards from '#lib/components/RecordLeaderboards.svelte';
+	import { recordMetric, recordValue, recordWindow, type PersonalRecord } from '#lib/records.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
-	import { formatSpeed, formatPower, formatHeartRate, formatDateOnly } from '#lib/format.js';
+	import { formatDateOnly } from '#lib/format.js';
 
-	// Cross-provider personal records (brief §11): the all-time best per
-	// (activity type, metric, window) across every activity + provider.
-	type Record = {
-		activity_type: string;
-		metric: string;
-		window_kind: string;
-		window_value: number;
-		achieved_value: number;
-		activity_id: string;
-		timestamp: string;
-	};
+	let { data } = $props();
 
-	let records = $state<Record[]>([]);
+	const boards = $derived(page.url.searchParams.get('tab') === 'leaderboards');
+	let records = $state<PersonalRecord[]>([]);
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
 
 	onMount(async () => {
 		try {
-			const res = await fetch('/api/records');
+			const res = await fetch(memberURL('/api/records', data.member));
 			if (!res.ok) throw new Error(await res.text());
 			const b = await res.json();
 			records = b.records ?? [];
@@ -36,7 +32,7 @@
 	const TYPE_ORDER = ['ride', 'run', 'swim', 'walk', 'hike', 'workout'];
 	let byType = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt inside $derived, never mutated after
-		const m = new Map<string, Record[]>();
+		const m = new Map<string, PersonalRecord[]>();
 		for (const r of records) {
 			if (!m.has(r.activity_type)) m.set(r.activity_type, []);
 			m.get(r.activity_type)!.push(r);
@@ -55,75 +51,44 @@
 		const i = TYPE_ORDER.indexOf(t);
 		return i === -1 ? 999 : i;
 	}
-
-	function windowLabel(kind: string, value: number): string {
-		if (kind === 'distance') {
-			if (value >= 1000)
-				return value % 1000 === 0 ? `${value / 1000} km` : `${(value / 1000).toFixed(2)} km`;
-			return `${value} m`;
-		}
-		// duration (seconds)
-		if (value >= 3600)
-			return value % 3600 === 0 ? `${value / 3600} h` : `${(value / 3600).toFixed(1)} h`;
-		if (value >= 60)
-			return value % 60 === 0 ? `${value / 60} min` : `${Math.round(value / 60)} min`;
-		return `${value} s`;
-	}
-
-	function metricLabel(metric: string): string {
-		switch (metric) {
-			case 'pace':
-				return 'Fastest';
-			case 'speed':
-				return 'Top speed';
-			case 'power':
-				return 'Best power';
-			case 'heart_rate':
-				return 'Peak HR';
-			case 'vam':
-				return 'Best VAM';
-			default:
-				return metric;
-		}
-	}
-
-	function formatValue(metric: string, v: number): string {
-		switch (metric) {
-			case 'pace': {
-				// seconds per km → mm:ss /km
-				const s = Math.round(v);
-				return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} /km`;
-			}
-			case 'speed':
-				return formatSpeed(v);
-			case 'power':
-				return formatPower(v);
-			case 'heart_rate':
-				return formatHeartRate(v);
-			case 'vam':
-				return `${Math.round(v)} m/h`;
-			default:
-				return String(Math.round(v));
-		}
-	}
 </script>
 
 <svelte:head><title>Records · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-4xl px-4 py-6">
-	<h1 class="mb-1 text-xl font-semibold text-zinc-100">Personal records</h1>
-	<p class="mb-6 text-sm text-zinc-500">
-		Your all-time bests across every activity and every connected provider — a unified view no
-		single provider can produce.
-	</p>
-
-	{#if !loaded}
+	<h1 class="mb-3 text-2xl font-semibold text-zinc-100">{m.member_records()}</h1>
+	<nav
+		class="mb-5 inline-flex gap-1 rounded-lg border border-zinc-800 bg-panel p-1"
+		aria-label={m.member_records()}
+	>
+		<a
+			href={memberURL('/records', data.member)}
+			aria-current={!boards ? 'page' : undefined}
+			class="rounded px-3 py-2 text-sm"
+			class:bg-accent-500={!boards}
+			class:text-on-accent={!boards}
+		>
+			{data.member ? m.record_member_records() : m.record_my_records()}
+		</a>
+		<a
+			href={memberURL('/records?tab=leaderboards', data.member)}
+			aria-current={boards ? 'page' : undefined}
+			class="rounded px-3 py-2 text-sm"
+			class:bg-accent-500={boards}
+			class:text-on-accent={boards}
+		>
+			{m.record_leaderboards()}
+		</a>
+	</nav>
+	{#if boards}
+		<RecordLeaderboards member={data.member} />
+	{:else if !loaded}
 		<p class="text-sm text-quiet">Loading…</p>
 	{:else if error}
 		<p class="text-sm text-red-400">{error}</p>
 	{:else if records.length === 0}
 		<p class="text-sm text-zinc-500">
-			No records yet — they appear once you've imported activities with power, pace, or heart-rate
+			No records yet. Records appear after importing activities with power, pace, or heart-rate
 			data.
 		</p>
 	{:else}
@@ -143,10 +108,10 @@
 								class="rounded-lg border border-zinc-800 bg-panel p-3 hover:border-accent-600"
 							>
 								<div class="text-xs text-zinc-500">
-									{metricLabel(r.metric)} · {windowLabel(r.window_kind, r.window_value)}
+									{recordMetric(r.metric, false)} · {recordWindow(r.window_kind, r.window_value)}
 								</div>
 								<div class="mt-0.5 text-lg font-semibold text-zinc-100">
-									{formatValue(r.metric, r.achieved_value)}
+									{recordValue(r.metric, r.achieved_value)}
 								</div>
 								<div class="mt-0.5 text-xs text-quiet">{formatDateOnly(r.timestamp)}</div>
 							</a>

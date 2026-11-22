@@ -10,6 +10,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/usecase/instance"
 	metricsuc "github.com/opencairn-org/cairn-core/internal/usecase/metrics"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // MetricHandlers are the REST twins of the MetricsService store RPCs.
@@ -22,8 +23,9 @@ import (
 //	POST   /api/metrics/bulk       { metrics: [...], continue_on_error? }
 //	DELETE /api/metrics/{id}
 type MetricHandlers struct {
-	Auth  *Auth
-	Store *metricsuc.Store
+	Auth   *Auth
+	Store  *metricsuc.Store
+	Access *view.ActivityAccess
 	// Policies adds the merge policies to /context (nil → omitted).
 	Policies *instance.MergePolicies
 }
@@ -31,6 +33,9 @@ type MetricHandlers struct {
 // Mount registers the routes.
 func (h *MetricHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/metrics", h.list)
+	if h.Access != nil {
+		mux.HandleFunc("GET /api/activities/{id}/power-inputs", h.powerInputs)
+	}
 	mux.HandleFunc("GET /api/metrics/latest", h.latest)
 	mux.HandleFunc("GET /api/metrics/series", h.series)
 	mux.HandleFunc("GET /api/metrics/context", h.context)
@@ -330,4 +335,17 @@ func actMetricJSON(m domain.Metric) map[string]any {
 		out["updated_at"] = m.UpdatedAt.UTC().Format(time.RFC3339)
 	}
 	return out
+}
+
+func (h *MetricHandlers) powerInputs(w http.ResponseWriter, r *http.Request) {
+	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryPower, "bad activity id")
+	if !ok {
+		return
+	}
+	metrics, err := h.Store.Context(r.Context(), act.UserID, &act.StartTime)
+	if err != nil {
+		writeActionError(w, err, "Unable to load power inputs")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"weight_kg": metrics["weight_kg"].ValueNumeric})
 }

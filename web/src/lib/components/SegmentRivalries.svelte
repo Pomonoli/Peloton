@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { formatDateOnly, intlLocale, formatSpeedKmh } from '#lib/format.js';
+	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
 		alignEffortHistory,
@@ -10,7 +11,7 @@
 	} from '#lib/segment-rivalries.js';
 	import StreamChart from './StreamChart.svelte';
 
-	let { id }: { id: string } = $props();
+	let { id, member }: { id: string; member: MemberView | null } = $props();
 
 	interface Entry {
 		rank: number;
@@ -67,15 +68,26 @@
 		const params = new SvelteURLSearchParams({ limit: String(pageSize), offset: String(offset) });
 		if (cutoff) params.set('from', cutoff);
 		try {
-			const response = await fetch(`/api/segments/${segmentId}/leaderboard?${params}`, {
-				signal: request.signal
-			});
+			const response = await fetch(
+				memberURL(`/api/segments/${segmentId}/leaderboard?${params}`, member),
+				{
+					signal: request.signal
+				}
+			);
 			if (!response.ok) throw new Error();
 			const { entries }: { entries: Entry[] } = await response.json();
 			if (request.signal.aborted) return;
 			board = offset ? [...board, ...entries] : entries;
 			more = entries.length === pageSize;
-			if (!offset) selected = entries.slice(0, 2).map((entry) => entry.user_id);
+			if (!offset) {
+				const contenders = entries.filter((entry) => entry.user_id !== member?.id);
+				selected = member
+					? [member.id, contenders[0]?.user_id].filter(
+							(id): id is string => !!id && entries.some((entry) => entry.user_id === id)
+						)
+					: entries.slice(0, 2).map((entry) => entry.user_id);
+				if (selected.length === 0) selected = entries.slice(0, 2).map((entry) => entry.user_id);
+			}
 		} catch {
 			if (!request.signal.aborted) boardError = true;
 		} finally {

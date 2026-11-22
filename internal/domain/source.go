@@ -107,6 +107,8 @@ const (
 // ---------------------------------------------------------------------------
 
 type ActivitySourcePayload struct {
+	// PowerRecorded is the source’s attestation. Nil denotes unspecified provenance.
+	PowerRecorded *bool
 	// Classification — present in almost every source.
 	Type          ActivityType
 	Discipline    Discipline

@@ -13,10 +13,11 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 	gearuc "github.com/opencairn-org/cairn-core/internal/usecase/gear"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // StatsServer implements cairnv1connect.StatsServiceHandler: aggregates over
-// the caller's own activities.
+// the selected member's activities.
 type StatsServer struct {
 	cairnv1connect.UnimplementedStatsServiceHandler
 
@@ -25,6 +26,7 @@ type StatsServer struct {
 	Content   port.ContentSigner
 	Gear      *gearuc.Service
 	MapETag   func(domain.Activity) string
+	Members   *view.Members
 }
 
 var _ cairnv1connect.StatsServiceHandler = (*StatsServer)(nil)
@@ -34,8 +36,8 @@ func NewStatsServer(overviews *dashboard.Overviews, content port.ContentSigner, 
 	return &StatsServer{Overviews: overviews, Content: content, Gear: gear, MapETag: mapETag}
 }
 
-func (s *StatsServer) GetOverview(ctx context.Context, _ *v1.GetOverviewRequest) (*v1.GetOverviewResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+func (s *StatsServer) GetOverview(ctx context.Context, req *v1.GetOverviewRequest) (*v1.GetOverviewResponse, error) {
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +59,7 @@ func (s *StatsServer) GetOverview(ctx context.Context, _ *v1.GetOverviewRequest)
 	}
 	names := gearNamesOf(ctx, s.Gear, ov.Recent...)
 	for _, a := range ov.Recent {
-		out.Recent = append(out.Recent, decorateActivity(ctx, activityToProto(a, nil), a, names, s.Content, s.MapETag))
+		out.Recent = append(out.Recent, decorateActivity(ctx, activityReadToProto(a, nil, !port.IsCommunityActivityRead(ctx)), a, names, s.Content, s.MapETag))
 	}
 	return out, nil
 }

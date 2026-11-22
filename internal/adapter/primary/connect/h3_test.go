@@ -151,10 +151,12 @@ func TestSegmentServer(t *testing.T) {
 	if err != nil || len(ef.GetEfforts()) != 2 || ef.GetPersonalRecord() == nil || ef.GetPersonalRecord().GetElapsed().GetSeconds() != 300 {
 		t.Fatalf("efforts %v %v", ef, err)
 	}
-	// A stranger with no efforts cannot see the segment.
+	// A member with no efforts can see the segment.
 	f.efforts = nil
-	_, err = s.GetSegment(ctx, &v1.GetSegmentRequest{Id: segID.String()})
-	wantCode(t, err, connectrpc.CodeNotFound)
+	got, err = s.GetSegment(ctx, &v1.GetSegmentRequest{Id: segID.String()})
+	if err != nil || got.GetSegment().GetName() != "Hill" {
+		t.Fatalf("member without efforts: %v %v", got, err)
+	}
 	_, err = s.GetSegment(ctx, &v1.GetSegmentRequest{Id: "nope"})
 	wantCode(t, err, connectrpc.CodeInvalidArgument)
 }

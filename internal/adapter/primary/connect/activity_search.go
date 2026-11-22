@@ -17,7 +17,7 @@ import (
 
 // SearchActivities is the faceted list (GET /api/activities/feed).
 func (s *ActivityServer) SearchActivities(ctx context.Context, req *v1.SearchActivitiesRequest) (*v1.SearchActivitiesResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +46,8 @@ func (s *ActivityServer) SearchActivities(ctx context.Context, req *v1.SearchAct
 	}
 	names := s.gearNames(ctx, res.Activities...)
 	for _, a := range res.Activities {
-		wire := decorateActivity(ctx, activityToProto(a, nil), a, names, s.Content, s.MapETag)
-		wire.GearUnset = dashboard.GearUnset(a, res.GearPrompt)
+		wire := decorateActivity(ctx, activityReadToProto(a, nil, !port.IsCommunityActivityRead(ctx)), a, names, s.Content, s.MapETag)
+		wire.GearUnset = dashboard.GearUnset(a, res.GearPrompt && !port.IsCommunityActivityRead(ctx))
 		out.Activities = append(out.Activities, wire)
 	}
 	if filter.Offset+len(res.Activities) < res.Matched {

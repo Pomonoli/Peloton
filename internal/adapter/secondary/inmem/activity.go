@@ -2,6 +2,7 @@ package inmem
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -67,24 +68,24 @@ func (r *ActivityRepo) SoftDeleteActivity(_ context.Context, id domain.ActivityI
 	return nil
 }
 
-func (r *ActivityRepo) ActivityTotals(_ context.Context, userID domain.UserID) (port.ActivityTotalsResult, error) {
+func (r *ActivityRepo) ActivityTotals(ctx context.Context, userID domain.UserID) (port.ActivityTotalsResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out port.ActivityTotalsResult
 	for _, a := range r.Activities {
-		if a.UserID == userID && a.DeletedAt == nil {
+		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || !a.HiddenByAdmin) {
 			out.Count++
 		}
 	}
 	return out, nil
 }
 
-func (r *ActivityRepo) ActivityTotalsForRange(_ context.Context, userID domain.UserID, start, end time.Time) (port.ActivityTotalsResult, error) {
+func (r *ActivityRepo) ActivityTotalsForRange(ctx context.Context, userID domain.UserID, start, end time.Time) (port.ActivityTotalsResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out port.ActivityTotalsResult
 	for _, a := range r.Activities {
-		if a.UserID != userID || a.DeletedAt != nil || a.StartTime.Before(start) || !a.StartTime.Before(end) {
+		if a.UserID != userID || a.DeletedAt != nil || (port.IsCommunityActivityRead(ctx) && a.HiddenByAdmin) || a.StartTime.Before(start) || !a.StartTime.Before(end) {
 			continue
 		}
 		out.Count++
@@ -99,12 +100,31 @@ func (r *ActivityRepo) ActivityTotalsForRange(_ context.Context, userID domain.U
 	return out, nil
 }
 
-func (r *ActivityRepo) ListRecentActivitiesForUser(_ context.Context, userID domain.UserID, limit int) ([]domain.Activity, error) {
+func (r *ActivityRepo) ListActivitiesForUser(ctx context.Context, userID domain.UserID, start, end time.Time) ([]domain.Activity, error) {
+	activities := slices.DeleteFunc(r.live(ctx, userID), func(a domain.Activity) bool {
+		return a.StartTime.Before(start) || a.StartTime.After(end)
+	})
+	slices.Reverse(activities)
+	return activities, nil
+}
+
+func (r *ActivityRepo) HasHiddenTrainingStress(_ context.Context, userID domain.UserID, before time.Time) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, a := range r.Activities {
+		if a.UserID == userID && !a.IsDeleted() && a.HiddenByAdmin && a.Summary.TSS != nil && a.StartTime.Before(before) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *ActivityRepo) ListRecentActivitiesForUser(ctx context.Context, userID domain.UserID, limit int) ([]domain.Activity, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []domain.Activity
 	for _, a := range r.Activities {
-		if a.UserID == userID && a.DeletedAt == nil {
+		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || !a.HiddenByAdmin) {
 			out = append(out, a)
 		}
 	}
@@ -329,12 +349,12 @@ func (d *SourceDenylist) IsDenied(_ context.Context, userID domain.UserID, provi
 }
 
 // live returns the user's non-deleted activities, newest first.
-func (r *ActivityRepo) live(userID domain.UserID) []domain.Activity {
+func (r *ActivityRepo) live(ctx context.Context, userID domain.UserID) []domain.Activity {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []domain.Activity
 	for _, a := range r.Activities {
-		if a.UserID == userID && a.DeletedAt == nil {
+		if a.UserID == userID && a.DeletedAt == nil && (!port.IsCommunityActivityRead(ctx) || !a.HiddenByAdmin) {
 			out = append(out, a)
 		}
 	}
@@ -375,8 +395,8 @@ func matchesGear(a domain.Activity, ids []domain.GearID) bool {
 	return false
 }
 
-func (r *ActivityRepo) ActivityFacets(_ context.Context, userID domain.UserID, f port.ActivityListFilter) ([]port.ActivityFacet, []port.ActivityFacet, int, error) {
-	all := r.live(userID)
+func (r *ActivityRepo) ActivityFacets(ctx context.Context, userID domain.UserID, f port.ActivityListFilter) ([]port.ActivityFacet, []port.ActivityFacet, int, error) {
+	all := r.live(ctx, userID)
 	types, discs := map[string]int{}, map[string]int{}
 	for _, a := range all {
 		if matches(a, f, true, false) {
@@ -398,9 +418,9 @@ func facetList(m map[string]int) []port.ActivityFacet {
 	return out
 }
 
-func (r *ActivityRepo) ListActivitiesFiltered(_ context.Context, userID domain.UserID, f port.ActivityListFilter) ([]domain.Activity, int, error) {
+func (r *ActivityRepo) ListActivitiesFiltered(ctx context.Context, userID domain.UserID, f port.ActivityListFilter) ([]domain.Activity, int, error) {
 	var hits []domain.Activity
-	for _, a := range r.live(userID) {
+	for _, a := range r.live(ctx, userID) {
 		if matches(a, f, false, false) {
 			hits = append(hits, a)
 		}
@@ -422,9 +442,9 @@ func (r *ActivityRepo) ListActivitiesFiltered(_ context.Context, userID domain.U
 	return hits, matched, nil
 }
 
-func (r *ActivityRepo) ActivityYearStats(_ context.Context, userID domain.UserID) ([]port.ActivityYearStat, error) {
+func (r *ActivityRepo) ActivityYearStats(ctx context.Context, userID domain.UserID) ([]port.ActivityYearStat, error) {
 	years := map[int]*port.ActivityYearStat{}
-	for _, a := range r.live(userID) {
+	for _, a := range r.live(ctx, userID) {
 		y := a.StartTime.UTC().Year()
 		if years[y] == nil {
 			years[y] = &port.ActivityYearStat{Year: y}

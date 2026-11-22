@@ -47,11 +47,6 @@ func (h *DetailHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/activities/{id}/export/options", h.exportOptions)
 }
 
-// owned resolves the caller's live {id} activity or writes the error.
-func (h *DetailHandlers) owned(w http.ResponseWriter, r *http.Request) (domain.Activity, bool) {
-	return detailOwned(w, r, h.Auth, h.Access, "bad activity id")
-}
-
 // detailOwned resolves the caller's live {id} activity; on failure it has
 // written 401, 400 (badID) or 404.
 func detailOwned(w http.ResponseWriter, r *http.Request, auth *Auth, access *view.ActivityAccess, badID string) (domain.Activity, bool) {
@@ -139,11 +134,11 @@ func detailZoneSummaryJSON(s *domain.ZoneSummary) any {
 }
 
 func (h *DetailHandlers) mergedStream(w http.ResponseWriter, r *http.Request) {
-	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
 	if !ok {
 		return
 	}
-	merged, has, err := h.Details.MergedStream(r.Context(), act)
+	merged, has, err := h.Details.MergedStream(viewer.ActivityReadContext(r.Context()), act)
 	if err != nil {
 		writeActionError(w, err, "load failed")
 		return
@@ -176,11 +171,11 @@ func detailMergedStreamJSON(merged streamalign.MergedStream) map[string]any {
 }
 
 func (h *DetailHandlers) similar(w http.ResponseWriter, r *http.Request) {
-	act, ok := h.owned(w, r)
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
 	if !ok {
 		return
 	}
-	g, err := h.Details.Similar(r.Context(), act)
+	g, err := h.Details.Similar(viewer.ActivityReadContext(r.Context()), act)
 	if err != nil {
 		h.Log.Error("find similar failed", "activity", act.ID, "error", err)
 		writeActionError(w, err, "load failed")
@@ -218,7 +213,7 @@ func (h *DetailHandlers) similar(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DetailHandlers) exportOptions(w http.ResponseWriter, r *http.Request) {
-	act, ok := h.owned(w, r)
+	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
 	if !ok {
 		return
 	}
@@ -233,7 +228,7 @@ func (h *DetailHandlers) exportOptions(w http.ResponseWriter, r *http.Request) {
 // exportFile serves the file; ?exclude=gps,heart_rate,… drops features.
 func (h *DetailHandlers) exportFile(format string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		act, ok := h.owned(w, r)
+		act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
 		if !ok {
 			return
 		}

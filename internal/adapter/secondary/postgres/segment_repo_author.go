@@ -11,18 +11,12 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
-// segmentVisibleSQL is the predicate for "viewer $N may see segment s".
-func segmentVisibleSQL(viewerParam string) string {
-	return `(
-		(s.source = 'native' AND s.scope = 'instance')
-		OR (s.source = 'native' AND s.owner_user_id = ` + viewerParam + `)
-		OR (s.source = 'external' AND s.external_account_id IN (
-			SELECT id FROM external_accounts WHERE user_id = ` + viewerParam + `))
-		OR (s.source = 'strava_catalog' AND EXISTS (
-			SELECT 1 FROM segment_efforts e JOIN activities a ON a.id = e.activity_id
-			WHERE e.segment_id = s.id AND a.hidden_by_admin = false AND ` + catalogEffortSQL + `))
-	)`
-}
+// segmentVisibleSQL includes local and mirrored segments. Catalog definitions
+// become visible when a local activity has a matching effort.
+const segmentVisibleSQL = `(s.source IN ('native', 'external')
+	OR (s.source = 'strava_catalog' AND EXISTS (
+		SELECT 1 FROM segment_efforts e JOIN activities a ON a.id = e.activity_id
+		WHERE e.segment_id = s.id AND a.hidden_by_admin = false AND ` + catalogEffortSQL + `)))`
 
 func (r *SegmentRepo) ViewerOwnsAccount(ctx context.Context, viewer domain.UserID, account domain.ExternalAccountID) (bool, error) {
 	db := dbtx(ctx, r.pool)
@@ -46,7 +40,7 @@ func (r *SegmentRepo) CountEffortsForSegment(ctx context.Context, segmentID doma
 
 func (r *SegmentRepo) ListSegments(ctx context.Context, viewer domain.UserID, f domain.SegmentListFilter) ([]domain.Segment, int, error) {
 	db := dbtx(ctx, r.pool)
-	where := []string{segmentVisibleSQL("$1")}
+	where := []string{segmentVisibleSQL, "$1::uuid IS NOT NULL"}
 	args := []any{viewer.UUID()}
 	add := func(cond string, v any) {
 		args = append(args, v)
@@ -116,7 +110,7 @@ func (r *SegmentRepo) SearchSegmentsInBBox(ctx context.Context, viewer domain.Us
 	if limit <= 0 {
 		limit = 100
 	}
-	visible := segmentVisibleSQL("$1")
+	visible := segmentVisibleSQL
 	if !includeInstance {
 		visible = `((s.source = 'native' AND s.owner_user_id = $1)
 			OR (s.source = 'external' AND s.external_account_id IN (SELECT id FROM external_accounts WHERE user_id = $1)))`
@@ -126,7 +120,7 @@ func (r *SegmentRepo) SearchSegmentsInBBox(ctx context.Context, viewer domain.Us
 		   FROM segments s
 		  WHERE ST_Intersects(s.bbox, ST_GeogFromText($2))
 		    AND (cardinality($3::text[]) = 0 OR s.activity_type = ANY($3))
-		    AND `+visible+`
+		    AND $1::uuid IS NOT NULL AND `+visible+`
 		  ORDER BY s.distance_m DESC
 		  LIMIT $4`,
 		viewer.UUID(), bboxToPolygonWKT(box), stringsOf(types), limit)
@@ -157,7 +151,7 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 		    AND (a.hidden_by_admin = false OR (s.source <> 'strava_catalog' AND e.user_id = $2))
 		    AND ($3::uuid IS NULL OR e.user_id = $3)
 		    AND ($4::timestamptz IS NULL OR e.start_time >= $4)
-		    AND ($5::timestamptz IS NULL OR e.start_time < $5)`
+		    AND ($5::timestamptz IS NULL OR e.start_time < $5)` + communityReadSQL(ctx, "a.")
 	if q.ValidOnly || q.BestPerUser {
 		from += " AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8"
 	}
@@ -187,7 +181,7 @@ const catalogHolderNameSQL = "COALESCE(NULLIF(u.display_name, ''), u.username::t
 var catalogNameEscape = strings.NewReplacer("~", "~~", "%", "~%", "_", "~_")
 
 func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogSegmentQuery) ([]domain.CatalogSegment, error) {
-	args := []any{userIDParam(q.Member), q.Limit, q.Offset}
+	args := []any{userIDParam(q.Member), q.Limit, q.Offset, q.Viewer.UUID()}
 	where := ""
 	if q.Name != "" {
 		args = append(args, "%"+catalogNameEscape.Replace(q.Name)+"%")
@@ -201,35 +195,48 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		WITH eligible AS (
-			SELECT e.id, e.segment_id, e.user_id, e.elapsed_s, e.start_time
+			SELECT e.id, e.segment_id, e.user_id, e.elapsed_s, e.start_time, e.activity_id,
+ e.activity_source_id, a.primary_stream_source_id, src.provider AS source_provider
 			FROM segment_efforts e
 			JOIN activities a ON a.id = e.activity_id
 			JOIN segments s ON s.id = e.segment_id
-			WHERE s.source = 'strava_catalog' AND a.hidden_by_admin = false AND `+catalogEffortSQL+where+`
+ JOIN activity_sources src ON src.id = e.activity_source_id AND src.activity_id = a.id AND src.status <> 'detached'
+			WHERE a.deleted_at IS NULL AND a.hidden_by_admin = false AND a.type = 'ride'
+             AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8 AND `+catalogEffortSQL+where+`
 		), summary AS (
 			SELECT segment_id, count(DISTINCT user_id) AS members
 			FROM eligible
 			GROUP BY segment_id
 			HAVING $1::uuid IS NULL OR bool_or(user_id = $1)
+		), personal_sources AS (
+			SELECT DISTINCT ON (segment_id, activity_id) segment_id, activity_id, count(*) AS attempts
+			FROM eligible WHERE user_id = $4 AND source_provider <> 'derived'
+			GROUP BY segment_id, activity_id, activity_source_id, primary_stream_source_id
+			ORDER BY segment_id, activity_id, count(*) DESC,
+			         (activity_source_id = primary_stream_source_id) DESC NULLS LAST, activity_source_id
+		), personal AS (
+			SELECT segment_id, sum(attempts)::bigint AS attempts
+			FROM personal_sources GROUP BY segment_id
 		), winner AS (
 			SELECT DISTINCT ON (e.segment_id) e.segment_id, e.elapsed_s, e.user_id
 			FROM eligible e JOIN summary ON summary.segment_id = e.segment_id
 			ORDER BY e.segment_id, e.elapsed_s, e.start_time, e.id
 		)
-		SELECT s.id, s.name, s.distance_m, winner.elapsed_s, `+catalogHolderNameSQL+`, summary.members,
+		SELECT s.id, s.name, s.distance_m, winner.elapsed_s, `+catalogHolderNameSQL+`, summary.members, COALESCE(personal.attempts, 0),
 		       ST_X(ST_StartPoint(s.geom::geometry)), ST_Y(ST_StartPoint(s.geom::geometry))`+geometry+`
 		FROM summary
 		JOIN segments s ON s.id = summary.segment_id
 		JOIN winner ON winner.segment_id = s.id
+ LEFT JOIN personal ON personal.segment_id = s.id
 		JOIN users u ON u.id = winner.user_id
-		ORDER BY `+catalogSegmentOrder(q.Sort, q.Descending)+` LIMIT $2 OFFSET $3`, args...)
+		ORDER BY `+catalogSegmentOrder(q.Order)+` LIMIT $2 OFFSET $3`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list catalog segments: %w", err)
 	}
 	return pgCollectRows(rows, func(row rowScanner) (domain.CatalogSegment, error) {
 		var item domain.CatalogSegment
 		var id uuid.UUID
-		dest := []any{&id, &item.Name, &item.DistanceM, &item.BestElapsedS, &item.LocalKOMHolder, &item.MemberCount,
+		dest := []any{&id, &item.Name, &item.DistanceM, &item.BestElapsedS, &item.LocalKOMHolder, &item.MemberCount, &item.MyAttempts,
 			&item.Start.Lon, &item.Start.Lat}
 		if q.Bounds != nil {
 			dest = append(dest, &item.Polyline, &item.PolylinePrecision)
@@ -262,33 +269,37 @@ func catalogViewportSQL(b *domain.CatalogSegmentBounds, args *[]any) string {
 	return " AND (" + intersects(b.MinLon, 180) + " OR " + intersects(-180, b.MaxLon) + ")"
 }
 
-func catalogSegmentOrder(sort domain.CatalogSegmentSort, descending bool) string {
+func catalogSegmentOrder(criteria []domain.CatalogSegmentOrder) string {
 	const nameOrder = "lower(NULLIF(btrim(s.name), ''))"
 	const validDistance = "CASE WHEN s.distance_m > 0 AND s.distance_m < 'Infinity'::float8 THEN s.distance_m END"
-	column := nameOrder
-	switch sort {
-	case domain.CatalogSortDistance:
-		column = validDistance
-	case domain.CatalogSortBestTime:
-		column = "winner.elapsed_s"
-	case domain.CatalogSortAverageSpeed:
-		// Match SegmentAverageSpeedKmh. Eligible times are always positive and finite.
-		column = "(" + validDistance + ") / winner.elapsed_s * 3.6"
-	case domain.CatalogSortLocalKOM:
-		column = "lower(NULLIF(btrim(" + catalogHolderNameSQL + "), ''))"
-	case domain.CatalogSortMembers:
-		column = "summary.members"
+	columns := map[domain.CatalogSegmentSort]string{
+		domain.CatalogSortName:     nameOrder,
+		domain.CatalogSortDistance: validDistance,
+		domain.CatalogSortBestTime: "winner.elapsed_s",
+		// Eligible times are positive and finite.
+		domain.CatalogSortAverageSpeed: "(" + validDistance + ") / winner.elapsed_s * 3.6",
+		domain.CatalogSortLocalKOM:     "lower(NULLIF(btrim(" + catalogHolderNameSQL + "), ''))",
+		domain.CatalogSortMembers:      "summary.members",
+		domain.CatalogSortMyAttempts:   "COALESCE(personal.attempts, 0)",
 	}
-	direction := " ASC"
-	if descending {
-		direction = " DESC"
+	order := make([]string, 0, len(criteria)+2)
+	hasName := false
+	for _, item := range criteria {
+		column, ok := columns[item.Column]
+		if !ok {
+			continue
+		}
+		hasName = hasName || item.Column == domain.CatalogSortName
+		direction := " ASC"
+		if item.Descending {
+			direction = " DESC"
+		}
+		order = append(order, column+direction+" NULLS LAST")
 	}
-	// Use the default name order and a unique ID to keep ties consistent across pages.
-	order := column + direction + " NULLS LAST"
-	if column != nameOrder {
-		order += ", " + nameOrder + " ASC NULLS LAST"
+	if !hasName {
+		order = append(order, nameOrder+" ASC NULLS LAST")
 	}
-	return order + ", s.id"
+	return strings.Join(append(order, "s.id"), ", ")
 }
 
 // multiScanner appends extra destinations to a scan, so a row scanner for a

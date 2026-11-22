@@ -12,15 +12,15 @@
 	let {
 		sourceId,
 		otherSourceIds,
-		startTime,
+		activityId,
 		userId,
 		hoverT,
 		onHover
 	}: {
 		sourceId: string;
 		otherSourceIds: string[];
-		startTime: string;
-		userId: string;
+		activityId: string;
+		userId: string | null;
 		hoverT: number | null;
 		onHover: (t: number | null) => void;
 	} = $props();
@@ -36,12 +36,12 @@
 	let failed = $state(false);
 	let controller: AbortController | undefined;
 	let result = $state<ReturnType<typeof estimatePower>>();
-	const storageKey = $derived(`cairn.estimated-power.${userId}`);
+	const storageKey = $derived(userId ? `cairn.estimated-power.${userId}` : null);
 	const offsets = $derived(track?.map((p) => p.t) ?? []);
 
 	function rememberEquipment() {
 		try {
-			localStorage.setItem(storageKey, JSON.stringify({ equipmentKg, crr, cdaM2 }));
+			if (storageKey) localStorage.setItem(storageKey, JSON.stringify({ equipmentKg, crr, cdaM2 }));
 		} catch {
 			// Calculations work without storage.
 		}
@@ -54,7 +54,7 @@
 		const request = new AbortController();
 		controller = request;
 		try {
-			const settings = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
+			const settings = JSON.parse((storageKey && localStorage.getItem(storageKey)) || '{}');
 			if (typeof settings.equipmentKg === 'number') equipmentKg = settings.equipmentKg;
 			if (typeof settings.crr === 'number') crr = settings.crr;
 			if (typeof settings.cdaM2 === 'number') cdaM2 = settings.cdaM2;
@@ -68,10 +68,8 @@
 				{ activitySourceId: id, maxResolutionHz: 1, channels: channels ?? [] },
 				options
 			);
-		const weight = fetch(`/api/metrics/context?as_of=${encodeURIComponent(startTime)}`, options)
-			.then(async (response) =>
-				response.ok ? (await response.json()).latest_metrics?.weight_kg?.value_numeric : null
-			)
+		const weight = fetch(`/api/activities/${activityId}/power-inputs`, options)
+			.then(async (response) => (response.ok ? (await response.json()).weight_kg : null))
 			.catch(() => null);
 		try {
 			const [primary, ...others] = await Promise.all([

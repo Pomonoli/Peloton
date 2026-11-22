@@ -60,6 +60,7 @@ func mountRestProfiles(mux *http.ServeMux, app *App, auth *rest.Auth, logger *sl
 	privacy.Visibility = visibility
 	h := &rest.ProfileHandlers{Auth: auth, Profiles: app.ProfileViews, Privacy: privacy}
 	h.Mount(mux)
+	auth.MountMembers(mux)
 	if visibility != nil {
 		h.MountVisibility(mux)
 	}

@@ -1,0 +1,70 @@
+<script lang="ts">
+	import { formatDateOnly } from '#lib/format.js';
+	import { memberURL } from '#lib/member.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { recordMetric, recordSport, recordValue, recordWindow } from '#lib/records.js';
+
+	let { data } = $props();
+	const { bucket, records } = $derived(data);
+</script>
+
+<svelte:head><title>{recordMetric(bucket.metric)} · {m.record_leaderboards()}</title></svelte:head>
+
+<section class="space-y-5">
+	<header>
+		<a
+			href={memberURL('/records?tab=leaderboards', data.member)}
+			class="text-sm text-accent-400 hover:underline"
+		>
+			← {m.record_leaderboards()}
+		</a>
+		<h1 class="mt-2 text-2xl font-semibold">
+			{recordMetric(bucket.metric)} · {recordWindow(bucket.window_kind, bucket.window_value)}
+		</h1>
+		<p class="mt-1 text-sm text-quiet">{recordSport(bucket.activity_type)}</p>
+	</header>
+	{#if records.length === 0}
+		<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+			{m.record_no_results()}
+		</p>
+	{:else}
+		<div class="overflow-x-auto rounded-lg border border-zinc-800">
+			<table class="w-full text-left text-sm">
+				<thead class="bg-panel text-xs text-quiet">
+					<tr>
+						<th scope="col" class="px-3 py-2">{m.record_rank()}</th>
+						<th scope="col" class="px-3 py-2">{m.record_rider()}</th>
+						<th scope="col" class="px-3 py-2">{m.record_personal_best()}</th>
+						<th scope="col" class="px-3 py-2">{m.record_date_activity()}</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-zinc-800">
+					{#each records as row (row.result?.username)}
+						{#if row.result}
+							<tr>
+								<td class="px-3 py-3 tabular-nums">{row.result.rank}</td>
+								<td class="px-3 py-3"
+									><a
+										class="text-accent-400 hover:underline"
+										href={`/u/${encodeURIComponent(row.result.username)}`}
+										>{row.result.display_name}</a
+									></td
+								>
+								<td class="px-3 py-3 font-semibold whitespace-nowrap tabular-nums"
+									>{recordValue(row.metric, row.result.achieved_value)}</td
+								>
+								<td class="px-3 py-3"
+									><a
+										class="text-accent-400 hover:underline"
+										href={`/activities/${row.result.activity_id}`}
+										>{formatDateOnly(row.result.timestamp)}</a
+									></td
+								>
+							</tr>
+						{/if}
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
+</section>

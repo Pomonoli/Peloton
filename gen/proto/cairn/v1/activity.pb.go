@@ -2962,8 +2962,10 @@ type ListActivitiesRequest struct {
 	// (cheaper); true is useful for the activity-feed UI which shows source
 	// badges.
 	IncludeSources bool `protobuf:"varint,8,opt,name=include_sources,json=includeSources,proto3" json:"include_sources,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,9,opt,name=member,proto3" json:"member,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListActivitiesRequest) Reset() {
@@ -3050,6 +3052,13 @@ func (x *ListActivitiesRequest) GetIncludeSources() bool {
 		return x.IncludeSources
 	}
 	return false
+}
+
+func (x *ListActivitiesRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 // The activity filter bar, shared by SearchActivities and the heatmap so the
@@ -3326,7 +3335,9 @@ type SearchActivitiesRequest struct {
 	// ACTIVITY_SORT_START_TIME_DESC when unset.
 	Sort ActivitySort `protobuf:"varint,2,opt,name=sort,proto3,enum=cairn.v1.ActivitySort" json:"sort,omitempty"`
 	// limit default 50, max 200.
-	Page          *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	Page *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,4,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3380,6 +3391,13 @@ func (x *SearchActivitiesRequest) GetPage() *PageRequest {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *SearchActivitiesRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type SearchActivitiesResponse struct {
@@ -8067,7 +8085,9 @@ func (x *CreateCustomBestEffortResponse) GetCustomBestEffort() *CustomBestEffort
 }
 
 type ListCustomBestEffortsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,1,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8100,6 +8120,13 @@ func (x *ListCustomBestEffortsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListCustomBestEffortsRequest.ProtoReflect.Descriptor instead.
 func (*ListCustomBestEffortsRequest) Descriptor() ([]byte, []int) {
 	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *ListCustomBestEffortsRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type ListCustomBestEffortsResponse struct {
@@ -8526,7 +8553,7 @@ const file_cairn_v1_activity_proto_rawDesc = "" +
 	"\fwindow_value\x18\x06 \x01(\x05R\vwindowValue\x12\x14\n" +
 	"\x05label\x18\a \x01(\tR\x05label\x129\n" +
 	"\n" +
-	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xe3\x02\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xfb\x02\n" +
 	"\x15ListActivitiesRequest\x122\n" +
 	"\n" +
 	"time_range\x18\x01 \x01(\v2\x13.cairn.v1.TimeRangeR\ttimeRange\x12,\n" +
@@ -8536,7 +8563,8 @@ const file_cairn_v1_activity_proto_rawDesc = "" +
 	"\x04tags\x18\x05 \x03(\tR\x04tags\x12*\n" +
 	"\x04sort\x18\x06 \x01(\x0e2\x16.cairn.v1.ActivitySortR\x04sort\x12)\n" +
 	"\x04page\x18\a \x01(\v2\x15.cairn.v1.PageRequestR\x04page\x12'\n" +
-	"\x0finclude_sources\x18\b \x01(\bR\x0eincludeSources\"\x86\t\n" +
+	"\x0finclude_sources\x18\b \x01(\bR\x0eincludeSources\x12\x16\n" +
+	"\x06member\x18\t \x01(\tR\x06member\"\x86\t\n" +
 	"\x0eActivityFilter\x12,\n" +
 	"\x05types\x18\x01 \x03(\x0e2\x16.cairn.v1.ActivityTypeR\x05types\x12 \n" +
 	"\vdisciplines\x18\x02 \x03(\tR\vdisciplines\x122\n" +
@@ -8582,11 +8610,12 @@ const file_cairn_v1_activity_proto_rawDesc = "" +
 	"\x0eActivityFacets\x12%\n" +
 	"\x05types\x18\x01 \x03(\v2\x0f.cairn.v1.FacetR\x05types\x121\n" +
 	"\vdisciplines\x18\x02 \x03(\v2\x0f.cairn.v1.FacetR\vdisciplines\x12%\n" +
-	"\x05years\x18\x03 \x03(\v2\x0f.cairn.v1.FacetR\x05years\"\xa2\x01\n" +
+	"\x05years\x18\x03 \x03(\v2\x0f.cairn.v1.FacetR\x05years\"\xba\x01\n" +
 	"\x17SearchActivitiesRequest\x120\n" +
 	"\x06filter\x18\x01 \x01(\v2\x18.cairn.v1.ActivityFilterR\x06filter\x12*\n" +
 	"\x04sort\x18\x02 \x01(\x0e2\x16.cairn.v1.ActivitySortR\x04sort\x12)\n" +
-	"\x04page\x18\x03 \x01(\v2\x15.cairn.v1.PageRequestR\x04page\"\xdc\x01\n" +
+	"\x04page\x18\x03 \x01(\v2\x15.cairn.v1.PageRequestR\x04page\x12\x16\n" +
+	"\x06member\x18\x04 \x01(\tR\x06member\"\xdc\x01\n" +
 	"\x18SearchActivitiesResponse\x122\n" +
 	"\n" +
 	"activities\x18\x01 \x03(\v2\x12.cairn.v1.ActivityR\n" +
@@ -9024,8 +9053,9 @@ const file_cairn_v1_activity_proto_rawDesc = "" +
 	"\fwindow_value\x18\x04 \x01(\x05R\vwindowValue\x12\x14\n" +
 	"\x05label\x18\x05 \x01(\tR\x05label\"j\n" +
 	"\x1eCreateCustomBestEffortResponse\x12H\n" +
-	"\x12custom_best_effort\x18\x01 \x01(\v2\x1a.cairn.v1.CustomBestEffortR\x10customBestEffort\"\x1e\n" +
-	"\x1cListCustomBestEffortsRequest\"k\n" +
+	"\x12custom_best_effort\x18\x01 \x01(\v2\x1a.cairn.v1.CustomBestEffortR\x10customBestEffort\"6\n" +
+	"\x1cListCustomBestEffortsRequest\x12\x16\n" +
+	"\x06member\x18\x01 \x01(\tR\x06member\"k\n" +
 	"\x1dListCustomBestEffortsResponse\x12J\n" +
 	"\x13custom_best_efforts\x18\x01 \x03(\v2\x1a.cairn.v1.CustomBestEffortR\x11customBestEfforts\"/\n" +
 	"\x1dDeleteCustomBestEffortRequest\x12\x0e\n" +

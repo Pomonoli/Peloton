@@ -799,6 +799,8 @@ message ListActivitiesRequest {
   // (cheaper); true is useful for the activity-feed UI which shows source
   // badges.
   bool include_sources = 8;
+  // Local member username or ID. Empty selects the caller.
+  string member = 9;
 }
 
 enum ActivitySort {
@@ -864,6 +866,8 @@ message SearchActivitiesRequest {
   ActivitySort sort = 2;
   // limit default 50, max 200.
   PageRequest page = 3;
+  // Local member username or ID. Empty selects the caller.
+  string member = 4;
 }
 message SearchActivitiesResponse {
   // Without sources; GetActivity has them.
@@ -1426,7 +1430,10 @@ message CreateCustomBestEffortResponse {
   CustomBestEffort custom_best_effort = 1;
 }
 
-message ListCustomBestEffortsRequest {}
+message ListCustomBestEffortsRequest {
+  // Local member username or ID. Empty selects the caller.
+  string member = 1;
+}
 message ListCustomBestEffortsResponse {
   repeated CustomBestEffort custom_best_efforts = 1;
 }

@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { onMount } from 'svelte';
 	import { formatDateOnly } from '#lib/format.js';
+
+	let { data } = $props();
 
 	type Spec = { key: string; label: string; unit: string; min: number; max: number };
 	type Entry = { id: string; key: string; effective_date: string; value: number };
@@ -31,11 +34,11 @@
 			used: 'The reference for heart-rate-based TSS, used for runs and any activity without power: Intensity = avgHR ÷ threshold HR.'
 		},
 		max_hr: {
-			what: 'Your highest observed heart rate.',
+			what: 'Highest observed heart rate.',
 			used: 'Bounds and sanity-checks HR-based intensity, and anchors heart-rate training zones. Not used directly for TSS yet, but informs zone displays.'
 		},
 		resting_hr: {
-			what: 'Your heart rate at complete rest (e.g. on waking).',
+			what: 'Heart rate at complete rest (e.g. on waking).',
 			used: 'With max HR it defines heart-rate reserve (Karvonen), a more personalised intensity scale, and is a simple recovery/fitness trend marker.'
 		},
 		weight_kg: {
@@ -47,7 +50,7 @@
 			used: 'Feeds BMI and physiological estimates (e.g. running economy, body-surface models for heat/calorie math). Rarely changes, but kept here so the profile is complete.'
 		},
 		threshold_pace: {
-			what: 'Your threshold running pace — sustainable pace for ~1 hour (entered as seconds per km).',
+			what: 'Threshold running pace — sustainable pace for ~1 hour (entered as seconds per km).',
 			used: 'The reference for pace-based running TSS (rTSS), the run equivalent of FTP for sports where you track speed rather than power.'
 		}
 	};
@@ -55,7 +58,7 @@
 	async function load() {
 		loading = true;
 		try {
-			const res = await fetch('/api/athlete/metrics');
+			const res = await fetch(memberURL('/api/athlete/metrics', data.member));
 			if (res.ok) {
 				const d = await res.json();
 				specs = d.specs ?? [];
@@ -139,28 +142,27 @@
 	<header>
 		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Athlete profile</h1>
 		<p class="mt-1 max-w-2xl text-sm text-zinc-400">
-			Your real physiological values, used to calculate Training Stress Score (TSS) and the fitness
-			curves. Each value is <b>time-based</b> — add a new entry whenever it changes (e.g. a new FTP test,
-			a weight change). Calculations interpolate between the nearest dates, so a re-computed old activity
-			uses the values that were true back then.
+			Dated physiological values, used to calculate Training Stress Score (TSS) and the fitness
+			curves. Calculations interpolate between the nearest dates.
 		</p>
 	</header>
 
-	<div class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-panel p-4">
-		<div class="text-sm text-zinc-300">
-			Changed your values? Recompute TSS + the training-load history with the new numbers.
+	{#if !data.member}
+		<div class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-panel p-4">
+			<div class="text-sm text-zinc-300">
+				Changed your values? Recompute TSS + the training-load history with the new numbers.
+			</div>
+			<button
+				type="button"
+				onclick={recalculate}
+				disabled={recalcBusy}
+				class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
+			>
+				{recalcBusy ? 'Recalculating…' : 'Recalculate training load'}
+			</button>
+			{#if recalcMsg}<span class="text-xs text-zinc-400">{recalcMsg}</span>{/if}
 		</div>
-		<button
-			type="button"
-			onclick={recalculate}
-			disabled={recalcBusy}
-			class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
-		>
-			{recalcBusy ? 'Recalculating…' : 'Recalculate training load'}
-		</button>
-		{#if recalcMsg}<span class="text-xs text-zinc-400">{recalcMsg}</span>{/if}
-	</div>
-
+	{/if}
 	{#if error}
 		<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
 			{error}
@@ -197,20 +199,22 @@
 										<span class="font-medium tabular-nums text-zinc-100"
 											>{fmtValue(spec, e.value)}</span
 										>
-										<button
-											type="button"
-											onclick={() => remove(e.id)}
-											class="text-quiet hover:text-red-400"
-											aria-label="Delete"
-											title="Delete">✕</button
-										>
+										{#if !data.member}
+											<button
+												type="button"
+												onclick={() => remove(e.id)}
+												class="text-quiet hover:text-red-400"
+												aria-label="Delete"
+												title="Delete">✕</button
+											>
+										{/if}
 									</span>
 								</li>
 							{/each}
 						</ul>
 					{/if}
 
-					{#if dr}
+					{#if dr && !data.member}
 						<div class="flex items-end gap-2 max-md:flex-wrap">
 							<div>
 								<label

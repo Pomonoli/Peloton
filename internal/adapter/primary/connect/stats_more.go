@@ -10,6 +10,7 @@ import (
 
 	v1 "github.com/opencairn-org/cairn-core/gen/proto/cairn/v1"
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 )
 
@@ -20,8 +21,8 @@ func (s *StatsServer) stats() (*dashboard.Stats, error) {
 	return s.Stats, nil
 }
 
-func (s *StatsServer) GetStats(ctx context.Context, _ *v1.GetStatsRequest) (*v1.GetStatsResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+func (s *StatsServer) GetStats(ctx context.Context, req *v1.GetStatsRequest) (*v1.GetStatsResponse, error) {
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -38,16 +39,18 @@ func (s *StatsServer) GetStats(ctx context.Context, _ *v1.GetStatsRequest) (*v1.
 		out.ByYear = append(out.ByYear, &v1.YearStat{Year: connectClampInt32(y.Year), Count: connectClampInt32(y.Count), DistanceM: y.DistanceM, MovingS: y.MovingS, ElevationGainM: y.ElevationGainM})
 	}
 	if a := res.LongestDistance; a != nil {
-		out.LongestDistance = decorateActivity(ctx, activityToProto(*a, nil), *a, gearNamesOf(ctx, s.Gear, *a), s.Content, s.MapETag)
+		names := gearNamesOf(ctx, s.Gear, *a)
+		out.LongestDistance = decorateActivity(ctx, activityReadToProto(*a, nil, !port.IsCommunityActivityRead(ctx)), *a, names, s.Content, s.MapETag)
 	}
 	if a := res.LongestDuration; a != nil {
-		out.LongestDuration = decorateActivity(ctx, activityToProto(*a, nil), *a, gearNamesOf(ctx, s.Gear, *a), s.Content, s.MapETag)
+		names := gearNamesOf(ctx, s.Gear, *a)
+		out.LongestDuration = decorateActivity(ctx, activityReadToProto(*a, nil, !port.IsCommunityActivityRead(ctx)), *a, names, s.Content, s.MapETag)
 	}
 	return out, nil
 }
 
 func (s *StatsServer) GetTrainingLoad(ctx context.Context, req *v1.GetTrainingLoadRequest) (*v1.GetTrainingLoadResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +73,7 @@ func (s *StatsServer) GetTrainingLoad(ctx context.Context, req *v1.GetTrainingLo
 }
 
 func (s *StatsServer) GetBestEffortHistory(ctx context.Context, req *v1.GetBestEffortHistoryRequest) (*v1.GetBestEffortHistoryResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +106,7 @@ func windowKindKey(k v1.BestEffortWindowKind) string {
 }
 
 func (s *StatsServer) GetHeatmap(ctx context.Context, req *v1.GetHeatmapRequest) (*v1.GetHeatmapResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}

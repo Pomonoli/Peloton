@@ -6,6 +6,7 @@ package protoconv
 
 import (
 	"math"
+	"strconv"
 	"time"
 
 	cairnv1 "github.com/opencairn-org/cairn-core/gen/proto/cairn/v1"
@@ -103,6 +104,18 @@ func ActivitySourcePayloadFromProto(p *cairnv1.ActivitySourcePayload) domain.Act
 		out.EndTime = ts.AsTime()
 	}
 	out.Laps = activityLapsFromProto(p.GetLaps(), out.StartTime)
+	// Keep only power provenance from provider extras. A known estimate
+	// takes precedence over any positive measurement claim.
+	extra := p.GetExtra()
+	estimated, _ := strconv.ParseBool(extra["power_estimated"])
+	deviceWatts, deviceErr := strconv.ParseBool(extra["device_watts"])
+	recorded, recordedErr := strconv.ParseBool(extra["power_recorded"])
+	switch {
+	case estimated || (deviceErr == nil && !deviceWatts) || (recordedErr == nil && !recorded):
+		out.PowerRecorded = new(false)
+	case deviceErr == nil || recordedErr == nil:
+		out.PowerRecorded = new(true)
+	}
 	return out
 }
 

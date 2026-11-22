@@ -136,7 +136,7 @@ func (s *SegmentServer) ListSegmentEfforts(ctx context.Context, req *v1.ListSegm
 }
 
 func (s *SegmentServer) GetSegmentLeaderboard(ctx context.Context, req *v1.GetSegmentLeaderboardRequest) (*v1.GetSegmentLeaderboardResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}

@@ -179,7 +179,7 @@ func (d *Details) MergedStream(ctx context.Context, act domain.Activity) (stream
 	}
 	streams := map[domain.SourceID]domain.Stream{}
 	for _, s := range sources {
-		if !s.Parsed.HasStream {
+		if !s.Parsed.HasStream || (port.IsCommunityActivityRead(ctx) && s.Status == domain.SourceStatusDetached) {
 			continue
 		}
 		st, err := d.streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: s.ID, Resolution: domain.StreamResolution5s})
@@ -290,7 +290,19 @@ func (d *Details) Comments(ctx context.Context, act domain.Activity) ([]CommentV
 
 // Manage assembles the technical manage view of the owner's activity.
 func (d *Details) Manage(ctx context.Context, act domain.Activity) (domain.ManageInfo, error) {
-	sources, err := d.activities.ListAllSourcesForActivity(ctx, act.ID)
+	var sources []domain.ActivitySource
+	var err error
+	if port.IsCommunityActivityRead(ctx) {
+		sources, err = d.activities.ListSourcesForActivity(ctx, act.ID)
+		for i, src := range sources {
+			sources[i] = domain.ActivitySource{
+				ID: src.ID, ActivityID: src.ActivityID, Provider: src.Provider, Status: domain.SourceStatusActive,
+				Parsed: domain.ActivitySourcePayload{HasStream: src.Parsed.HasStream, Laps: src.Parsed.Laps},
+			}
+		}
+	} else {
+		sources, err = d.activities.ListAllSourcesForActivity(ctx, act.ID)
+	}
 	if err != nil {
 		return domain.ManageInfo{}, fmt.Errorf("list sources: %w", err)
 	}
@@ -303,7 +315,7 @@ func (d *Details) Manage(ctx context.Context, act domain.Activity) (domain.Manag
 		}
 	}
 	var workers []domain.LiveWorker
-	if d.presence != nil {
+	if d.presence != nil && !port.IsCommunityActivityRead(ctx) {
 		workers = d.presence.LiveWorkers(ctx)
 	}
 	return domain.BuildManageInfo(act, sources, workers, manual), nil

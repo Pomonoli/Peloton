@@ -50,3 +50,9 @@ type CustomBestEffortRepo interface {
 	// Delete removes one window (ownership-scoped); ErrNotFound when absent.
 	Delete(ctx context.Context, userID domain.UserID, id domain.CustomBestEffortID) error
 }
+
+// CommunityRecordReader returns one winning member per bucket, or every
+// member's personal best for the requested bucket.
+type CommunityRecordReader interface {
+	ListCommunityRecords(ctx context.Context, bucket *domain.RecordBucket) ([]domain.CommunityRecord, error)
+}

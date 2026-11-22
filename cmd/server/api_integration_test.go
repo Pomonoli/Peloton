@@ -447,7 +447,7 @@ func TestAPI_EndToEnd(t *testing.T) {
 	}
 	bob.rpc(procedure+"ListBestEfforts", map[string]any{"activityId": actID}, http.StatusOK)
 	bob.rpc(procedure+"GetParsedSource", map[string]any{"activityId": actID, "sourceId": srcID}, http.StatusNotFound)
-	bob.do(http.MethodGet, "/api/activities/"+actID+"/manage", nil, http.StatusNotFound)
+	bob.do(http.MethodGet, "/api/activities/"+actID+"/manage", nil, http.StatusOK)
 	bob.do(http.MethodPost, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
 	firstComment := bob.post("/api/activities/"+actID+"/comments", map[string]any{"body": "Great route!"}, http.StatusOK)
 	if body := alice.do(http.MethodGet, "/api/activities/"+actID+"/comments", nil, http.StatusOK); !bytes.Contains(body, []byte("Great route!")) {

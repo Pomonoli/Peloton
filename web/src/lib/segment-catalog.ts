@@ -9,9 +9,29 @@ export interface CatalogSegment {
 	average_speed_kmh: number | null;
 	local_kom_holder: string;
 	member_count: number;
+	my_attempts: number;
 	start: [number, number];
 	polyline?: string;
 	polyline_precision?: number;
+}
+
+export type SortColumn = Exclude<
+	keyof CatalogSegment,
+	'id' | 'start' | 'polyline' | 'polyline_precision'
+>;
+export type CatalogSort = { column: SortColumn; direction: 'asc' | 'desc' };
+
+export function defaultCatalogSort(mySegments: boolean): CatalogSort[] {
+	return mySegments
+		? [{ column: 'my_attempts', direction: 'desc' }]
+		: [{ column: 'name', direction: 'asc' }];
+}
+
+export function nextCatalogSort(order: CatalogSort[], column: SortColumn, append: boolean) {
+	const active = order.find((item) => item.column === column);
+	const next: CatalogSort = { column, direction: active?.direction === 'asc' ? 'desc' : 'asc' };
+	if (!append) return [next];
+	return active ? order.map((item) => (item.column === column ? next : item)) : [...order, next];
 }
 
 export interface CatalogPage {
@@ -39,8 +59,14 @@ export function catalogViewport(west: number, south: number, east: number, north
 	};
 }
 
-export async function fetchSegmentCatalog(params: Record<string, string>, signal: AbortSignal) {
-	const res = await fetch(`/api/segments/catalog?${new URLSearchParams(params)}`, { signal });
+export async function fetchSegmentCatalog(
+	params: Record<string, string>,
+	order: CatalogSort[],
+	signal: AbortSignal
+) {
+	const query = new URLSearchParams(params);
+	for (const { column, direction } of order) query.append('sort', `${column}:${direction}`);
+	const res = await fetch(`/api/segments/catalog?${query}`, { signal });
 	if (!res.ok) throw new Error('Could not load the segment catalog.');
 	return (await res.json()) as CatalogPage;
 }

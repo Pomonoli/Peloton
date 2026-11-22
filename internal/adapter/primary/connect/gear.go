@@ -13,8 +13,10 @@ import (
 	v1 "github.com/opencairn-org/cairn-core/gen/proto/cairn/v1"
 	"github.com/opencairn-org/cairn-core/gen/proto/cairn/v1/cairnv1connect"
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/protoconv"
 	gearuc "github.com/opencairn-org/cairn-core/internal/usecase/gear"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // GearServer implements cairnv1connect.GearServiceHandler over the gear use
@@ -22,7 +24,8 @@ import (
 type GearServer struct {
 	cairnv1connect.UnimplementedGearServiceHandler
 
-	Gear *gearuc.Service
+	Gear    *gearuc.Service
+	Members *view.Members
 }
 
 var _ cairnv1connect.GearServiceHandler = (*GearServer)(nil)
@@ -32,7 +35,7 @@ func NewGearServer(gear *gearuc.Service) *GearServer {
 }
 
 func (s *GearServer) ListGear(ctx context.Context, req *v1.ListGearRequest) (*v1.ListGearResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -42,13 +45,13 @@ func (s *GearServer) ListGear(ctx context.Context, req *v1.ListGearRequest) (*v1
 	}
 	out := &v1.ListGearResponse{Gear: make([]*v1.Gear, 0, len(gear))}
 	for _, g := range gear {
-		out.Gear = append(out.Gear, gearToProto(g))
+		out.Gear = append(out.Gear, gearReadToProto(g, !port.IsCommunityActivityRead(ctx)))
 	}
 	return out, nil
 }
 
 func (s *GearServer) GetGear(ctx context.Context, req *v1.GetGearRequest) (*v1.GetGearResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +63,7 @@ func (s *GearServer) GetGear(ctx context.Context, req *v1.GetGearRequest) (*v1.G
 	if err != nil {
 		return nil, gearErr(err)
 	}
-	return &v1.GetGearResponse{Gear: gearToProto(g)}, nil
+	return &v1.GetGearResponse{Gear: gearReadToProto(g, !port.IsCommunityActivityRead(ctx))}, nil
 }
 
 func (s *GearServer) CreateGear(ctx context.Context, req *v1.CreateGearRequest) (*v1.CreateGearResponse, error) {
@@ -373,4 +376,11 @@ func gearRefToProto(r domain.GearExternalRef) *v1.GearExternalRef {
 		out.DefaultFor = append(out.DefaultFor, activityTypeToProto(t))
 	}
 	return out
+}
+
+func gearReadToProto(g domain.Gear, owner bool) *v1.Gear {
+	if !owner {
+		g.ExternalRefs = nil
+	}
+	return gearToProto(g)
 }

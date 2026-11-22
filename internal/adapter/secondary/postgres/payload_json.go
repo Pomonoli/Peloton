@@ -21,7 +21,8 @@ import (
 const payloadSchemaVersion = 1
 
 type payloadJSON struct {
-	V int `json:"v"`
+	PowerRecorded *bool `json:"power_recorded,omitempty"`
+	V             int   `json:"v"`
 
 	Type          string `json:"type"`
 	Discipline    string `json:"discipline,omitempty"`
@@ -99,6 +100,7 @@ type lapJSON struct {
 // encodePayload marshals a domain payload into the on-disk JSON shape.
 func encodePayload(p domain.ActivitySourcePayload) ([]byte, error) {
 	w := payloadJSON{
+		PowerRecorded:    p.PowerRecorded,
 		V:                payloadSchemaVersion,
 		Type:             string(p.Type),
 		Discipline:       string(p.Discipline),
@@ -138,6 +140,7 @@ func decodePayload(b []byte) (domain.ActivitySourcePayload, error) {
 	}
 
 	p := domain.ActivitySourcePayload{
+		PowerRecorded:   w.PowerRecorded,
 		Type:            domain.ActivityType(w.Type),
 		Discipline:      domain.Discipline(w.Discipline),
 		IsVirtual:       w.IsVirtual,

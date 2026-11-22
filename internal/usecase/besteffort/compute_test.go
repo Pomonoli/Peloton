@@ -210,3 +210,15 @@ func TestComputeVAMEffort(t *testing.T) {
 		t.Fatal("flat altitude should produce no VAM effort")
 	}
 }
+
+func TestReadMetricRejectsInvalidSensorSamples(t *testing.T) {
+	sample := domain.StreamSample{PowerW: new(int16(6000)), HeartRateBpm: new(int16(320)), SpeedMps: new(math.NaN())}
+	for _, metric := range []domain.BestEffortMetric{domain.BestEffortMetricPower, domain.BestEffortMetricHeartRate, domain.BestEffortMetricSpeed} {
+		if _, ok := readMetric(sample, metric); ok {
+			t.Errorf("%s accepted corrupt sample", metric)
+		}
+	}
+	if value, ok := readMetric(domain.StreamSample{PowerW: new(int16(0))}, domain.BestEffortMetricPower); !ok || value != 0 {
+		t.Fatal("a recorded zero watt sample is valid coasting data")
+	}
+}

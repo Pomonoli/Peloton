@@ -1,4 +1,4 @@
-// Package segmentview holds the visibility-filtered segment reads: browse,
+// Package segmentview holds the community segment reads: browse,
 // efforts and leaderboards.
 package segmentview
 
@@ -75,7 +75,7 @@ func (s *Segments) Mine(ctx context.Context, userID domain.UserID, activityType 
 	return page, nil
 }
 
-// Catalog pages the shared Strava catalog by member, name, and map viewport.
+// Catalog pages cycling segments with community efforts by member, name, and map viewport.
 func (s *Segments) Catalog(ctx context.Context, q domain.CatalogSegmentQuery) ([]domain.CatalogSegment, bool, error) {
 	if s.segments == nil {
 		return nil, false, ErrUnavailable
@@ -84,34 +84,29 @@ func (s *Segments) Catalog(ctx context.Context, q domain.CatalogSegmentQuery) ([
 	if q.Bounds != nil && !q.Bounds.Valid() {
 		return nil, false, port.NewActionError(port.ActionErrorInvalid, "invalid segment map bounds")
 	}
+	seen := make(map[domain.CatalogSegmentSort]bool)
+	for _, order := range q.Order {
+		if !order.Column.Valid() || seen[order.Column] {
+			return nil, false, port.NewActionError(port.ActionErrorInvalid, "invalid or duplicate segment sort column")
+		}
+		seen[order.Column] = true
+	}
+
 	limit := clampLimit(q.Limit)
 	q.Limit, q.Offset = limit+1, max(0, q.Offset)
 	items, err := s.segments.ListCatalogSegments(ctx, q)
 	return items[:min(len(items), limit)], len(items) > limit, err
 }
 
-// Detail returns a segment with the viewer's own efforts (fastest first). A
-// viewer can open a catalog segment as soon as it has a community effort.
+// Detail returns a community segment with the selected member's efforts, fastest first.
 func (s *Segments) Detail(ctx context.Context, userID domain.UserID, id domain.SegmentID) (domain.Segment, []domain.SegmentEffort, error) {
-	if s.segments == nil {
-		return domain.Segment{}, nil, ErrUnavailable
-	}
-	seg, err := s.segments.GetSegment(ctx, id)
+	seg, err := s.Visible(ctx, userID, id)
 	if err != nil {
-		return domain.Segment{}, nil, domain.ErrNotFound
-	}
-	if seg.Source == domain.SegmentSourceStravaCatalog {
-		if _, err := s.Visible(ctx, userID, id); err != nil {
-			return domain.Segment{}, nil, err
-		}
+		return domain.Segment{}, nil, err
 	}
 	efforts, err := s.segments.ListEffortsForSegment(ctx, id, userID, port.LeaderboardScopePersonalOnly, segmentEffortsMax, 0)
 	if err != nil {
 		return domain.Segment{}, nil, fmt.Errorf("list efforts: %w", err)
-	}
-	owns := seg.OwnerUserID != nil && *seg.OwnerUserID == userID
-	if len(efforts) == 0 && !owns && !seg.InstanceShared() && seg.Source != domain.SegmentSourceStravaCatalog {
-		return domain.Segment{}, nil, domain.ErrNotFound
 	}
 	setCatalogPersonalRanks(seg, efforts, 0)
 	return seg, efforts, nil
@@ -119,7 +114,7 @@ func (s *Segments) Detail(ctx context.Context, userID domain.UserID, id domain.S
 
 // MyEfforts pages the viewer's efforts on a visible segment, fastest first.
 func (s *Segments) MyEfforts(ctx context.Context, userID domain.UserID, id domain.SegmentID, limit, offset int) ([]domain.SegmentEffort, error) {
-	seg, _, err := s.Detail(ctx, userID, id)
+	seg, err := s.Visible(ctx, userID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -147,9 +142,11 @@ func setCatalogPersonalRanks(seg domain.Segment, efforts []domain.SegmentEffort,
 	}
 }
 
-// Visible loads a segment the viewer may read (owner, instance scope, or a
-// mirror of one of their accounts); anything else is domain.ErrNotFound.
+// Visible loads a community segment. Catalog entries require a valid local effort.
 func (s *Segments) Visible(ctx context.Context, viewer domain.UserID, id domain.SegmentID) (domain.Segment, error) {
+	if viewer == (domain.UserID{}) {
+		return domain.Segment{}, domain.ErrNotFound
+	}
 	if s.segments == nil {
 		return domain.Segment{}, ErrUnavailable
 	}
@@ -165,14 +162,6 @@ func (s *Segments) Visible(ctx context.Context, viewer domain.UserID, id domain.
 		if len(efforts) == 0 {
 			return domain.Segment{}, domain.ErrNotFound
 		}
-		return seg, nil
-	}
-	owns := false
-	if seg.ExternalAccountID != nil {
-		owns, _ = s.segments.ViewerOwnsAccount(ctx, viewer, *seg.ExternalAccountID)
-	}
-	if !seg.VisibleTo(viewer, owns) {
-		return domain.Segment{}, domain.ErrNotFound
 	}
 	return seg, nil
 }
@@ -205,15 +194,10 @@ func (s *Segments) SearchBBox(ctx context.Context, viewer domain.UserID, box por
 	return segs, nil
 }
 
-// Efforts lists community efforts on a shared segment or the viewer's own
-// efforts on their personal segment.
+// Efforts lists community efforts for the selected segment.
 func (s *Segments) Efforts(ctx context.Context, viewer domain.UserID, id domain.SegmentID, q domain.SegmentEffortQuery) ([]domain.SegmentEffort, error) {
-	seg, err := s.Visible(ctx, viewer, id)
-	if err != nil {
+	if _, err := s.Visible(ctx, viewer, id); err != nil {
 		return nil, err
-	}
-	if !seg.InstanceShared() {
-		q.UserID = &viewer
 	}
 	q.Limit, q.Offset = clampLimit(q.Limit), max(0, q.Offset)
 	rows, err := s.segments.ListSegmentEffortsFiltered(ctx, id, viewer, q)
@@ -236,9 +220,6 @@ func (s *Segments) Leaderboard(ctx context.Context, viewer domain.UserID, id dom
 	}
 	const scanPage = 200
 	eq := domain.SegmentEffortQuery{From: q.From, To: q.To, BestPerUser: true, Limit: scanPage}
-	if !seg.InstanceShared() {
-		eq.UserID = &viewer
-	}
 	limit, offset := clampLimit(q.Limit), max(0, q.Offset)
 	ranked := make([]domain.LeaderboardEntry, 0, limit)
 	var mine *domain.LeaderboardEntry

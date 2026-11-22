@@ -30,8 +30,8 @@ func (r *BestEffortRepo) ListPersonalRecords(ctx context.Context, userID domain.
 		SELECT DISTINCT ON (activity_type, metric, window_kind, window_value)
 		       activity_type, metric, window_kind, window_value,
 		       achieved_value, activity_id, ts
-		  FROM best_efforts
-		 WHERE user_id = $1
+		  FROM best_efforts b
+		 WHERE user_id = $1 AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL`+communityReadSQL(ctx, "a.")+`)
 		 ORDER BY activity_type, metric, window_kind, window_value,
 		          (CASE WHEN metric = ANY($2) THEN achieved_value ELSE -achieved_value END) ASC,
 		          ts ASC`,
@@ -250,7 +250,7 @@ func (r *BestEffortRepo) ListBestEffortHistory(
 		   FROM best_efforts b
 		   JOIN activities a ON a.id = b.activity_id AND a.deleted_at IS NULL
 		  WHERE b.user_id = $1 AND b.activity_type = $2
-		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5
+		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5`+communityReadSQL(ctx, "a.")+`
 		  ORDER BY b.activity_id, b.achieved_value `+betterDir,
 		userID.UUID(), activityType, metric, windowKind, windowValue,
 	)

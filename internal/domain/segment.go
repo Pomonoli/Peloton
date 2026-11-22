@@ -420,6 +420,7 @@ type CatalogSegment struct {
 	BestElapsedS      float64
 	LocalKOMHolder    string
 	MemberCount       int
+	MyAttempts        int
 	Start             GeoPoint
 	Polyline          string // populated for viewport queries
 	PolylinePrecision int
@@ -435,17 +436,31 @@ const (
 	CatalogSortAverageSpeed CatalogSegmentSort = "average_speed_kmh"
 	CatalogSortLocalKOM     CatalogSegmentSort = "local_kom_holder"
 	CatalogSortMembers      CatalogSegmentSort = "member_count"
+	CatalogSortMyAttempts   CatalogSegmentSort = "my_attempts"
 )
+
+func (s CatalogSegmentSort) Valid() bool {
+	switch s {
+	case CatalogSortName, CatalogSortDistance, CatalogSortBestTime, CatalogSortAverageSpeed, CatalogSortLocalKOM, CatalogSortMembers, CatalogSortMyAttempts:
+		return true
+	}
+	return false
+}
+
+type CatalogSegmentOrder struct {
+	Column     CatalogSegmentSort
+	Descending bool
+}
 
 // CatalogSegmentQuery filters, sorts and pages the shared segment catalog.
 type CatalogSegmentQuery struct {
-	Member     *UserID
-	Name       string
-	Bounds     *CatalogSegmentBounds
-	Sort       CatalogSegmentSort
-	Descending bool
-	Limit      int
-	Offset     int
+	Viewer UserID
+	Member *UserID
+	Name   string
+	Bounds *CatalogSegmentBounds
+	Order  []CatalogSegmentOrder
+	Limit  int
+	Offset int
 }
 
 // CatalogSegmentBounds is a map viewport. MinLon > MaxLon denotes a

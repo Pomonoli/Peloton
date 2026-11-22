@@ -134,8 +134,10 @@ func TestExportOptionsAndExportActivity(t *testing.T) {
 	wantCode(t, err, connectrpc.CodeInvalidArgument)
 	_, err = f.srv.ExportActivity(f.ctx, &v1.ExportActivityRequest{ActivityId: aid.String(), Format: v1.ExportFormat_EXPORT_FORMAT_FIT, Exclude: []string{"nope"}})
 	wantCode(t, err, connectrpc.CodeInvalidArgument)
-	// Non-owner: exports are owner-only even for a visible activity.
+	// A member can export a visible activity.
 	other := context.WithValue(t.Context(), ctxKeyUserID, domain.UserID(uuid.New()))
-	_, err = f.srv.ExportActivity(other, &v1.ExportActivityRequest{ActivityId: aid.String(), Format: v1.ExportFormat_EXPORT_FORMAT_GPX})
-	wantCode(t, err, connectrpc.CodeNotFound)
+	res, err = f.srv.ExportActivity(other, &v1.ExportActivityRequest{ActivityId: aid.String(), Format: v1.ExportFormat_EXPORT_FORMAT_GPX})
+	if err != nil || res.GetFile().GetUrl() == "" {
+		t.Fatalf("member export: %v %v", res, err)
+	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 	"github.com/opencairn-org/cairn-core/internal/usecase/metrics"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // MetricsServer implements cairnv1connect.MetricsServiceHandler: the metric
@@ -27,6 +28,7 @@ type MetricsServer struct {
 	Health   *dashboard.Health       // nil → ListHealthSeries Unavailable
 	Athlete  port.AthleteProfileRepo // nil → athlete RPCs Unavailable
 	Settings port.UserSettingsRepo   // nil → GetUserContext carries no settings
+	Members  *view.Members
 }
 
 var _ cairnv1connect.MetricsServiceHandler = (*MetricsServer)(nil)
@@ -135,7 +137,7 @@ func metricToProto(m domain.Metric) *v1.Metric {
 }
 
 func (s *MetricsServer) ListHealthSeries(ctx context.Context, req *v1.ListHealthSeriesRequest) (*v1.ListHealthSeriesResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -160,8 +162,8 @@ func (s *MetricsServer) athlete() (port.AthleteProfileRepo, error) {
 	return s.Athlete, nil
 }
 
-func (s *MetricsServer) ListAthleteMetrics(ctx context.Context, _ *v1.ListAthleteMetricsRequest) (*v1.ListAthleteMetricsResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+func (s *MetricsServer) ListAthleteMetrics(ctx context.Context, req *v1.ListAthleteMetricsRequest) (*v1.ListAthleteMetricsResponse, error) {
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}

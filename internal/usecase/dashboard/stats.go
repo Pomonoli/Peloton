@@ -1,14 +1,16 @@
-// Package dashboard holds the owner's own dashboard reads: overview, stats,
+// Package dashboard holds member dashboard reads: overview, stats,
 // heatmap, search and health series.
 package dashboard
 
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
+	"github.com/opencairn-org/cairn-core/internal/usecase/trainingload"
 )
 
 // ErrUnavailable: the read needs a subsystem this instance has not wired.
@@ -80,9 +82,22 @@ func (s *Stats) TrainingLoad(ctx context.Context, userID domain.UserID, days int
 		days = TrainingLoadDefaultDays
 	}
 	end := s.now().UTC().Add(24 * time.Hour)
-	metrics, err := s.metrics.ListMetricsForUser(ctx, userID, "", end.AddDate(0, 0, -days), end)
+	start := end.AddDate(0, 0, -days)
+	if port.IsCommunityActivityRead(ctx) {
+		hidden, err := s.activities.HasHiddenTrainingStress(ctx, userID, end)
+		if err != nil {
+			return nil, fmt.Errorf("check for moderated training activities: %w", err)
+		}
+		if hidden {
+			return trainingload.CommunitySeries(ctx, s.activities, userID, start, end)
+		}
+	}
+	metrics, err := s.metrics.ListMetricsForUser(ctx, userID, "", start, end)
 	if err != nil {
 		return nil, fmt.Errorf("list metrics: %w", err)
+	}
+	if port.IsCommunityActivityRead(ctx) {
+		metrics = slices.DeleteFunc(metrics, func(m domain.Metric) bool { return !slices.Contains(domain.AllTrainingLoadKeys, m.Key) })
 	}
 	return domain.TrainingLoadSeries(metrics), nil
 }
@@ -143,8 +158,7 @@ type HeatmapResult struct {
 	Tracks      []HeatmapTrack
 }
 
-// Heatmap lists the GPS tracks of the caller's activities matching filter at
-// the given stream resolution. Owner-only, so no privacy-zone trimming.
+// Heatmap lists the member's GPS tracks matching filter at the given resolution.
 func (s *Stats) Heatmap(ctx context.Context, userID domain.UserID, filter port.ActivityListFilter, res domain.StreamResolution) (HeatmapResult, error) {
 	if s.streams == nil {
 		return HeatmapResult{}, ErrUnavailable

@@ -95,6 +95,7 @@ type ActivityServer struct {
 	Searches    *dashboard.Searches
 	Details     *view.Details
 	MapETag     func(domain.Activity) string
+	Members     *view.Members
 }
 
 // Compile-time interface check.
@@ -154,7 +155,7 @@ func (s *ActivityServer) ListActivities(
 	ctx context.Context,
 	req *v1.ListActivitiesRequest,
 ) (*v1.ListActivitiesResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +191,7 @@ func (s *ActivityServer) ListActivities(
 			}
 			sources = srcs
 		}
-		out.Activities = append(out.Activities, s.withMapImage(ctx, withGear(activityToProto(a, sources), a, names), a))
+		out.Activities = append(out.Activities, s.withMapImage(ctx, withGear(activityReadToProto(a, sources, !port.IsCommunityActivityRead(ctx)), a, names), a))
 	}
 
 	// Reverse to start-time-DESC unless the caller asked otherwise. The
@@ -222,21 +223,25 @@ func (s *ActivityServer) GetActivity(
 			fmt.Errorf("list sources: %w", err))
 	}
 
-	if !viewer.IsOwner {
-		out := activityToProto(activity, nil)
-		out.GearId, out.MergeProvenance = "", nil
-		for _, src := range sources {
-			if src.Status == domain.SourceStatusActive {
-				out.Sources = append(out.Sources, &v1.ActivitySource{
-					Id: src.ID.String(), ActivityId: out.Id, Provider: src.Provider,
-				})
-			}
-		}
-		return &v1.GetActivityResponse{Activity: s.withMapImage(ctx, out, activity)}, nil
+	out := withGear(activityReadToProto(activity, sources, viewer.IsOwner), activity, s.gearNames(ctx, activity))
+	return &v1.GetActivityResponse{Activity: s.withMapImage(ctx, out, activity)}, nil
+}
+
+func activityReadToProto(a domain.Activity, sources []domain.ActivitySource, owner bool) *v1.Activity {
+	if owner {
+		return activityToProto(a, sources)
 	}
-	return &v1.GetActivityResponse{
-		Activity: s.withMapImage(ctx, withGear(activityToProto(activity, sources), activity, s.gearNames(ctx, activity)), activity),
-	}, nil
+	out := activityToProto(a, nil)
+	out.MergeProvenance = nil
+	for _, src := range sources {
+		if src.Status != domain.SourceStatusDetached {
+			out.Sources = append(out.Sources, &v1.ActivitySource{
+				Id: src.ID.String(), ActivityId: out.Id, Provider: src.Provider,
+				Status: v1.ActivitySourceStatus_ACTIVITY_SOURCE_STATUS_ACTIVE,
+			})
+		}
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -453,7 +458,7 @@ func (s *ActivityServer) GetActivityStream(
 	if err != nil {
 		return nil, err
 	}
-	if !viewer.IsOwner && src.Status != domain.SourceStatusActive {
+	if !viewer.IsOwner && src.Status == domain.SourceStatusDetached {
 		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 

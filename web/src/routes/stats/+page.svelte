@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { intlLocale, formatDistance, formatDuration, formatElevation } from '#lib/format.js';
+
+	let { data } = $props();
 
 	type Facet = { value: string; count: number };
 	type Year = {
@@ -32,7 +35,7 @@
 
 	onMount(async () => {
 		try {
-			const res = await fetch('/api/stats');
+			const res = await fetch(memberURL('/api/stats', data.member));
 			if (res.ok) s = await res.json();
 		} catch {
 			/* ignore */
@@ -53,7 +56,7 @@
 	<header>
 		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Stats</h1>
 		<p class="mt-1 text-sm text-zinc-400">
-			The numbers, for the data geeks. Lifetime totals, year-by-year, and your records.
+			Lifetime totals, year-by-year trends, and activity records.
 		</p>
 	</header>
 
@@ -61,7 +64,7 @@
 		<div class="text-sm text-zinc-500">Loading…</div>
 	{:else if !s || s.totals.count === 0}
 		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
-			No activities yet. Import some to see your stats.
+			No activities yet.
 		</div>
 	{:else}
 		<!-- lifetime totals -->
@@ -163,7 +166,7 @@
 				<div class="space-y-2">
 					{#each s.by_sport as f (f.value)}
 						<a
-							href={`/activities?type=${f.value}`}
+							href={memberURL(`/activities?type=${f.value}`, data.member)}
 							class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-panel px-4 py-2.5 hover:border-zinc-700 hover:bg-zinc-900/80"
 						>
 							<span class="text-accent-400"><SportIcon type={f.value} size={20} /></span>

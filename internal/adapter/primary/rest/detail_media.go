@@ -366,8 +366,8 @@ func (h *ContentHandlers) signedActivity(w http.ResponseWriter, r *http.Request,
 		http.NotFound(w, r)
 		return domain.Activity{}, false
 	}
-	act, vw, err := h.Access.Visible(r.Context(), id, &me, false, domain.CategoryMap)
-	if err != nil || (cl.Kind == content.KindExport && !vw.IsOwner) {
+	act, _, err := h.Access.Visible(r.Context(), id, &me, false, domain.CategoryMap)
+	if err != nil {
 		http.NotFound(w, r)
 		return domain.Activity{}, false
 	}

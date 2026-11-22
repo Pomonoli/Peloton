@@ -2,6 +2,7 @@
 	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { memberURL } from '#lib/member.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import {
 		intlLocale,
@@ -48,7 +49,7 @@
 		const next = new Date(monday);
 		next.setUTCDate(monday.getUTCDate() + 7);
 		const iso = (d: Date) => d.toISOString().slice(0, 10);
-		return `/activities?from=${iso(monday)}&to=${iso(next)}`;
+		return memberURL(`/activities?from=${iso(monday)}&to=${iso(next)}`, data.member);
 	}
 
 	type FeedItem = {
@@ -71,11 +72,12 @@
 	onMount(async () => {
 		if (!data.user) return;
 		try {
-			const res = await fetch('/api/overview');
+			const res = await fetch(memberURL('/api/overview', data.member));
 			if (res.ok) ov = await res.json();
 		} catch {
 			/* ignore */
 		}
+		if (data.member) return;
 		try {
 			const fr = await fetch('/api/feed/home');
 			if (fr.ok) feed = (await fr.json()).activities ?? [];
@@ -94,7 +96,11 @@
 			{ key: 'federated' as const, label: 'Federated' }
 		].filter((s) => s.key !== 'federated' || data.features?.federation)
 	);
-	const shown = $derived(feed.filter((a) => sources[a.source]));
+	const shown = $derived<FeedItem[]>(
+		data.member
+			? (ov?.recent ?? []).map((a) => ({ ...a, source: 'following', owner: data.member! }))
+			: feed.filter((a) => sources[a.source])
+	);
 
 	const summary = $derived(
 		ov
@@ -130,9 +136,11 @@
 			<div class="flex flex-wrap items-end justify-between gap-4">
 				<div>
 					<h1 class="text-2xl font-semibold tracking-tight">
-						Welcome back, {data.user.displayName}
+						{#if data.member}{m.nav_overview()}{:else}Welcome back, {data.user.displayName}{/if}
 					</h1>
-					<p class="mt-1 text-sm text-zinc-400">Your training at a glance.</p>
+					{#if !data.member}<p class="mt-1 text-sm text-zinc-400">
+							Your training at a glance.
+						</p>{/if}
 				</div>
 				{#if summary.length}
 					<dl class="flex flex-wrap gap-x-8 gap-y-2">
@@ -198,16 +206,21 @@
 				<nav class="rounded-xl border border-zinc-800 bg-panel p-4 text-sm">
 					<h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Explore</h2>
 					<div class="space-y-0.5">
-						<a href="/analysis" class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
-							>Training load</a
+						<a
+							href={memberURL('/analysis', data.member)}
+							class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60">Training load</a
 						>
-						<a href="/stats" class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
-							>Stats</a
+						<a
+							href={memberURL('/stats', data.member)}
+							class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60">Stats</a
 						>
-						<a href="/segments" class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
-							>Segments</a
+						<a
+							href={memberURL('/segments', data.member)}
+							class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60">Segments</a
 						>
-						<a href="/athlete" class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
+						<a
+							href={memberURL('/athlete', data.member)}
+							class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
 							>{m.nav_athlete()}</a
 						>
 					</div>
@@ -217,7 +230,9 @@
 			<!-- Main content: the feed (own + friends + federated, quick-filterable) -->
 			<main>
 				<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-					<h2 class="text-sm font-medium text-zinc-300">Your feed</h2>
+					<h2 class="text-sm font-medium text-zinc-300">
+						{data.member ? m.member_recent_activities() : 'Your feed'}
+					</h2>
 					{#if feed.length > 0}
 						<div class="flex flex-wrap gap-1.5">
 							{#each sourceMeta as s (s.key)}
@@ -350,7 +365,7 @@
 					<div
 						class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
 					>
-						{m.community_feed_empty()}
+						{data.member ? m.activities_empty() : m.community_feed_empty()}
 					</div>
 				{/if}
 			</main>

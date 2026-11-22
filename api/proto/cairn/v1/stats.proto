@@ -47,7 +47,10 @@ service StatsService {
   }
 }
 
-message GetOverviewRequest {}
+message GetOverviewRequest {
+  // Local member username or ID. Empty selects the caller.
+  string member = 1;
+}
 message GetOverviewResponse {
   Totals totals = 1;
   repeated Facet by_sport = 2;
@@ -59,7 +62,10 @@ message GetOverviewResponse {
   TimeRange last_week_range = 7;
 }
 
-message GetStatsRequest {}
+message GetStatsRequest {
+  // Local member username or ID. Empty selects the caller.
+  string member = 1;
+}
 message YearStat {
   int32 year = 1;
   int32 count = 2;
@@ -80,6 +86,8 @@ message GetStatsResponse {
 message GetTrainingLoadRequest {
   // Days back from today; default 180, max 3650.
   int32 days = 1;
+  // Local member username or ID. Empty selects the caller.
+  string member = 2;
 }
 message TrainingLoadDay {
   // YYYY-MM-DD, UTC.
@@ -101,6 +109,8 @@ message GetBestEffortHistoryRequest {
   BestEffortMetric metric = 2;
   BestEffortWindowKind window_kind = 3;
   int32 window_value = 4;
+  // Local member username or ID. Empty selects the caller.
+  string member = 5;
 }
 message BestEffortHistoryItem {
   string activity_id = 1;
@@ -124,6 +134,8 @@ message GetHeatmapRequest {
     RESOLUTION_5S = 2;
   }
   Resolution resolution = 2;
+  // Local member username or ID. Empty selects the caller.
+  string member = 3;
 }
 message HeatmapTrack {
   string activity_id = 1;

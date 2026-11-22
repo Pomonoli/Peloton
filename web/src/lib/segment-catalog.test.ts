@@ -3,6 +3,9 @@ import {
 	catalogFeatures,
 	catalogViewport,
 	fetchSegmentCatalog,
+	defaultCatalogSort,
+	nextCatalogSort,
+	type CatalogSort,
 	type CatalogSegment
 } from './segment-catalog';
 
@@ -14,6 +17,7 @@ const segment: CatalogSegment = {
 	average_speed_kmh: 57.6,
 	local_kom_holder: 'Alice',
 	member_count: 2,
+	my_attempts: 1,
 	start: [7.98, 47.01]
 };
 
@@ -79,11 +83,46 @@ it('sends the criteria literally and passes cancellation through to the catalog 
 	const { signal } = new AbortController();
 	const result = await fetchSegmentCatalog(
 		{ q: ' 100%_grade ', mine: 'true', limit: '50' },
+		[
+			{ column: 'average_speed_kmh', direction: 'desc' },
+			{ column: 'member_count', direction: 'asc' }
+		],
 		signal
 	);
 	expect(result).toEqual({ segments: [segment], has_more: true });
-	expect(fetch).toHaveBeenCalledWith('/api/segments/catalog?q=+100%25_grade+&mine=true&limit=50', {
-		signal
-	});
-	await expect(fetchSegmentCatalog({ q: 'missing' }, signal)).rejects.toThrow();
+	expect(fetch).toHaveBeenCalledWith(
+		'/api/segments/catalog?q=+100%25_grade+&mine=true&limit=50&sort=average_speed_kmh%3Adesc&sort=member_count%3Aasc',
+		{
+			signal
+		}
+	);
+	await expect(fetchSegmentCatalog({ q: 'missing' }, [], signal)).rejects.toThrow();
+});
+
+it('adds multiple levels, reverses a level in place, and replaces the stack on a regular click', () => {
+	const first: CatalogSort[] = [{ column: 'average_speed_kmh', direction: 'desc' }];
+	const firstTwo = nextCatalogSort(first, 'member_count', true);
+	const stack = nextCatalogSort(firstTwo, 'best_elapsed_s', true);
+	expect(nextCatalogSort(stack, 'member_count', true)).toEqual([
+		...first,
+		{ column: 'member_count', direction: 'desc' },
+		{ column: 'best_elapsed_s', direction: 'asc' }
+	]);
+	expect(nextCatalogSort(stack, 'member_count', false)).toEqual([
+		{ column: 'member_count', direction: 'desc' }
+	]);
+	expect(nextCatalogSort(stack, 'distance_m', false)).toEqual([
+		{ column: 'distance_m', direction: 'asc' }
+	]);
+});
+
+it('defaults My Segments to attempts descending and preserves an explicit sort stack', () => {
+	const defaultOrder = defaultCatalogSort(true);
+	expect(defaultOrder).toEqual([{ column: 'my_attempts', direction: 'desc' }]);
+	expect(defaultCatalogSort(false)).toEqual([{ column: 'name', direction: 'asc' }]);
+	const combined = nextCatalogSort(defaultOrder, 'average_speed_kmh', true);
+	expect(nextCatalogSort(combined, 'my_attempts', true)).toEqual([
+		{ column: 'my_attempts', direction: 'asc' },
+		{ column: 'average_speed_kmh', direction: 'asc' }
+	]);
 });

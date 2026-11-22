@@ -1575,7 +1575,9 @@ type ListHealthSeriesRequest struct {
 	// One of Steps, HRV, RestingHR, Sleep, Weight, WaterIntake.
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// Days back from today; default 90, max 3650.
-	Days          int32 `protobuf:"varint,2,opt,name=days,proto3" json:"days,omitempty"`
+	Days int32 `protobuf:"varint,2,opt,name=days,proto3" json:"days,omitempty"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1622,6 +1624,13 @@ func (x *ListHealthSeriesRequest) GetDays() int32 {
 		return x.Days
 	}
 	return 0
+}
+
+func (x *ListHealthSeriesRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type HealthSample struct {
@@ -1747,7 +1756,9 @@ func (x *ListHealthSeriesResponse) GetSeries() []*HealthSample {
 }
 
 type ListAthleteMetricsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Local member username or ID. Empty selects the caller.
+	Member        string `protobuf:"bytes,1,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1780,6 +1791,13 @@ func (x *ListAthleteMetricsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListAthleteMetricsRequest.ProtoReflect.Descriptor instead.
 func (*ListAthleteMetricsRequest) Descriptor() ([]byte, []int) {
 	return file_cairn_v1_metrics_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListAthleteMetricsRequest) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type AthleteMetricSpec struct {
@@ -3041,10 +3059,11 @@ const file_cairn_v1_metrics_proto_rawDesc = "" +
 	"\x0elatest_metrics\x18\x02 \x03(\v23.cairn.v1.GetUserContextResponse.LatestMetricsEntryR\rlatestMetrics\x1aR\n" +
 	"\x12LatestMetricsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.cairn.v1.MetricR\x05value:\x028\x01\"A\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.cairn.v1.MetricR\x05value:\x028\x01\"Y\n" +
 	"\x17ListHealthSeriesRequest\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x12\n" +
-	"\x04days\x18\x02 \x01(\x05R\x04days\"f\n" +
+	"\x04days\x18\x02 \x01(\x05R\x04days\x12\x16\n" +
+	"\x06member\x18\x03 \x01(\tR\x06member\"f\n" +
 	"\fHealthSample\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value\x12\x12\n" +
@@ -3052,8 +3071,9 @@ const file_cairn_v1_metrics_proto_rawDesc = "" +
 	"\bprovider\x18\x04 \x01(\tR\bprovider\"^\n" +
 	"\x18ListHealthSeriesResponse\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12.\n" +
-	"\x06series\x18\x02 \x03(\v2\x16.cairn.v1.HealthSampleR\x06series\"\x1b\n" +
-	"\x19ListAthleteMetricsRequest\"s\n" +
+	"\x06series\x18\x02 \x03(\v2\x16.cairn.v1.HealthSampleR\x06series\"3\n" +
+	"\x19ListAthleteMetricsRequest\x12\x16\n" +
+	"\x06member\x18\x01 \x01(\tR\x06member\"s\n" +
 	"\x11AthleteMetricSpec\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x12\n" +

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
 	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import { intlLocale, formatDate, formatDateOnly } from '#lib/format.js';
@@ -12,6 +13,8 @@
 		type MetricGroup,
 		type StoredMetric
 	} from '#lib/metrics.js';
+
+	let { data } = $props();
 
 	// Daily health metrics merged across providers (Garmin etc.), from /api/health.
 	type Point = { day: string; value: number; unit: string; provider: string };
@@ -54,8 +57,11 @@
 		return Promise.all(
 			DEFS.map(async (d) => {
 				const series =
-					(await json<{ series?: Point[] }>(`/api/health?type=${d.type}&days=${days}`))?.series ??
-					[];
+					(
+						await json<{ series?: Point[] }>(
+							memberURL(`/api/health?type=${d.type}&days=${days}`, data.member)
+						)
+					)?.series ?? [];
 				return { ...d, series, latest: series.at(-1) ?? null };
 			})
 		);
@@ -82,7 +88,10 @@
 
 	async function load() {
 		loaded = false;
-		[metrics, [groups, trends]] = await Promise.all([loadHealth(), loadStore()]);
+		[metrics, [groups, trends]] = await Promise.all([
+			loadHealth(),
+			data.member ? [[], {}] : loadStore()
+		]);
 		loaded = true;
 	}
 	onMount(load);
@@ -145,8 +154,11 @@
 		<p class="text-sm text-quiet">Loading…</p>
 	{:else if !anyData}
 		<p class="text-sm text-zinc-500">
-			No health data yet. Connect a provider that supplies health data and run "Import health" from
-			<a href="/connections" class="text-accent-400 hover:text-accent-300">Connections</a>.
+			No health data yet.
+			{#if !data.member}
+				Connect a provider that supplies health data and run "Import health" from
+				<a href="/connections" class="text-accent-400 hover:text-accent-300">Connections</a>.
+			{/if}
 		</p>
 	{:else}
 		{#if anyHealth}

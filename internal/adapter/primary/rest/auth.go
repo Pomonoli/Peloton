@@ -7,6 +7,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/usecase/audit"
 	authuc "github.com/opencairn-org/cairn-core/internal/usecase/auth"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // SessionCookieName is the long-lived browser session cookie.
@@ -15,6 +16,7 @@ const SessionCookieName = "cairn_session"
 // Auth reads a request's credential and resolves it through the Callers use case.
 type Auth struct {
 	Callers *authuc.Callers
+	Members *view.Members
 }
 
 func credentialOf(r *http.Request) authuc.Credential {

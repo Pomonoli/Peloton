@@ -198,7 +198,7 @@ func dashFeedActivityOf(a domain.Activity, gearPrompt bool) dashFeedActivity {
 //	GET /api/activities/feed?<filter>&limit=&offset=
 //	  → { total, matched, facets:{types,disciplines,years}, activities, offset, limit, has_more }
 func (h *DashboardHandlers) feed(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
@@ -208,7 +208,7 @@ func (h *DashboardHandlers) feed(w http.ResponseWriter, r *http.Request) {
 	filter.Limit = limit
 	filter.Offset = offset
 
-	res, err := h.Searches.Search(r.Context(), userID, filter)
+	res, err := h.Searches.Search(ctx, userID, filter)
 	if err != nil {
 		h.Log.Error("activity search failed", "error", err)
 		http.Error(w, "list failed", http.StatusInternalServerError)
@@ -216,7 +216,7 @@ func (h *DashboardHandlers) feed(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]dashFeedActivity, 0, len(res.Activities))
 	for _, a := range res.Activities {
-		out = append(out, dashFeedActivityOf(a, res.GearPrompt))
+		out = append(out, dashFeedActivityOf(a, res.GearPrompt && !port.IsCommunityActivityRead(ctx)))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"total":   res.Total,
@@ -239,7 +239,7 @@ func (h *DashboardHandlers) feed(w http.ResponseWriter, r *http.Request) {
 //	  → { matched, with_track, truncated, facets:{...},
 //	      geojson: FeatureCollection<LineString>{properties:{id,type,discipline}} }
 func (h *DashboardHandlers) heatmap(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
@@ -248,7 +248,7 @@ func (h *DashboardHandlers) heatmap(w http.ResponseWriter, r *http.Request) {
 	if q.Get("res") == string(domain.StreamResolution5s) {
 		res = domain.StreamResolution5s
 	}
-	hm, err := h.Stats.Heatmap(r.Context(), userID, dashActivityFilter(q), res)
+	hm, err := h.Stats.Heatmap(ctx, userID, dashActivityFilter(q), res)
 	if err != nil {
 		h.Log.Error("heatmap failed", "error", err)
 		writeActionError(w, err, "tracks failed")

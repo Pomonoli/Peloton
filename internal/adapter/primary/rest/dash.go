@@ -10,7 +10,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 )
 
-// DashboardHandlers serve the owner's dashboards.
+// DashboardHandlers serve dashboards for the selected member.
 //
 //	GET /api/overview            landing dashboard
 //	GET /api/stats               stats page
@@ -18,11 +18,12 @@ import (
 //	GET /api/activities/feed     faceted activity list (dash_feed.go)
 //	GET /api/activities/heatmap  every GPS track (dash_feed.go)
 type DashboardHandlers struct {
-	Auth      *Auth
-	Overviews *dashboard.Overviews
-	Searches  *dashboard.Searches
-	Stats     *dashboard.Stats
-	Log       *slog.Logger
+	Auth            *Auth
+	Overviews       *dashboard.Overviews
+	Searches        *dashboard.Searches
+	Stats           *dashboard.Stats
+	PerformanceMaps *dashboard.PerformanceMaps
+	Log             *slog.Logger
 }
 
 // Mount registers the routes.
@@ -32,15 +33,18 @@ func (h *DashboardHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/stats", h.stats)
 	mux.HandleFunc("GET /api/activities/feed", h.feed)
 	mux.HandleFunc("GET /api/activities/heatmap", h.heatmap)
+	if h.PerformanceMaps != nil {
+		mux.HandleFunc("GET /api/activities/heatmap/performance", h.performanceHeatmap)
+	}
 }
 
 // overview → { totals, by_sport:[{value,count}], recent:[activity...], this_week, last_week }
 func (h *DashboardHandlers) overview(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
-	ov, err := h.Overviews.Get(r.Context(), userID)
+	ov, err := h.Overviews.Get(ctx, userID)
 	if err != nil {
 		http.Error(w, "totals failed", http.StatusInternalServerError)
 		return
@@ -67,11 +71,11 @@ func dashTotalsJSON(t port.ActivityTotalsResult) map[string]any {
 
 // stats → { totals, by_sport, by_discipline, by_year, records:{longest_distance, longest_duration} }
 func (h *DashboardHandlers) stats(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
-	st, err := h.Stats.Get(r.Context(), userID)
+	st, err := h.Stats.Get(ctx, userID)
 	if err != nil {
 		http.Error(w, "stats failed", http.StatusInternalServerError)
 		return
@@ -114,12 +118,12 @@ func dashStatsRecordJSON(a *domain.Activity) map[string]any {
 
 // analysis → { dates, ctl, atl, tsb, tss, current:{ctl,atl,tsb} }
 func (h *DashboardHandlers) analysis(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.Auth.requireUser(w, r)
+	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
-	series, err := h.Stats.TrainingLoad(r.Context(), userID, days)
+	series, err := h.Stats.TrainingLoad(ctx, userID, days)
 	if err != nil {
 		writeActionError(w, err, "analysis failed")
 		return

@@ -7,9 +7,13 @@
 	import { setPrefs } from '#lib/prefs.svelte.js';
 	import { formatDate } from '#lib/format.js';
 	import LoadingBar from '#lib/components/LoadingBar.svelte';
+	import MemberNav from '#lib/components/MemberNav.svelte';
+	import { memberProfile } from '#lib/member.js';
 	import BrandMark from '#lib/components/BrandMark.svelte';
 
 	let { children, data } = $props();
+
+	const member = $derived(page.data.member ?? page.data.activityOwner);
 
 	// Email-verification banner (logged-in users with an unverified email).
 	let resendState = $state<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -401,7 +405,26 @@
 		{/if}
 
 		<main class="mx-auto w-full max-w-6xl flex-1 px-6 py-8 max-md:px-4 max-md:py-5">
-			{@render children()}
+			{#if member}
+				<div class="mb-5 rounded-lg border border-zinc-800 bg-panel px-4 py-3">
+					<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
+						<div>
+							<span class="text-quiet">{m.member_viewing()}</span>
+							<a
+								href={memberProfile(member)}
+								class="ml-1 font-semibold text-accent-400 hover:underline"
+							>
+								{member.display_name || member.username}
+							</a>
+						</div>
+						<a href="/friends" class="text-accent-400 hover:underline">{m.member_switch()}</a>
+					</div>
+					{#if page.data.member}<MemberNav {member} />{/if}
+				</div>
+			{/if}
+			{#key member?.id}
+				{@render children()}
+			{/key}
 		</main>
 		<footer
 			class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 px-6 py-4 text-xs text-zinc-500"

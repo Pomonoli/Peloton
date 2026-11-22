@@ -33,7 +33,7 @@ func mountAct(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	if app.SourcePreviews != nil {
 		(&rest.SourcePreviewHandlers{Auth: auth, Previews: app.SourcePreviews, Committer: &previewCommitter{app: app, logger: logger}}).Mount(mux)
 	}
-	(&rest.ActivityManageHandlers{Auth: auth, Actions: app.SourceActions, Details: app.Details, Pipeline: app.Pipeline, Log: logger}).Mount(mux)
+	(&rest.ActivityManageHandlers{Auth: auth, Actions: app.SourceActions, Access: detailAccess(app), Details: app.Details, Pipeline: app.Pipeline, Log: logger}).Mount(mux)
 	if app.FieldOverrides != nil {
 		pins := &activity.FieldPins{Activities: app.Activities, Overrides: app.FieldOverrides, Remerge: app.Pipeline, Log: logger}
 		(&rest.MergeOverrideHandlers{Auth: auth, Actions: app.SourceActions, Pins: pins, Links: app.SourceLinks, Log: logger}).Mount(mux)
@@ -53,7 +53,7 @@ func mountAct(mux *http.ServeMux, app *App, logger *slog.Logger) {
 		(&rest.AthleteHandlers{Auth: auth, Profile: profile}).Mount(mux)
 	}
 	if app.MetricStore != nil {
-		(&rest.MetricHandlers{Auth: auth, Store: app.MetricStore, Policies: policies}).Mount(mux)
+		(&rest.MetricHandlers{Auth: auth, Store: app.MetricStore, Policies: policies, Access: detailAccess(app)}).Mount(mux)
 	}
 	logger.Info("activity write endpoints mounted")
 }

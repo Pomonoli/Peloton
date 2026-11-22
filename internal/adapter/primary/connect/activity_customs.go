@@ -42,8 +42,8 @@ func (s *ActivityServer) CreateCustomBestEffort(ctx context.Context, req *v1.Cre
 	return &v1.CreateCustomBestEffortResponse{CustomBestEffort: customBestEffortToProto(created)}, nil
 }
 
-func (s *ActivityServer) ListCustomBestEfforts(ctx context.Context, _ *v1.ListCustomBestEffortsRequest) (*v1.ListCustomBestEffortsResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+func (s *ActivityServer) ListCustomBestEfforts(ctx context.Context, req *v1.ListCustomBestEffortsRequest) (*v1.ListCustomBestEffortsResponse, error) {
+	ctx, userID, err := memberRead(ctx, s.Members, req.GetMember())
 	if err != nil {
 		return nil, err
 	}

@@ -441,7 +441,7 @@ func (r *SegmentRepo) ListEffortsForSegment(
 			   FROM segment_efforts e
 			   JOIN segments s ON s.id = e.segment_id
 			   JOIN activities a ON a.id = e.activity_id
-			  WHERE e.segment_id = $1 AND e.user_id = $2 AND `+catalogEffortSQL+`
+			  WHERE e.segment_id = $1 AND e.user_id = $2 AND a.deleted_at IS NULL AND `+catalogEffortSQL+communityReadSQL(ctx, "a.")+`
 			  ORDER BY e.elapsed_s, e.start_time, e.id
 			  LIMIT $3 OFFSET $4`,
 			segmentID.UUID(), viewerUserID.UUID(), limit, offset,
@@ -719,10 +719,10 @@ func (r *SegmentRepo) ListUserSegmentsByEffortCount(
 		   FROM segment_efforts e
 		   JOIN segments s ON s.id = e.segment_id
 		   JOIN activities a ON a.id = e.activity_id
-		  WHERE e.user_id = $1 AND `+catalogEffortSQL+`
+		  WHERE e.user_id = $1 AND a.deleted_at IS NULL AND `+catalogEffortSQL+communityReadSQL(ctx, "a.")+`
 		    AND ($2 = '' OR s.activity_type = $2)
 		  GROUP BY s.id
-		  ORDER BY effort_count DESC, last_effort_at DESC
+		  ORDER BY effort_count DESC, last_effort_at DESC, s.id
 		  LIMIT $3 OFFSET $4`,
 		userID.UUID(), activityType, limit, offset,
 	)
@@ -768,7 +768,7 @@ func (r *SegmentRepo) UserSegmentStats(ctx context.Context, userID domain.UserID
 		   FROM segment_efforts e
 		   JOIN segments s ON s.id = e.segment_id
 		   JOIN activities a ON a.id = e.activity_id
-		  WHERE e.user_id = $1 AND `+catalogEffortSQL,
+		  WHERE e.user_id = $1 AND a.deleted_at IS NULL AND `+catalogEffortSQL+communityReadSQL(ctx, "a."),
 		userID.UUID(),
 	).Scan(&st.Segments, &st.Efforts, &st.PRs, &st.CRs, &st.External, &st.Native)
 	if err != nil {
@@ -800,7 +800,7 @@ func (r *SegmentRepo) FindSimilarActivities(ctx context.Context, q domain.Simila
 		         GROUP BY e.activity_id
 		   ) sh ON sh.activity_id = a.id
 		  WHERE a.user_id = $2
-		    AND a.deleted_at IS NULL
+		    AND a.deleted_at IS NULL`+communityReadSQL(ctx, "a.")+`
 		    AND a.id <> $1
 		    AND a.type = $3
 		    AND a.start_lat BETWEEN $4::float8 - $7::float8 AND $4::float8 + $7::float8

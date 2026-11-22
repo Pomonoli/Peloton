@@ -116,6 +116,9 @@ type ActivityReader interface {
 		start, end time.Time,
 	) ([]domain.Activity, error)
 
+	// HasHiddenTrainingStress reports whether a moderated ride contributes to stored training load.
+	HasHiddenTrainingStress(ctx context.Context, userID domain.UserID, before time.Time) (bool, error)
+
 	// ListRecentActivitiesForUser returns the user's newest `limit` activities
 	// ordered by start_time DESC, regardless of age. Soft-deleted rows are
 	// excluded. This is the count-based pagination the activity feed uses (the

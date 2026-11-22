@@ -69,8 +69,17 @@ var streamRawColumns = []string{
 
 // WriteStream replaces all samples for the source. Atomic — DELETE and
 // COPY run in the same transaction (either an outer InTx caller's or a
-// short auto-commit pair).
+// a short transaction).
 func (r *StreamRepo) WriteStream(ctx context.Context, sourceID domain.SourceID, samples []domain.StreamSample) error {
+	return NewTxManager(r.pool).InTx(ctx, func(ctx context.Context) error {
+		if _, err := dbtx(ctx, r.pool).Exec(ctx, `UPDATE activity_sources SET heatmap_revision=heatmap_revision+1 WHERE id=$1`, sourceID.UUID()); err != nil {
+			return fmt.Errorf("revise heatmap source %s: %w", sourceID, err)
+		}
+		return r.replaceStream(ctx, sourceID, samples)
+	})
+}
+
+func (r *StreamRepo) replaceStream(ctx context.Context, sourceID domain.SourceID, samples []domain.StreamSample) error {
 	db := r.dbCopier(ctx)
 
 	// DELETE always runs, even when samples is empty — empty input means
@@ -348,15 +357,7 @@ func scan30sSample(row rowScanner, s *domain.StreamSample) error {
 // has no stored stream — TimescaleDB's chunk-aware DELETE handles this
 // efficiently regardless of dataset size.
 func (r *StreamRepo) DeleteStream(ctx context.Context, sourceID domain.SourceID) error {
-	db := dbtx(ctx, r.pool)
-	_, err := db.Exec(ctx,
-		`DELETE FROM activity_streams WHERE activity_source_id = $1`,
-		sourceID.UUID(),
-	)
-	if err != nil {
-		return fmt.Errorf("delete stream for %s: %w", sourceID, err)
-	}
-	return nil
+	return r.WriteStream(ctx, sourceID, nil)
 }
 
 // RefreshAggregates materialises the 5s/30s CAggs over the source's own time

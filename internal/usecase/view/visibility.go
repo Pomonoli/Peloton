@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
 // Visibility resolves activity reads inside the authenticated community.
@@ -23,6 +24,10 @@ type Viewer struct {
 	Cats    domain.CategorySet
 	Zones   []domain.PrivacyZone
 	IsOwner bool
+}
+
+func (v Viewer) ActivityReadContext(ctx context.Context) context.Context {
+	return port.WithActivityReadViewer(ctx, v.IsOwner)
 }
 
 func (v *Visibility) Resolve(ctx context.Context, act domain.Activity, viewer *domain.UserID, hasLink bool) (Viewer, bool) {

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { memberURL } from '#lib/member.js';
+	import { onDestroy } from 'svelte';
 	import { refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
@@ -11,6 +13,8 @@
 		formatElevation,
 		formatRelativeDate
 	} from '#lib/format.js';
+
+	let { data } = $props();
 
 	type FeedActivity = {
 		id: string;
@@ -94,7 +98,9 @@
 			const q = filter.params();
 			q.set('limit', String(PAGE_SIZE));
 			q.set('offset', String((p - 1) * PAGE_SIZE));
-			const res = await fetch(`/api/activities/feed?${q.toString()}`, { signal: ctrl.signal });
+			const res = await fetch(memberURL(`/api/activities/feed?${q}`, data.member), {
+				signal: ctrl.signal
+			});
 			if (res.ok && seq === feedSeq) {
 				const data: Feed = await res.json();
 				items = data.activities;
@@ -106,6 +112,11 @@
 			if (seq === feedSeq) loading = false;
 		}
 	}
+
+	onDestroy(() => {
+		clearTimeout(debounceTimer);
+		feedAbort?.abort();
+	});
 
 	function goToPage(p: number) {
 		if (p < 1 || p > totalPages || p === pageNum) return;
@@ -181,65 +192,68 @@
 				</p>
 			{/if}
 		</div>
-		<div class="flex items-center gap-2">
-			<a
-				href="/activities/new"
-				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
-			>
-				+ New activity
-			</a>
-			<button
-				type="button"
-				disabled={uploading}
-				onclick={() => fileInput?.click()}
-				class="rounded border border-accent-500 bg-accent-500/20 px-3 py-1.5 text-xs text-accent-300 hover:bg-accent-500/30 disabled:opacity-50"
-			>
-				{uploading ? 'Uploading…' : 'Upload files'}
-			</button>
-		</div>
+		{#if !data.member}
+			<div class="flex items-center gap-2">
+				<a
+					href="/activities/new"
+					class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
+				>
+					+ New activity
+				</a>
+				<button
+					type="button"
+					disabled={uploading}
+					onclick={() => fileInput?.click()}
+					class="rounded border border-accent-500 bg-accent-500/20 px-3 py-1.5 text-xs text-accent-300 hover:bg-accent-500/30 disabled:opacity-50"
+				>
+					{uploading ? 'Uploading…' : 'Upload files'}
+				</button>
+			</div>
+		{/if}
 	</header>
 
-	<div
-		role="button"
-		tabindex="0"
-		ondragover={(e) => {
-			e.preventDefault();
-			dragOver = true;
-		}}
-		ondragleave={() => (dragOver = false)}
-		ondrop={onDrop}
-		onclick={() => fileInput?.click()}
-		onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInput?.click()}
-		class="cursor-pointer rounded-lg border-2 border-dashed px-5 py-6 text-center text-sm transition-colors {dragOver
-			? 'border-accent-500 bg-accent-500/10 text-accent-200'
-			: 'border-zinc-700 bg-zinc-900/30 text-zinc-400 hover:border-zinc-600'}"
-	>
-		Drag &amp; drop <code>.gpx</code>, <code>.tcx</code> or <code>.fit</code> files here (multiple
-		supported), or click to browse.
-		<input
-			bind:this={fileInput}
-			type="file"
-			accept=".gpx,.tcx,.fit"
-			multiple
-			class="hidden"
-			onchange={(e) => uploadFiles(e.currentTarget.files)}
-		/>
-	</div>
-
-	{#if uploadError}
-		<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
-			{uploadError}
-		</div>
-	{/if}
-	{#if uploadOk}
+	{#if !data.member}
 		<div
-			class="rounded border border-emerald-700/50 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300"
+			role="button"
+			tabindex="0"
+			ondragover={(e) => {
+				e.preventDefault();
+				dragOver = true;
+			}}
+			ondragleave={() => (dragOver = false)}
+			ondrop={onDrop}
+			onclick={() => fileInput?.click()}
+			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInput?.click()}
+			class="cursor-pointer rounded-lg border-2 border-dashed px-5 py-6 text-center text-sm transition-colors {dragOver
+				? 'border-accent-500 bg-accent-500/10 text-accent-200'
+				: 'border-zinc-700 bg-zinc-900/30 text-zinc-400 hover:border-zinc-600'}"
 		>
-			{uploadOk}
+			Drag &amp; drop <code>.gpx</code>, <code>.tcx</code> or <code>.fit</code> files here (multiple
+			supported), or click to browse.
+			<input
+				bind:this={fileInput}
+				type="file"
+				accept=".gpx,.tcx,.fit"
+				multiple
+				class="hidden"
+				onchange={(e) => uploadFiles(e.currentTarget.files)}
+			/>
 		</div>
-	{/if}
 
-	<ActivityFilterBar {filter} facets={feed?.facets ?? null} />
+		{#if uploadError}
+			<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+				{uploadError}
+			</div>
+		{/if}
+		{#if uploadOk}
+			<div
+				class="rounded border border-emerald-700/50 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300"
+			>
+				{uploadOk}
+			</div>
+		{/if}
+	{/if}
+	<ActivityFilterBar {filter} facets={feed?.facets ?? null} member={data.member?.username} />
 
 	{#if items.length === 0 && !loading}
 		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
