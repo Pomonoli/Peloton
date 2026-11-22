@@ -71,6 +71,7 @@
 	const icons = {
 		overview: 'M3 11.5 12 4l9 7.5 M5 10v10h5v-6h4v6h5V10',
 		activities: 'M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01',
+		planner: 'M4 4h6l4 16h6 M4 20h6l4-16h6 M4 4v16 M20 4v16',
 		heatmap:
 			'M12 22c4.4 0 7-2.9 7-6.5 0-3-1.7-5-3.5-7-.5 2-1.5 3-2.5 3.5.5-3-1-6.5-4-9 .3 3-1 4.5-2.5 6.5C5 11.5 5 13.7 5 15.5 5 19.1 7.6 22 12 22z',
 		analysis: 'M3 3v18h18 M7 14l4-4 3 3 5-6',
@@ -111,6 +112,7 @@
 			items: [
 				{ href: '/', label: m.nav_overview(), icon: icons.overview },
 				{ href: '/activities', label: m.nav_activities(), icon: icons.activities },
+				{ href: '/routes/waasland', label: m.nav_waas_planner(), icon: icons.planner },
 				{ href: '/heatmap', label: 'Heatmap', icon: icons.heatmap },
 				{ href: '/analysis', label: m.nav_analysis(), icon: icons.analysis },
 				{ href: '/stats', label: m.nav_stats(), icon: icons.stats },
@@ -372,6 +374,9 @@
 				<div class="mx-auto flex max-w-6xl items-center gap-3 px-6 py-3 max-md:px-4">
 					{@render brand()}
 					<span class="text-xs text-zinc-500 max-md:hidden">{m.app_subtitle()}</span>
+					<a href="/routes/waasland" class="ml-auto text-sm text-accent-300 hover:underline"
+						>{m.nav_waas_planner()}</a
+					>
 					<a
 						href="/login"
 						class="ml-auto rounded border border-accent-500 bg-accent-500/20 px-3 py-1.5 text-xs text-accent-300 hover:bg-accent-500/30"

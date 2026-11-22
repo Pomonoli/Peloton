@@ -310,6 +310,7 @@ func serveMountFeatures(mux *http.ServeMux, app *App, cfg *config.Config, logger
 	mountRestAccountJobs(mux, app, logger)
 	mountRestHealthMetrics(mux, app, logger)
 	mountRestInstanceFeatures(mux, cfg, logger)
+	mountWaasPlanner(mux, app)
 	serveMountSocial(mux, app, logger)
 }
 
