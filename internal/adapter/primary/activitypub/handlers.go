@@ -39,18 +39,30 @@ type Handlers struct {
 	// Version is the software version NodeInfo reports.
 	Version string
 	Log     *slog.Logger
+	// IsMember gates reads of a local actor and their collections.
+	IsMember func(*http.Request) bool
 }
 
 // Mount registers the routes.
 func (h *Handlers) Mount(mux *http.ServeMux) {
-	mux.HandleFunc("GET /.well-known/webfinger", h.webfinger)
+	mux.HandleFunc("GET /.well-known/webfinger", h.memberRead(h.webfinger))
 	mux.HandleFunc("GET /.well-known/nodeinfo", h.nodeinfoLinks)
 	mux.HandleFunc("GET /nodeinfo/2.1", h.nodeinfo)
-	mux.HandleFunc("GET /users/{username}", h.actor)
-	mux.HandleFunc("GET /users/{username}/followers", h.followers)
-	mux.HandleFunc("GET /users/{username}/following", h.following)
-	mux.HandleFunc("GET /users/{username}/outbox", h.outbox)
+	mux.HandleFunc("GET /users/{username}", h.memberRead(h.actor))
+	mux.HandleFunc("GET /users/{username}/followers", h.memberRead(h.followers))
+	mux.HandleFunc("GET /users/{username}/following", h.memberRead(h.following))
+	mux.HandleFunc("GET /users/{username}/outbox", h.memberRead(h.outbox))
 	mux.HandleFunc("POST /users/{username}/inbox", h.inbox)
+}
+
+func (h *Handlers) memberRead(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.IsMember != nil && !h.IsMember(r) {
+			http.NotFound(w, r)
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (h *Handlers) instance() federation.Instance { return h.Actors.Instance }

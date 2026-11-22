@@ -26,7 +26,7 @@ Peloton uses Garmin’s official read-only Personal API. Each rider creates and 
 - Peloton prefers the original FIT and also handles original TCX or GPX files. When Garmin supplies no usable file, Peloton imports the available ride summary. Summary-only rides lack the recorded track and sensor samples needed for route matching and stream-based records. Object storage must be enabled to retain original files for download.
 - The Garmin connector uses the instance scheduler cadence, `CAIRN_SCHEDULER_POLLING_INTERVAL`. Setting `CAIRN_SCHEDULER_ENABLED=false` turns off recurring polls. The history import, retries, and **Sync Now** still run.
 - Garmin keys and bearer sessions are encrypted at rest with the instance master key. Keep each key private. Protect access to the Peloton instance and use HTTPS when connecting from another device. Existing Cairn Garmin worker connections can still be managed through the external worker controls.
-- Strava segment discovery uses the existing catalog, cache, and visibility rules. Discovery requires NATS and the feature flag. A visible ride appears on a Local KOM leaderboard only when its recorded route matches a segment and its visibility allows the viewer to see the effort.
+- Strava segment discovery uses the existing catalog and cache. Discovery requires NATS and the feature flag. A paced backfill scans previously imported Garmin recordings that have GPS data. The shared Local KOM leaderboard ranks one locally matched effort per member. Summary-only rides are visible to members and need a GPS recording to produce segment efforts.
 
 ## Automated verification
 

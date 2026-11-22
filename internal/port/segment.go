@@ -58,11 +58,13 @@ type SegmentReader interface {
 		offset int,
 	) ([]domain.SegmentEffort, error)
 
-	// ListSegmentEffortsFiltered pages efforts on one segment with their
-	// activity's visibility state. Deleted activities, and other users'
-	// private or admin-hidden ones, are pre-filtered; callers still resolve
-	// visibility per row (view.Visibility).
+	// ListSegmentEffortsFiltered pages efforts with their athlete's card,
+	// applying moderation and the caller's filters.
 	ListSegmentEffortsFiltered(ctx context.Context, segmentID domain.SegmentID, viewer domain.UserID, q domain.SegmentEffortQuery) ([]domain.SegmentEffortCandidate, error)
+
+	// ListCatalogSegments pages discovered segments with valid group efforts.
+	// A member filter selects segments without changing their group results.
+	ListCatalogSegments(ctx context.Context, member *domain.UserID, limit, offset int) ([]domain.CatalogSegment, error)
 
 	// UserSegmentStats is the viewer's headline block: distinct segments
 	// with efforts, efforts, records, external vs native.

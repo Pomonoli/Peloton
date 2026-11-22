@@ -1,4 +1,8 @@
-# Per-field visibility model (multi-user v1)
+# Activity visibility
+
+Peloton gives signed-in members access to each other’s activity history, routes, statistics, and matched Strava segment results. This applies to existing records regardless of their stored Cairn privacy fields. Administrative hides and soft deletes still apply. The owner retains control over changes to activities, source files, and account settings. Profile, activity and share-link reads require a signed-in account.
+
+## Upstream Cairn model (reference)
 
 The foundation for every multi-user feature (feed, public profiles, share links,
 kudos/comments). The operator chose a **richer, per-field** model over the

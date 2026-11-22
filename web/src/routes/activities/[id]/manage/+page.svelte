@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { APP_NAME } from '$app/env/public';
+	import { m } from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
 	import { formatDate } from '#lib/format.js';
 	import ActivityNav from '#lib/components/ActivityNav.svelte';
@@ -401,8 +402,7 @@
 	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Share</h2>
 		<p class="mb-4 text-xs text-zinc-500">
-			Create an unguessable read-only link. Anyone with the link sees this activity projected
-			through your "link" visibility rules — no {APP_NAME} account needed. Revoke any time.
+			{m.community_share_link_help()}
 		</p>
 		<div class="mb-3">
 			<button

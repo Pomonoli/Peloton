@@ -90,7 +90,7 @@ func TestClubsReads(t *testing.T) {
 		members: map[domain.ClubID]map[domain.UserID]domain.ClubMemberRole{pub.ID: {member: domain.ClubRoleMember}, priv.ID: {me: domain.ClubRoleOwner}},
 		feed:    []domain.Activity{repo.Activities[act], repo.Activities[own]},
 	}
-	feeds := NewFeeds(repo, users, NewVisibility(nil, nil, nil), nil, false)
+	feeds := NewFeeds(repo, users, NewVisibility(), nil, false)
 	c := NewClubs(clubs, users, feeds)
 
 	cards, err := c.List(context.Background(), me, 0, 0)
@@ -110,7 +110,13 @@ func TestClubsReads(t *testing.T) {
 	if d, err := c.Get(context.Background(), "pub", nil); err != nil || d.IsMember {
 		t.Fatalf("anonymous on public %+v %v", d, err)
 	}
-	rows, err := c.Members(context.Background(), "pub", nil, 0, 0)
+	if _, err := c.Members(context.Background(), "pub", nil, 0, 0); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("anonymous member list: %v", err)
+	}
+	if _, err := c.Feed(context.Background(), "pub", nil, 0, 0); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("anonymous club feed: %v", err)
+	}
+	rows, err := c.Members(context.Background(), "pub", &me, 0, 0)
 	if err != nil || len(rows) != 1 || rows[0].User.Username != "member" {
 		t.Fatalf("members %v %v", rows, err)
 	}
@@ -129,7 +135,7 @@ func TestProjectedAndShared(t *testing.T) {
 	users := &fakeUsers{users: map[domain.UserID]domain.User{owner: {ID: owner, Username: "owner"}}}
 	public := addActivity(repo, owner, domain.ActivityTypeRide, vNow, domain.PrivacyPublic)
 	private := addActivity(repo, owner, domain.ActivityTypeRide, vNow, domain.PrivacyPrivate)
-	feeds := NewFeeds(repo, users, NewVisibility(nil, nil, nil), nil, false)
+	feeds := NewFeeds(repo, users, NewVisibility(), nil, false)
 
 	p, u, isOwner, err := feeds.Projected(context.Background(), public, &viewer, false)
 	if err != nil || isOwner || u.Username != "owner" || p.ID != public {
@@ -138,14 +144,14 @@ func TestProjectedAndShared(t *testing.T) {
 	if _, _, isOwner, err := feeds.Projected(context.Background(), private, &owner, false); err != nil || !isOwner {
 		t.Fatalf("owner on private: %v %v", isOwner, err)
 	}
-	if _, _, _, err := feeds.Projected(context.Background(), private, &viewer, false); !errors.Is(err, ErrForbidden) {
+	if _, _, _, err := feeds.Projected(context.Background(), private, &viewer, false); err != nil {
 		t.Fatalf("stranger on private: %v", err)
 	}
 	if _, _, _, err := feeds.Projected(context.Background(), domain.ActivityID(uuid.New()), nil, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("unknown: %v", err)
 	}
 	links := &fakeLinks{links: map[string]domain.ShareLink{"tok": {Token: "tok", ActivityID: private}}}
-	if p, u, err := feeds.Shared(context.Background(), links, "tok", nil); err != nil || p.ID != private || u.Username != "owner" {
+	if p, u, err := feeds.Shared(context.Background(), links, "tok", &viewer); err != nil || p.ID != private || u.Username != "owner" {
 		t.Fatalf("shared %+v %v %v", p, u, err)
 	}
 	if _, _, err := feeds.Shared(context.Background(), links, "nope", nil); !errors.Is(err, domain.ErrNotFound) {
@@ -163,27 +169,27 @@ func TestProfilesGet(t *testing.T) {
 	addActivity(repo, owner, domain.ActivityTypeRun, vNow, domain.PrivacyPublic)
 	addActivity(repo, owner, domain.ActivityTypeRun, vNow.Add(-time.Hour), domain.PrivacyPrivate)
 	follows := &fakeFollows{following: map[domain.UserID]map[domain.UserID]bool{follower: {owner: true}}}
-	p := NewProfiles(usersByName{users}, repo, follows, nil, NewVisibility(nil, follows, nil))
+	p := NewProfiles(usersByName{users}, repo, follows, nil, NewVisibility())
 
-	// Private profile: owner and follower see it, a stranger is forbidden.
+	// Members see the same history regardless of follow status.
 	if v, err := p.Get(context.Background(), "Owner ", &owner); err != nil || !v.IsOwner || len(v.Activities) != 2 || v.Counts.Followers != 2 {
 		t.Fatalf("owner %+v %v", v, err)
 	}
-	if v, err := p.Get(context.Background(), "owner", &follower); err != nil || !v.IsFollowing || len(v.Activities) != 1 {
+	if v, err := p.Get(context.Background(), "owner", &follower); err != nil || !v.IsFollowing || len(v.Activities) != 2 {
 		t.Fatalf("follower %+v %v", v, err)
 	}
-	if _, err := p.Get(context.Background(), "owner", &stranger); !errors.Is(err, ErrForbidden) {
+	if v, err := p.Get(context.Background(), "owner", &stranger); err != nil || len(v.Activities) != 2 {
 		t.Fatalf("stranger: %v", err)
 	}
-	if _, err := p.Get(context.Background(), "nobody", nil); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := p.Get(context.Background(), "nobody", &stranger); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("unknown: %v", err)
 	}
-	// Public profile: anonymous sees the public activity.
+	// A legacy public profile still requires authentication.
 	u := users.users[owner]
 	u.ProfileIsPublic = true
 	users.users[owner] = u
-	if v, err := p.Get(context.Background(), "owner", nil); err != nil || v.IsOwner || len(v.Activities) != 1 {
-		t.Fatalf("anonymous %+v %v", v, err)
+	if _, err := p.Get(context.Background(), "owner", nil); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("anonymous: %v", err)
 	}
 }
 

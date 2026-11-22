@@ -24,7 +24,7 @@ func wireSegmentDiscovery(app *App, enabled bool, logger *slog.Logger) {
 	}
 	app.DiscoverSegments = &segment.DiscoverSegments{
 		Provider: tailwindkompass.New(), Cache: app.Segments,
-		Activities: app.Activities, Streams: app.Streams, Tx: app.Tx, Matcher: app.MatchSegments,
+		Activities: app.Activities, Streams: app.Streams, Tx: app.Tx, Matcher: app.MatchSegments, Garmin: app.Segments,
 	}
 }
 
@@ -35,8 +35,7 @@ func startSegmentDiscoveryConsumer(ctx context.Context, app *App, logger *slog.L
 	logger.Info("starting Strava segment discovery consumer", "provider", app.DiscoverSegments.Provider.Name())
 	return app.NATSBus.Subscribe(ctx, port.ConsumerConfig{
 		Stream: natsadapter.StreamEvents, Durable: "strava-segment-discovery",
-		// A newly enabled consumer starts with new events. Riders choose
-		// which pre-existing activities to rescan.
+		// Older Garmin recordings are handled by the backfill loop.
 		Subject: pipeline.ActivityChangedSubject, DeliverPolicy: port.DeliverNew,
 		AckWait: 2 * time.Minute, MaxDeliver: 5,
 	}, func(ctx context.Context, msg port.Message) error {
@@ -92,4 +91,23 @@ func runSegmentDiscovery(ctx context.Context, scan *segment.DiscoverSegments, ev
 		}
 	}
 	return nil
+}
+
+// runGarminSegmentBackfill scans existing recordings at a bounded pace.
+func runGarminSegmentBackfill(ctx context.Context, discovery *segment.DiscoverSegments, logger *slog.Logger) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	var after domain.SourceID
+	for ctx.Err() == nil {
+		next, err := discovery.BackfillGarmin(ctx, after, 5)
+		if err != nil && ctx.Err() == nil {
+			logger.Warn("Garmin segment backfill", "error", err)
+		}
+		after = next
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

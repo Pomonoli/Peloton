@@ -539,7 +539,13 @@ const sourceSaveSQL = `
 			moving_s = EXCLUDED.moving_s,
 			elapsed_s = EXCLUDED.elapsed_s,
 			start_lat = COALESCE(EXCLUDED.start_lat, activity_sources.start_lat),
-			start_lng = COALESCE(EXCLUDED.start_lng, activity_sources.start_lng)
+			start_lng = COALESCE(EXCLUDED.start_lng, activity_sources.start_lng),
+			garmin_segments_scanned_at = CASE
+				WHEN EXCLUDED.provider = 'garmin' AND (
+					EXCLUDED.raw_blob_id IS DISTINCT FROM activity_sources.raw_blob_id OR
+					EXCLUDED.parsed IS DISTINCT FROM activity_sources.parsed
+				) THEN NULL ELSE activity_sources.garmin_segments_scanned_at
+			END
 	`
 
 // sourceMF is the derived match-feature projection written alongside a source.
@@ -1312,12 +1318,11 @@ func (r *ActivityRepo) ListActivitiesFiltered(
 	return out, matched, nil
 }
 
-// ListFollowingFeed returns non-private activities owned by users the viewer
-// follows (accepted edges), newest first. The privacy filter is coarse here
-// (private excluded); per-category projection happens at the read path.
-func (r *ActivityRepo) ListFollowingFeed(
+// ListCommunityActivities pages the community feed or a member's activity history.
+func (r *ActivityRepo) ListCommunityActivities(
 	ctx context.Context,
 	viewerID domain.UserID,
+	ownerID *domain.UserID,
 	limit, offset int,
 ) ([]domain.Activity, error) {
 	if limit <= 0 {
@@ -1331,17 +1336,13 @@ func (r *ActivityRepo) ListFollowingFeed(
 		`SELECT `+activityColumns+`
 		   FROM activities a
 		   WHERE a.deleted_at IS NULL
-		     AND a.privacy <> 'private'
-		     AND a.hidden_by_admin = false
-		     AND a.user_id IN (
-		         SELECT followee_id FROM follows
-		         WHERE follower_id = $1 AND status = 'accepted'
-		     )
+		     AND (a.hidden_by_admin = false OR a.user_id = $1)
+		     AND ($2::uuid IS NULL OR a.user_id = $2)
 		   ORDER BY a.start_time DESC, a.id DESC
-		   LIMIT $2 OFFSET $3`,
-		viewerID.UUID(), limit, offset)
+		   LIMIT $3 OFFSET $4`,
+		viewerID.UUID(), userIDParam(ownerID), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list following feed: %w", err)
+		return nil, fmt.Errorf("list community activities: %w", err)
 	}
 	defer rows.Close()
 	var out []domain.Activity

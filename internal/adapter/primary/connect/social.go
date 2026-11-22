@@ -86,7 +86,7 @@ func (s *SocialServer) feedItemToProto(ctx context.Context, it view.FeedItem) *v
 func (s *SocialServer) projectedToProto(ctx context.Context, p domain.ProjectedActivity) *v1.ProjectedActivity {
 	out := projectedActivityToProto(p)
 	if p.MapVisible && s.Content != nil {
-		if u, err := s.Content.MapImage(ctx, p.ID, true); err == nil {
+		if u, err := s.Content.MapImage(ctx, p.ID, false); err == nil {
 			out.MapImage = contentURLToProto(u)
 		}
 	}

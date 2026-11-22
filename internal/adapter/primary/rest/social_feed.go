@@ -7,8 +7,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
-// HomeFeedHandlers serve the logged-in landing feed: own activities, the local
-// following feed (projected) and federated activities, newest first.
+// HomeFeedHandlers serve the logged-in landing feed of community and federated activities.
 //
 //	GET /api/feed/home
 type HomeFeedHandlers struct {

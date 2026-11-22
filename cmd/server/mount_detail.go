@@ -25,15 +25,11 @@ func detailMapImages(app *App, cfg config.MapConfig, logger *slog.Logger) *mapim
 	if ua == "" {
 		ua = "Cairn/" + Version + " (static map; +https://github.com/opencairn-org/cairn-core)"
 	}
-	var zones mapimage.ZoneSource
-	if app.Visibility2 != nil {
-		zones = app.Visibility2
-	}
 	var streams port.StreamRepo // a nil *postgres.StreamRepo must stay a nil interface
 	if app.Streams != nil {
 		streams = app.Streams
 	}
-	return mapimage.New(streams, app.BlobStore, zones, staticmap.HTTPTileFetcher(cfg.TileURL, ua, cfg.Timeout), logger)
+	return mapimage.New(streams, app.BlobStore, nil, staticmap.HTTPTileFetcher(cfg.TileURL, ua, cfg.Timeout), logger)
 }
 
 // mountContent mounts the signed /content/ route and installs app.Content,
@@ -42,6 +38,7 @@ func mountContent(mux *http.ServeMux, app *App, cfg *config.Config, logger *slog
 	signer := content.NewSigner(content.NewCodec(cfg.Auth.SessionSecret, nil), cfg.HTTP.PublicBaseURL, cfg.Storage.PresignTTL, app.BlobStore)
 	app.Content = signer
 	(&rest.ContentHandlers{
+		Auth:    restAuth(app),
 		Signer:  signer,
 		Access:  detailAccess(app),
 		Images:  detailMapImages(app, cfg.Map, logger),
@@ -58,12 +55,12 @@ func mountDetail(mux *http.ServeMux, app *App, cfg *config.Config, logger *slog.
 		Auth: auth, Access: access, Details: app.Details, Exports: app.Exports, Log: logger,
 		Streams: app.Streams != nil, Segments: app.Segments != nil,
 	}).Mount(mux)
-	(&rest.MapImageHandlers{Auth: auth, Access: access, Shares: app.Shares, Images: detailMapImages(app, cfg.Map, logger)}).Mount(mux)
+	(&rest.MapImageHandlers{Auth: auth, Access: access, Images: detailMapImages(app, cfg.Map, logger)}).Mount(mux)
 	logger.Info("activity detail endpoints mounted", "tiles", cfg.Map.TileURL)
 	if app.Attachments == nil {
 		return
 	}
 	photos := attachment.NewPhotos(app.Attachments, app.BlobStore, app.AttachmentVariants, app.Content, logger)
-	(&rest.AttachmentHandlers{Auth: auth, Access: access, Shares: app.Shares, Photos: photos}).Mount(mux)
+	(&rest.AttachmentHandlers{Auth: auth, Access: access, Photos: photos}).Mount(mux)
 	logger.Info("attachment endpoints mounted", "path", "/api/activities/{id}/attachments")
 }

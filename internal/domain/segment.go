@@ -151,7 +151,7 @@ func (s *Segment) Validate() error {
 	if s.PolylinePrecision != 5 && s.PolylinePrecision != 6 {
 		return ErrSegmentInvalidPolylinePrecision
 	}
-	if s.DistanceM <= 0 {
+	if !(s.DistanceM > 0) || math.IsInf(s.DistanceM, 0) {
 		return ErrSegmentNonPositiveDistance
 	}
 	return nil
@@ -411,6 +411,28 @@ func (s *Segment) EffectiveTolerances(base MatchTolerances) MatchTolerances {
 // ---------------------------------------------------------------------------
 // Read-model projections for the segments landing page (#70)
 // ---------------------------------------------------------------------------
+
+// CatalogSegment summarizes one discovered segment ridden by the community.
+type CatalogSegment struct {
+	ID             SegmentID
+	Name           string
+	DistanceM      float64
+	BestElapsedS   float64
+	LocalKOMHolder string
+	MemberCount    int
+}
+
+// SegmentAverageSpeedKmh uses elapsed time over the matched segment distance.
+func SegmentAverageSpeedKmh(distanceMeters, elapsedSeconds float64) *float64 {
+	if !(distanceMeters > 0 && elapsedSeconds > 0) || math.IsInf(elapsedSeconds, 0) {
+		return nil
+	}
+	speed := distanceMeters / elapsedSeconds * 3.6
+	if !(speed > 0) || math.IsInf(speed, 0) {
+		return nil
+	}
+	return &speed
+}
 
 // UserSegmentListItem is a lean per-segment summary for the segments landing
 // page: the segment's identity plus the viewer's aggregate effort stats on it.

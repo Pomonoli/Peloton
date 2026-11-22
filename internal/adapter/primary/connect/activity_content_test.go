@@ -49,7 +49,7 @@ func contentFixture(t *testing.T) (*actFixture, domain.ActivityID) {
 			ThumbBlobID: "attachments/a/1.thumb.jpg", MediumBlobID: "attachments/a/1.medium.jpg", Blurhash: "LEHV6nWB2yk8", Caption: "sunrise", CreatedAt: actNow},
 		{ID: domain.AttachmentID(uuid.New()), ActivityID: aid, BlobID: "attachments/a/2", ContentType: "image/jpeg", CreatedAt: actNow}, // no variants yet
 	}}}
-	f.srv.Visibility = view.NewVisibility(nil, nil, nil)
+	f.srv.Visibility = view.NewVisibility()
 	f.srv.Exports = activityexport.NewExports(&fakeStreams{samples: []domain.StreamSample{
 		{Timestamp: actNow, Latitude: f64(49.0), Longitude: f64(8.0), HeartRateBpm: new(int16)},
 		{Timestamp: actNow.Add(time.Second), Latitude: f64(49.001), Longitude: f64(8.001)},
@@ -76,12 +76,14 @@ func TestListAttachmentsSignsVariants(t *testing.T) {
 	if b.GetOriginal() == nil || b.Medium != nil || b.Thumb != nil || b.GetBlurhash() != "" {
 		t.Fatalf("variant-less attachment %v", b)
 	}
-	// A stranger: the activity is private → NotFound.
+	// A member can see shared variants. Originals remain owner-only.
 	other := context.WithValue(t.Context(), ctxKeyUserID, domain.UserID(uuid.New()))
-	_, err = f.srv.ListAttachments(other, &v1.ListAttachmentsRequest{ActivityId: aid.String()})
-	wantCode(t, err, connectrpc.CodeNotFound)
+	shared, err := f.srv.ListAttachments(other, &v1.ListAttachmentsRequest{ActivityId: aid.String()})
+	if err != nil || len(shared.GetAttachments()) != 2 || shared.GetAttachments()[0].GetOriginal() != nil {
+		t.Fatalf("shared attachment variants: %v %v", shared, err)
+	}
 	_, err = f.srv.ListAttachments(t.Context(), &v1.ListAttachmentsRequest{ActivityId: aid.String()})
-	wantCode(t, err, connectrpc.CodeNotFound)
+	wantCode(t, err, connectrpc.CodeUnauthenticated)
 }
 
 func TestGetActivityMapImageAndListCarryMapImage(t *testing.T) {

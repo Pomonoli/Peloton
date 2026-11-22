@@ -137,7 +137,11 @@ func (s *SocialServer) GetProfile(ctx context.Context, req *v1.GetProfileRequest
 	if s.Profiles == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeUnavailable, "profiles are not available on this instance")
 	}
-	pv, err := s.Profiles.Get(ctx, req.GetUsername(), viewerFor(ctx))
+	me, err := userIDFromHandlerCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pv, err := s.Profiles.Get(ctx, req.GetUsername(), &me)
 	if err != nil {
 		return nil, actionErr(err)
 	}
@@ -155,11 +159,15 @@ func (s *SocialServer) GetProjectedActivity(ctx context.Context, req *v1.GetProj
 	if s.Feeds == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeUnavailable, "feeds are not available on this instance")
 	}
+	me, err := userIDFromHandlerCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
 	id, err := parseActivityID(req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
-	p, owner, isOwner, err := s.Feeds.Projected(ctx, id, viewerFor(ctx), false)
+	p, owner, isOwner, err := s.Feeds.Projected(ctx, id, &me, false)
 	if err != nil {
 		return nil, actionErr(err)
 	}
@@ -170,7 +178,11 @@ func (s *SocialServer) GetSharedActivity(ctx context.Context, req *v1.GetSharedA
 	if s.Feeds == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeUnavailable, "feeds are not available on this instance")
 	}
-	p, owner, err := s.Feeds.Shared(ctx, s.ShareLinks, req.GetToken(), viewerFor(ctx))
+	me, err := userIDFromHandlerCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p, owner, err := s.Feeds.Shared(ctx, s.ShareLinks, req.GetToken(), &me)
 	if err != nil {
 		return nil, actionErr(err)
 	}

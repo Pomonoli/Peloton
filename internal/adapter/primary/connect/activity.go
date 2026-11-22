@@ -211,31 +211,9 @@ func (s *ActivityServer) GetActivity(
 	ctx context.Context,
 	req *v1.GetActivityRequest,
 ) (*v1.GetActivityResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	activity, viewer, err := s.visibleActivity(ctx, req.GetId())
 	if err != nil {
 		return nil, err
-	}
-
-	id, err := uuid.Parse(req.GetId())
-	if err != nil {
-		return nil, connectrpc.NewError(connectrpc.CodeInvalidArgument,
-			"invalid activity id")
-	}
-
-	activity, err := s.Activities.GetActivity(ctx, domain.ActivityID(id))
-	if err != nil {
-		return nil, notFoundErr(err)
-	}
-
-	// Authorisation: the activity must belong to the authenticated user.
-	// Future RBAC (admin override, follower sharing) plugs in here.
-	if activity.UserID != userID {
-		return nil, connectrpc.NewError(connectrpc.CodeNotFound,
-			"not found")
-	}
-	if activity.IsDeleted() {
-		return nil, connectrpc.NewError(connectrpc.CodeNotFound,
-			"not found")
 	}
 
 	sources, err := s.Activities.ListSourcesForActivity(ctx, activity.ID)
@@ -244,6 +222,18 @@ func (s *ActivityServer) GetActivity(
 			fmt.Errorf("list sources: %w", err))
 	}
 
+	if !viewer.IsOwner {
+		out := activityToProto(activity, nil)
+		out.GearId, out.MergeProvenance = "", nil
+		for _, src := range sources {
+			if src.Status == domain.SourceStatusActive {
+				out.Sources = append(out.Sources, &v1.ActivitySource{
+					Id: src.ID.String(), ActivityId: out.Id, Provider: src.Provider,
+				})
+			}
+		}
+		return &v1.GetActivityResponse{Activity: s.withMapImage(ctx, out, activity)}, nil
+	}
 	return &v1.GetActivityResponse{
 		Activity: s.withMapImage(ctx, withGear(activityToProto(activity, sources), activity, s.gearNames(ctx, activity)), activity),
 	}, nil
@@ -442,7 +432,7 @@ func (s *ActivityServer) GetActivityStream(
 	ctx context.Context,
 	req *v1.GetActivityStreamRequest,
 ) (*v1.GetActivityStreamResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	_, err := userIDFromHandlerCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -454,20 +444,17 @@ func (s *ActivityServer) GetActivityStream(
 	}
 	sourceID := domain.SourceID(sourceUUID)
 
-	// Ownership check via the source's parent activity. We don't have a
-	// direct user_id on ActivitySource, so we look up the source then
-	// its activity.
+	// Authorize the parent activity before reading its stream.
 	src, err := s.Activities.GetSource(ctx, sourceID)
 	if err != nil {
 		return nil, notFoundErr(err)
 	}
-	activity, err := s.Activities.GetActivity(ctx, src.ActivityID)
+	_, viewer, err := s.visibleActivity(ctx, src.ActivityID.String())
 	if err != nil {
-		return nil, notFoundErr(err)
+		return nil, err
 	}
-	if activity.UserID != userID {
-		return nil, connectrpc.NewError(connectrpc.CodeNotFound,
-			"not found")
+	if !viewer.IsOwner && src.Status != domain.SourceStatusActive {
+		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 
 	channels := channelsFromProto(req.GetChannels())
@@ -491,36 +478,19 @@ func (s *ActivityServer) GetActivityStream(
 // ListBestEfforts
 //
 // Returns every sliding-window peak computed for the activity, optionally
-// filtered to a subset of BestEffortMetric values. Activity ownership is
-// enforced via the parent activity's user_id.
+// filtered to a subset of BestEffortMetric values.
 // ---------------------------------------------------------------------------
 
 func (s *ActivityServer) ListBestEfforts(
 	ctx context.Context,
 	req *v1.ListBestEffortsRequest,
 ) (*v1.ListBestEffortsResponse, error) {
-	userID, err := userIDFromHandlerCtx(ctx)
+	activity, _, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
 
-	id, err := uuid.Parse(req.GetActivityId())
-	if err != nil {
-		return nil, connectrpc.NewError(connectrpc.CodeInvalidArgument,
-			"invalid activity_id")
-	}
-	activityID := domain.ActivityID(id)
-
-	// Ownership check — load the activity to verify the caller owns it.
-	activity, err := s.Activities.GetActivity(ctx, activityID)
-	if err != nil {
-		return nil, notFoundErr(err)
-	}
-	if activity.UserID != userID || activity.IsDeleted() {
-		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
-	}
-
-	efforts, err := s.BestEfforts.ListForActivity(ctx, activityID)
+	efforts, err := s.BestEfforts.ListForActivity(ctx, activity.ID)
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal,
 			fmt.Errorf("list best efforts: %w", err))

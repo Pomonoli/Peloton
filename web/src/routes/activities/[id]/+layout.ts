@@ -45,6 +45,7 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 
 	// Streams and best-efforts are independent — run them in parallel.
 	const a = activity;
+	const isOwner = a.userId === user.id;
 	const [streamResult, bestEfforts, gear] = await Promise.all([
 		loadStream(clients, a),
 		clients.activity
@@ -55,10 +56,12 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 				return [] as BestEffortView[];
 			}),
 		// For the "gear not set" prompt; failure just hides it.
-		clients.gear
-			.listGear({ includeRetired: false })
-			.then((res) => res.gear.map(gearToView))
-			.catch(() => [] as GearView[])
+		isOwner
+			? clients.gear
+					.listGear({ includeRetired: false })
+					.then((res) => res.gear.map(gearToView))
+					.catch(() => [] as GearView[])
+			: []
 	]);
 
 	// Per-channel merged stream (best field from best source) — only worth
@@ -71,6 +74,7 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 
 	return {
 		activity: activityToView(a),
+		isOwner,
 		stream: streamResult.stream,
 		mergedStream: merged.stream,
 		mergedProvenance: merged.provenance,

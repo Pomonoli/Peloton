@@ -71,9 +71,14 @@ func newITDiscoveryEnv(t *testing.T) *itestEnv {
 
 func startITDiscovery(t *testing.T, env *itestEnv) {
 	t.Helper()
+	startITConsumers(t, env, startFollowUpConsumer, startSegmentDiscoveryConsumer)
+}
+
+func startITConsumers(t *testing.T, env *itestEnv, consumers ...func(context.Context, *App, *slog.Logger) (port.Subscription, error)) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	for _, start := range []func(context.Context, *App, *slog.Logger) (port.Subscription, error){startFollowUpConsumer, startSegmentDiscoveryConsumer} {
+	for _, start := range consumers {
 		sub, err := start(ctx, env.app, testLogger())
 		if err != nil {
 			t.Fatal(err)
@@ -85,7 +90,7 @@ func startITDiscovery(t *testing.T, env *itestEnv) {
 type discoveredEffort struct {
 	SegmentID string  `json:"segment_id"`
 	Elapsed   float64 `json:"elapsed_s"`
-	Speed     float64 `json:"avg_speed_mps"`
+	SpeedKmh  float64 `json:"average_speed_kmh"`
 	PR        bool    `json:"is_personal_record"`
 	KOM       int     `json:"local_kom_position"`
 }
@@ -118,26 +123,44 @@ func setITSegmentVisibility(c *itestClient, activityID, privacy string) {
 	}, http.StatusOK)
 }
 
-func segmentBoard(t *testing.T, c *itestClient, segmentID string) []domain.LeaderboardEntry {
+type boardRow struct {
+	Rank       int       `json:"rank"`
+	UserID     string    `json:"user_id"`
+	ActivityID string    `json:"activity_id"`
+	Name       string    `json:"display_name"`
+	Elapsed    float64   `json:"elapsed_s"`
+	SpeedKmh   float64   `json:"average_speed_kmh"`
+	StartTime  time.Time `json:"start_time"`
+}
+
+func segmentBoard(t *testing.T, c *itestClient, segmentID string) []boardRow {
 	t.Helper()
 	var result struct {
-		Entries []struct {
-			Rank       int     `json:"rank"`
-			UserID     string  `json:"user_id"`
-			ActivityID string  `json:"activity_id"`
-			Elapsed    float64 `json:"elapsed_s"`
-		}
+		Entries []boardRow
 	}
 	if err := json.Unmarshal(c.do(http.MethodGet, "/api/segments/"+segmentID+"/leaderboard", nil, http.StatusOK), &result); err != nil {
 		t.Fatal(err)
 	}
-	var board []domain.LeaderboardEntry
-	for _, row := range result.Entries {
-		u, _ := domain.ParseUUID[domain.UserID](row.UserID)
-		a, _ := domain.ParseUUID[domain.ActivityID](row.ActivityID)
-		board = append(board, domain.LeaderboardEntry{Rank: row.Rank, UserID: u, ActivityID: a, ElapsedS: row.Elapsed})
+	return result.Entries
+}
+
+type catalogRow struct {
+	ID          string  `json:"id"`
+	MemberCount int     `json:"member_count"`
+	Winner      string  `json:"local_kom_holder"`
+	Elapsed     float64 `json:"best_elapsed_s"`
+	SpeedKmh    float64 `json:"average_speed_kmh"`
+}
+
+func catalog(t *testing.T, c *itestClient, filter string) []catalogRow {
+	t.Helper()
+	var response struct {
+		Segments []catalogRow
 	}
-	return board
+	if err := json.Unmarshal(c.do(http.MethodGet, "/api/segments/catalog"+filter, nil, http.StatusOK), &response); err != nil {
+		t.Fatal(err)
+	}
+	return response.Segments
 }
 
 func TestAPI_DiscoveredSegments(t *testing.T) {
@@ -161,10 +184,6 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 	startITDiscovery(t, env)
 	alice := env.user("segment-alice", domain.UserRoleUser)
 	bob := env.user("segment-bob", domain.UserRoleUser)
-	bob.do(http.MethodPut, "/api/profile/visibility", map[string]any{
-		"policy": map[string][]string{"public": {"summary", "segments"}},
-	}, http.StatusOK)
-
 	gpx := gpxRide(time.Date(2022, 9, 21, 12, 0, 0, 0, time.UTC))
 	upload := alice.upload("test-ride.gpx", gpx)
 	activity := str(upload, "activity_id")
@@ -179,11 +198,28 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 	close(provider.release)
 	got := waitForSegmentEfforts(t, alice, activity, 1)
 	if len(got) != 1 || got[0].Elapsed != 200 || !got[0].PR || got[0].KOM != 1 ||
-		math.Abs(got[0].Speed-seg.DistanceM/got[0].Elapsed) > 0.000001 {
+		math.Abs(got[0].SpeedKmh-seg.DistanceM/got[0].Elapsed*3.6) > 0.000001 {
 		t.Fatalf("unexpected historical effort: %+v", got)
 	}
 	segmentID := got[0].SegmentID
-	bob.do(http.MethodGet, "/api/segments/"+segmentID+"/leaderboard", nil, http.StatusNotFound)
+	// Bob has never ridden this segment and neither rider follows the other.
+	bob.do(http.MethodGet, "/api/segments/"+segmentID, nil, http.StatusOK)
+	if board := segmentBoard(t, bob, segmentID); len(board) != 1 || board[0].UserID != alice.userID.String() {
+		t.Fatalf("new member did not see the shared leaderboard: %+v", board)
+	}
+	if rows := catalog(t, bob, ""); len(rows) != 1 || rows[0].ID != segmentID || rows[0].MemberCount != 1 {
+		t.Fatalf("unexpected initial community catalog: %+v", rows)
+	}
+	if rows := catalog(t, bob, "?mine=true"); len(rows) != 0 {
+		t.Fatalf("My Segments included a ride Bob had not completed: %+v", rows)
+	}
+	if peer := activitySegmentEfforts(t, bob, activity); len(peer) != 1 || peer[0] != got[0] {
+		t.Fatalf("member's activity effort missing or different: %+v", peer)
+	}
+	anon := env.anon()
+	for _, path := range []string{"/api/segments/catalog", "/api/segments/" + segmentID, "/api/segments/" + segmentID + "/leaderboard", "/api/activities/" + activity + "/segment-efforts"} {
+		anon.do(http.MethodGet, path, nil, http.StatusUnauthorized)
+	}
 	bob.do(http.MethodPost, "/api/activities/"+activity+"/rescan-segments", nil, http.StatusNotFound)
 
 	repeated := alice.upload("duplicate.gpx", gpx)
@@ -196,17 +232,19 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 	if len(bobEfforts) != 1 || bobEfforts[0].Elapsed != 100 || bobEfforts[0].SegmentID != segmentID || provider.calls.Load() != before {
 		t.Fatal("a second rider did not reuse the cached segment")
 	}
-	setITSegmentVisibility(bob, bobActivity, "PUBLIC")
+	setITSegmentVisibility(bob, bobActivity, "PRIVATE")
 	board := segmentBoard(t, alice, segmentID)
-	if len(board) != 2 || board[0].UserID != bob.userID || board[0].Rank != 1 || board[1].Rank != 2 {
+	if len(board) != 2 || board[0].UserID != bob.userID.String() || board[0].Rank != 1 || board[1].Rank != 2 ||
+		board[0].StartTime.IsZero() || math.Abs(board[0].SpeedKmh-seg.DistanceM/100*3.6) > 0.000001 {
 		t.Fatalf("expected two local standings, got %+v", board)
 	}
 	if got := activitySegmentEfforts(t, alice, activity); len(got) != 1 || got[0].KOM != 2 {
 		t.Fatalf("activity did not display the viewer's Local KOM position: %+v", got)
 	}
-	setITSegmentVisibility(bob, bobActivity, "PRIVATE")
-	if board := segmentBoard(t, alice, segmentID); len(board) != 1 || board[0].UserID != alice.userID {
-		t.Fatal("private effort visible on another rider's leaderboard")
+	all, mine := catalog(t, alice, ""), catalog(t, alice, "?mine=true")
+	if len(all) != 1 || len(mine) != 1 || all[0] != mine[0] || all[0].ID != segmentID ||
+		all[0].MemberCount != 2 || all[0].Winner != board[0].Name || all[0].Elapsed != board[0].Elapsed || all[0].SpeedKmh != board[0].SpeedKmh {
+		t.Fatalf("catalog and My Segments should agree with the shared standings: all=%+v mine=%+v", all, mine)
 	}
 	slow := alice.upload("older-ride.gpx", gpxRideAtInterval(time.Date(2019, 4, 6, 12, 0, 0, 0, time.UTC), 2*time.Second))
 	slowID := str(slow, "activity_id")
@@ -222,11 +260,14 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 		t.Fatal(err)
 	}
 	alice.do(http.MethodPost, "/api/activities/"+activity+"/rescan-segments", nil, http.StatusAccepted)
-	if efforts := waitForSegmentEfforts(t, alice, activity, 1); len(efforts) != 1 || efforts[0] != got[0] {
+	if efforts := waitForSegmentEfforts(t, alice, activity, 1); len(efforts) != 1 || efforts[0].Elapsed != got[0].Elapsed || efforts[0].KOM != 2 || !efforts[0].PR {
 		t.Fatalf("rescan did not restore the same cached effort: %+v", efforts)
 	}
 	if provider.calls.Load() != before {
 		t.Fatal("repeat imports or rescans made unnecessary provider requests")
+	}
+	if board := segmentBoard(t, alice, segmentID); len(board) != 2 || board[1].Elapsed != 200 {
+		t.Fatalf("repeat efforts must not create new competitors: %+v", board)
 	}
 	alice.do(http.MethodGet, "/api/segments/"+segmentID, nil, http.StatusOK)
 	alice.do(http.MethodGet, "/api/segments", nil, http.StatusOK)

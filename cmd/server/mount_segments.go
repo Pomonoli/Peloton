@@ -15,7 +15,7 @@ func mountRestSegments(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	}
 	h := &rest.SegmentHandlers{
 		Auth: restAuth(app), Views: app.SegmentViews, Authoring: app.SegmentAuthoring, Details: app.Details,
-		Activities: app.SourceActions, Log: logger,
+		Activities: app.SourceActions, Access: detailAccess(app), Log: logger,
 		Backfill: func(userID domain.UserID, id domain.SegmentID, from, to time.Time) string {
 			return backfillSegment(app, logger, userID, id, from, to)
 		},

@@ -41,9 +41,12 @@ func viewerFor(ctx context.Context) *domain.UserID {
 }
 
 // visibleActivity loads an activity and resolves how the caller may see it:
-// owners fully, others through the visibility model. NotFound hides private,
-// hidden, deleted and foreign-blocked activities alike.
+// members through the community visibility rules.
 func (s *ActivityServer) visibleActivity(ctx context.Context, rawID string) (domain.Activity, view.Viewer, error) {
+	me, err := userIDFromHandlerCtx(ctx)
+	if err != nil {
+		return domain.Activity{}, view.Viewer{}, err
+	}
 	id, err := parseActivityID(rawID)
 	if err != nil {
 		return domain.Activity{}, view.Viewer{}, err
@@ -52,10 +55,7 @@ func (s *ActivityServer) visibleActivity(ctx context.Context, rawID string) (dom
 	if err != nil {
 		return domain.Activity{}, view.Viewer{}, notFoundErr(err)
 	}
-	if s.Visibility == nil {
-		return domain.Activity{}, view.Viewer{}, connectrpc.NewError(connectrpc.CodeUnavailable, "visibility is not available on this instance")
-	}
-	vw, ok := s.Visibility.Resolve(ctx, act, viewerFor(ctx), false)
+	vw, ok := s.Visibility.Resolve(ctx, act, &me, false)
 	if !ok {
 		return domain.Activity{}, view.Viewer{}, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
@@ -115,8 +115,7 @@ func (s *ActivityServer) attachmentToProto(ctx context.Context, a domain.Attachm
 	return out
 }
 
-// GetActivityMapImage: owner gets the full track, a viewer the map category
-// is open to gets the privacy-zone trimmed one.
+// GetActivityMapImage signs a map image for a member who can read the ride.
 func (s *ActivityServer) GetActivityMapImage(ctx context.Context, req *v1.GetActivityMapImageRequest) (*v1.GetActivityMapImageResponse, error) {
 	if s.Content == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeUnavailable, "course images are not available on this instance")
@@ -131,7 +130,7 @@ func (s *ActivityServer) GetActivityMapImage(ctx context.Context, req *v1.GetAct
 	if act.PrimaryStreamSourceID == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "this activity has no GPS track")
 	}
-	u, err := s.Content.MapImage(ctx, act.ID, !vw.IsOwner)
+	u, err := s.Content.MapImage(ctx, act.ID, false)
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal, fmt.Errorf("sign map image: %w", err))
 	}

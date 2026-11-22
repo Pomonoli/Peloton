@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { APP_NAME } from '$app/env/public';
-	import { onMount } from 'svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
 
@@ -21,34 +21,43 @@
 	};
 	type Profile = {
 		user: Card;
-		is_public: boolean;
 		is_self: boolean;
 		is_following: boolean;
 		followers_count: number;
 		following_count: number;
 		activities: Activity[];
+		has_more: boolean;
 	};
 
 	let profile = $state<Profile | null>(null);
 	let error = $state<string | null>(null);
 	let busy = $state(false);
 
-	async function load() {
+	let loading = $state(false);
+
+	async function load(username: string, offset: number, signal?: AbortSignal) {
+		loading = true;
 		error = null;
 		try {
-			const res = await fetch(`/api/profiles/${data.username}`);
-			if (res.status === 403) {
-				error = 'This profile is private.';
-				return;
-			}
+			const res = await fetch(`/api/profiles/${encodeURIComponent(username)}?offset=${offset}`, {
+				signal: signal ?? null
+			});
+			if (username !== data.username || signal?.aborted) return;
 			if (res.status === 404) {
-				error = 'Athlete not found.';
+				error = m.community_member_missing();
 				return;
 			}
-			if (!res.ok) throw new Error((await res.text()).trim());
-			profile = await res.json();
-		} catch (e) {
-			error = (e as Error).message;
+			if (!res.ok) throw new Error();
+			const next: Profile = await res.json();
+			if (username !== data.username || signal?.aborted) return;
+			profile =
+				offset === 0
+					? next
+					: { ...next, activities: [...(profile?.activities ?? []), ...next.activities] };
+		} catch {
+			if (!signal?.aborted && username === data.username) error = m.community_profile_failed();
+		} finally {
+			if (!signal?.aborted && username === data.username) loading = false;
 		}
 	}
 
@@ -70,24 +79,6 @@
 		}
 	}
 
-	let blocked = $state(false);
-	async function blockUser() {
-		if (!profile) return;
-		if (
-			!confirm(
-				`Block ${profile.user.display_name || profile.user.username}? They won't be able to see your activities or interact with you.`
-			)
-		)
-			return;
-		const res = await fetch(`/api/users/${profile.user.id}/block`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' }
-		});
-		if (res.ok) {
-			blocked = true;
-			profile.is_following = false;
-		}
-	}
 	async function reportUser() {
 		if (!profile) return;
 		const reason = prompt('Why are you reporting this athlete?') ?? '';
@@ -100,13 +91,18 @@
 		alert('Report submitted. Thanks — an admin will review it.');
 	}
 
-	onMount(load);
+	$effect(() => {
+		const controller = new AbortController();
+		profile = null;
+		void load(data.username, 0, controller.signal);
+		return () => controller.abort();
+	});
 </script>
 
 <svelte:head><title>{data.username} · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-6">
-	{#if error}
+	{#if error && !profile}
 		<div class="rounded-lg border border-dashed p-8 text-center text-sm text-zinc-400">{error}</div>
 	{:else if profile}
 		<header class="mb-6 flex items-center gap-4 max-md:flex-wrap">
@@ -127,49 +123,35 @@
 					>
 				</div>
 			</div>
-			{#if data.user && !profile.is_self}
-				{#if blocked}
-					<span class="rounded-full border px-4 py-2 text-sm text-zinc-400">Blocked</span>
-				{:else}
-					<div class="flex items-center gap-2">
-						<button
-							onclick={toggleFollow}
-							disabled={busy}
-							class={`rounded-full px-4 py-2 text-sm font-medium ${profile.is_following ? 'border bg-panel border border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-accent-500 text-on-accent hover:bg-accent-600'} disabled:opacity-50`}
-						>
-							{profile.is_following ? 'Following' : 'Follow'}
-						</button>
-						<button
-							onclick={reportUser}
-							title="Report"
-							class="text-zinc-500 hover:text-zinc-300 max-md:p-2">⚑</button
-						>
-						<button
-							onclick={blockUser}
-							title="Block"
-							class="text-zinc-500 hover:text-red-400 max-md:p-2">⊘</button
-						>
-					</div>
-				{/if}
-			{:else if !data.user}
-				<a
-					href="/login"
-					class="rounded-full bg-accent-500 px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-600"
-					>Sign in to follow</a
-				>
+			{#if !profile.is_self}
+				<div class="flex items-center gap-2">
+					<button
+						onclick={toggleFollow}
+						disabled={busy}
+						class={`rounded-full px-4 py-2 text-sm font-medium ${profile.is_following ? 'border bg-panel border border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-accent-500 text-on-accent hover:bg-accent-600'} disabled:opacity-50`}
+					>
+						{profile.is_following ? 'Following' : 'Follow'}
+					</button>
+					<button
+						onclick={reportUser}
+						title="Report"
+						aria-label="Report"
+						class="text-zinc-500 hover:text-zinc-300 max-md:p-2">⚑</button
+					>
+				</div>
 			{/if}
 		</header>
 
 		<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
-			Recent activities
+			{m.community_activity_history()}
 		</h2>
 		{#if profile.activities.length === 0}
-			<p class="text-sm text-zinc-400">No visible activities.</p>
+			<p class="text-sm text-zinc-400">{m.community_activity_history_empty()}</p>
 		{/if}
 		<div class="space-y-3">
 			{#each profile.activities as a (a.id)}
 				<a
-					href={`/a/${a.id}`}
+					href={`/activities/${a.id}`}
 					class="block rounded-lg border bg-panel border border-zinc-800 p-4 shadow-sm hover:opacity-90"
 				>
 					<div class="flex items-center gap-3">
@@ -195,7 +177,18 @@
 				</a>
 			{/each}
 		</div>
+		{#if error}<p role="status" class="mt-3 text-sm text-red-300">{error}</p>{/if}
+		{#if profile.has_more}
+			<button
+				type="button"
+				disabled={loading}
+				onclick={() => load(data.username, profile?.activities.length ?? 0)}
+				class="mt-3 rounded border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:border-accent-500 disabled:opacity-50"
+			>
+				{loading ? m.community_loading() : m.community_load_more()}
+			</button>
+		{/if}
 	{:else}
-		<p class="text-sm text-zinc-400">Loading…</p>
+		<p class="text-sm text-zinc-400">{m.community_loading()}</p>
 	{/if}
 </div>

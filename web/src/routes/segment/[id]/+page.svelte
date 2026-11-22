@@ -1,11 +1,17 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { decodePolylineLonLat } from '#lib/polyline.js';
-	import { formatDistance, formatDuration, formatDate, formatElevation } from '#lib/format.js';
+	import {
+		formatMetricDistance,
+		formatDuration,
+		formatDate,
+		formatDateOnly,
+		formatElevation,
+		formatSpeedKmh
+	} from '#lib/format.js';
 
 	type Segment = {
 		id: string;
@@ -37,6 +43,9 @@
 		user_id: string;
 		display_name: string;
 		elapsed_s: number;
+		average_speed_kmh: number | null;
+		start_time: string;
+		activity_id: string;
 	};
 
 	const leaderboardPageSize = 20;
@@ -70,21 +79,36 @@
 	let loading = $state(true);
 	let notFound = $state(false);
 
-	onMount(async () => {
+	async function loadSegment(id: string, signal: AbortSignal) {
 		try {
-			const res = await fetch(`/api/segments/${page.params.id}`);
-			if (res.status === 404) {
-				notFound = true;
-			} else if (res.ok) {
-				const d = await res.json();
-				segment = d.segment;
-				efforts = d.efforts ?? [];
-				if (segment?.source === 'strava_catalog') void loadLeaderboard(segment.id, 0);
-			}
+			const res = await fetch(`/api/segments/${id}`, { signal });
+			if (!res.ok) throw new Error();
+			const result = await res.json();
+			if (signal.aborted) return;
+			segment = result.segment;
+			efforts = result.efforts ?? [];
+			if (segment?.source === 'strava_catalog') void loadLeaderboard(id, 0);
 		} catch {
-			/* ignore */
+			if (!signal.aborted) notFound = true;
+		} finally {
+			if (!signal.aborted) loading = false;
 		}
-		loading = false;
+	}
+
+	$effect(() => {
+		const id = page.params.id;
+		if (!id) return;
+		loading = true;
+		notFound = false;
+		segment = null;
+		efforts = [];
+		board = [];
+		boardError = false;
+		boardLoading = false;
+		moreRiders = false;
+		const controller = new AbortController();
+		void loadSegment(id, controller.signal);
+		return () => controller.abort();
 	});
 
 	const coordinates = $derived(
@@ -132,7 +156,7 @@
 		<div class="text-sm text-zinc-500">Loading…</div>
 	{:else if notFound || !segment}
 		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
-			Segment not found, or you have no efforts on it.
+			{m.segment_not_found()}
 		</div>
 	{:else}
 		<header class="flex items-center gap-3">
@@ -144,14 +168,13 @@
 			<div>
 				<h1 class="text-2xl font-semibold tracking-tight">{segment.name || 'Segment'}</h1>
 				<div class="mt-0.5 flex flex-wrap gap-x-4 text-xs text-zinc-500">
-					<span>{formatDistance(segment.distance_m)}</span>
+					<span>{formatMetricDistance(segment.distance_m)}</span>
 					{#if segment.source === 'strava_catalog'}<span>{m.segment_strava_source()}</span>{/if}
 					{#if segment.elevation_gain_m}<span
 							>{formatElevation(segment.elevation_gain_m)} climb</span
 						>{/if}
 					{#if segment.avg_grade != null}<span>{segment.avg_grade.toFixed(1)}% avg</span>{/if}
 					{#if segment.climb_category}<span>Cat {segment.climb_category}</span>{/if}
-					<span>{efforts.length} effort{efforts.length === 1 ? '' : 's'}</span>
 				</div>
 			</div>
 		</header>
@@ -170,6 +193,9 @@
 					<p role="status" class="mb-2 text-sm text-quiet">{m.segment_leaderboard_failed()}</p>
 				{/if}
 				{#if board.length > 0}
+					<p class="mb-2 text-sm text-accent-300">
+						{m.segment_winner({ name: board[0]?.display_name ?? '' })}
+					</p>
 					<div class="overflow-x-auto rounded-xl border border-zinc-800">
 						<table class="w-full text-sm">
 							<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
@@ -177,6 +203,8 @@
 									<th scope="col" class="px-4 py-2 text-left">{m.segment_leaderboard_rank()}</th>
 									<th scope="col" class="px-4 py-2 text-left">{m.segment_leaderboard_rider()}</th>
 									<th scope="col" class="px-4 py-2 text-right">{m.segment_leaderboard_time()}</th>
+									<th scope="col" class="px-4 py-2 text-right">{m.segment_avg_speed()}</th>
+									<th scope="col" class="px-4 py-2 text-right">{m.segment_leaderboard_date()}</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-zinc-800">
@@ -187,6 +215,16 @@
 										<td class="px-4 py-2 text-right tabular-nums"
 											>{formatDuration(entry.elapsed_s)}</td
 										>
+										<td class="px-4 py-2 text-right whitespace-nowrap tabular-nums"
+											>{formatSpeedKmh(entry.average_speed_kmh)}</td
+										>
+										<td class="px-4 py-2 text-right whitespace-nowrap">
+											<a
+												href={`/activities/${entry.activity_id}`}
+												class="text-accent-400 hover:underline"
+												>{formatDateOnly(entry.start_time)}</a
+											>
+										</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -202,7 +240,7 @@
 						disabled={boardLoading}
 						onclick={() => loadLeaderboard(page.params.id ?? '', board.length)}
 					>
-						{m.segment_leaderboard_next()}
+						{boardError ? m.community_retry() : m.segment_leaderboard_next()}
 					</button>
 				{/if}
 			</section>
@@ -253,45 +291,52 @@
 
 		<section>
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">{m.segment_leaderboard_only_yours()}</h2>
-			<div class="overflow-x-auto rounded-xl border border-zinc-800">
-				<table class="w-full text-sm">
-					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
-						<tr>
-							<th class="px-4 py-2 text-left font-medium">Date</th>
-							<th class="px-4 py-2 text-right font-medium">Time</th>
-							<th class="px-4 py-2 text-right font-medium">Rank</th>
-							<th class="px-4 py-2 text-right font-medium">HR</th>
-							<th class="px-4 py-2 text-right font-medium">Power</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each efforts as e (e.id)}
-							<tr class="border-t border-zinc-800/70 hover:bg-panel">
-								<td class="px-4 py-2">
-									<a
-										href={`/activities/${e.activity_id}`}
-										class="text-accent-400 hover:text-accent-300 hover:underline"
-									>
-										{formatDate(e.start_time)}
-									</a>
-								</td>
-								<td class="px-4 py-2 text-right tabular-nums">
-									{formatDuration(e.elapsed_s)}
-									{#if e.is_personal_record}<span
-											class="ml-1 rounded bg-amber-500/15 px-1 text-[10px] text-amber-300">PR</span
-										>{/if}
-								</td>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-400">#{e.personal_rank}</td>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-400"
-									>{e.avg_heart_rate ?? '—'}</td
-								>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-400">{e.avg_power ?? '—'}</td
-								>
+			{#if efforts.length === 0}
+				<p class="text-sm text-quiet">{m.segment_no_personal_efforts()}</p>
+			{:else}
+				<div class="overflow-x-auto rounded-xl border border-zinc-800">
+					<table class="w-full text-sm">
+						<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
+							<tr>
+								<th class="px-4 py-2 text-left font-medium">Date</th>
+								<th class="px-4 py-2 text-right font-medium">Time</th>
+								<th class="px-4 py-2 text-right font-medium">Rank</th>
+								<th class="px-4 py-2 text-right font-medium">HR</th>
+								<th class="px-4 py-2 text-right font-medium">Power</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+						</thead>
+						<tbody>
+							{#each efforts as e (e.id)}
+								<tr class="border-t border-zinc-800/70 hover:bg-panel">
+									<td class="px-4 py-2">
+										<a
+											href={`/activities/${e.activity_id}`}
+											class="text-accent-400 hover:text-accent-300 hover:underline"
+										>
+											{formatDate(e.start_time)}
+										</a>
+									</td>
+									<td class="px-4 py-2 text-right tabular-nums">
+										{formatDuration(e.elapsed_s)}
+										{#if e.is_personal_record}<span
+												class="ml-1 rounded bg-amber-500/15 px-1 text-[10px] text-amber-300"
+												>PR</span
+											>{/if}
+									</td>
+									<td class="px-4 py-2 text-right tabular-nums text-zinc-400">#{e.personal_rank}</td
+									>
+									<td class="px-4 py-2 text-right tabular-nums text-zinc-400"
+										>{e.avg_heart_rate ?? '—'}</td
+									>
+									<td class="px-4 py-2 text-right tabular-nums text-zinc-400"
+										>{e.avg_power ?? '—'}</td
+									>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		</section>
 	{/if}
 </div>

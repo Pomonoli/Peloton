@@ -413,6 +413,62 @@ func TestAPI_EndToEnd(t *testing.T) {
 	act2, src2 := str(up2, "activity_id"), str(up2, "source_id")
 	bobAct := str(bob.upload("bob.gpx", gpxRide(start.Add(24*time.Hour))), "activity_id")
 
+	// The uploads retain the default Cairn privacy values and nobody follows
+	// anyone yet. Both sessions can read the other member's stored rides.
+	for _, check := range []struct {
+		client *itestClient
+		user   string
+		ride   string
+	}{{bob, "italice", actID}, {alice, "itbob", bobAct}} {
+		for _, path := range []string{"/api/feed/home", "/api/feed/following", "/api/profiles/" + check.user} {
+			if body := check.client.do(http.MethodGet, path, nil, http.StatusOK); !bytes.Contains(body, []byte(check.ride)) {
+				t.Errorf("%s: member ride %s missing from %s", check.client.name, check.ride, path)
+			}
+		}
+	}
+	procedure := "/cairn.v1.ActivityService/"
+	peer := bob.post(procedure+"GetActivity", map[string]any{"id": actID}, http.StatusOK)
+	peerActivity, _ := peer["activity"].(map[string]any)
+	summary, _ := peerActivity["summary"].(map[string]any)
+	if str(peerActivity, "primaryStreamSourceId") != srcID || summary["distanceM"] == nil {
+		t.Fatalf("member activity is missing its route or statistics: %v", peer)
+	}
+	sources, _ := peerActivity["sources"].([]any)
+	for _, entry := range sources {
+		source, _ := entry.(map[string]any)
+		if source["rawBlobId"] != nil || source["externalAccountId"] != nil {
+			t.Fatal("member activity exposed original file or provider-account metadata")
+		}
+	}
+	stream := bob.post(procedure+"GetActivityStream", map[string]any{"activitySourceId": srcID}, http.StatusOK)
+	streamData, _ := stream["stream"].(map[string]any)
+	if points, _ := streamData["latitude"].([]any); len(points) == 0 {
+		t.Fatalf("member did not receive the ride's GPS track: %v", stream)
+	}
+	bob.rpc(procedure+"ListBestEfforts", map[string]any{"activityId": actID}, http.StatusOK)
+	bob.rpc(procedure+"GetParsedSource", map[string]any{"activityId": actID, "sourceId": srcID}, http.StatusNotFound)
+	bob.do(http.MethodGet, "/api/activities/"+actID+"/manage", nil, http.StatusNotFound)
+	bob.do(http.MethodPost, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
+	firstComment := bob.post("/api/activities/"+actID+"/comments", map[string]any{"body": "Great route!"}, http.StatusOK)
+	if body := alice.do(http.MethodGet, "/api/activities/"+actID+"/comments", nil, http.StatusOK); !bytes.Contains(body, []byte("Great route!")) {
+		t.Errorf("owner did not receive the member's comment: %s", body)
+	}
+	bob.do(http.MethodDelete, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
+	bob.do(http.MethodDelete, "/api/comments/"+str(firstComment, "id"), nil)
+	for _, path := range []string{"/api/feed/home", "/api/feed/following", "/api/profiles/italice", "/api/activities/" + actID + "/projected"} {
+		anon.do(http.MethodGet, path, nil, http.StatusUnauthorized)
+	}
+	anon.do(http.MethodGet, "/api/activities/"+actID+"/map.png", nil, http.StatusNotFound)
+	anon.rpc(procedure+"GetActivity", map[string]any{"id": actID}, http.StatusUnauthorized)
+	anon.rpc(procedure+"GetActivityStream", map[string]any{"activitySourceId": srcID}, http.StatusUnauthorized)
+	signedMap, _ := peerActivity["mapImage"].(map[string]any)
+	mapURL, err := url.Parse(str(signedMap, "url"))
+	if err != nil || !strings.HasPrefix(mapURL.Path, "/content/") {
+		t.Fatalf("missing signed map URL: %v", signedMap)
+	}
+	bob.do(http.MethodGet, mapURL.Path, nil, http.StatusOK)
+	anon.do(http.MethodGet, mapURL.Path, nil, http.StatusUnauthorized)
+
 	manual := alice.post("/api/activities/manual", map[string]any{
 		"type": "run", "title": "Track session", "start_time": start.Add(72 * time.Hour).Format(time.RFC3339),
 		"elapsed_duration_s": 3600, "moving_duration_s": 3500, "distance_m": 10000, "avg_heart_rate_bpm": 150,
@@ -518,7 +574,8 @@ func TestAPI_EndToEnd(t *testing.T) {
 
 	// Share links.
 	sh := alice.post("/api/activities/"+actID+"/share", nil, http.StatusOK)
-	anon.do(http.MethodGet, "/api/shared/"+str(sh, "token"), nil, http.StatusOK)
+	anon.do(http.MethodGet, "/api/shared/"+str(sh, "token"), nil, http.StatusUnauthorized)
+	bob.do(http.MethodGet, "/api/shared/"+str(sh, "token"), nil, http.StatusOK)
 	alice.do(http.MethodGet, "/api/activities/"+actID+"/shares", nil, http.StatusOK)
 	alice.do(http.MethodDelete, "/api/shares/"+str(sh, "token"), nil, http.StatusOK, http.StatusNoContent)
 
@@ -536,7 +593,8 @@ func TestAPI_EndToEnd(t *testing.T) {
 		"/.well-known/webfinger?resource=acct:italice@" + strings.Replace(strings.TrimPrefix(env.srv.URL, "http://"), "127.0.0.1", "localhost", 1),
 		"/users/italice", "/users/italice/outbox", "/users/italice/followers", "/users/italice/following",
 	} {
-		anon.do(http.MethodGet, p, nil)
+		anon.do(http.MethodGet, p, nil, http.StatusNotFound)
+		alice.do(http.MethodGet, p, nil, http.StatusOK)
 	}
 	alice.do(http.MethodPost, "/api/federation/follow", map[string]any{"handle": "nobody@127.0.0.1:1"})
 

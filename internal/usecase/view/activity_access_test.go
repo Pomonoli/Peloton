@@ -22,7 +22,7 @@ func TestActivityAccess(t *testing.T) {
 	now := time.Now()
 	gone.DeletedAt = &now
 	repo.Activities[deleted] = gone
-	a := NewActivityAccess(repo, NewVisibility(nil, nil, nil))
+	a := NewActivityAccess(repo, NewVisibility())
 
 	if _, err := a.Owned(ctx, owner, private); err != nil {
 		t.Fatalf("owner: %v", err)
@@ -40,7 +40,7 @@ func TestActivityAccess(t *testing.T) {
 	if _, vw, err := a.Visible(ctx, private, &owner, false, domain.CategoryMap); err != nil || !vw.IsOwner {
 		t.Fatalf("owner visible: %v %+v", err, vw)
 	}
-	if _, _, err := a.Visible(ctx, private, &other, false, domain.CategoryMap); !errors.Is(err, domain.ErrNotFound) {
+	if _, vw, err := a.Visible(ctx, private, &other, false, domain.CategoryMap); err != nil || vw.IsOwner {
 		t.Fatalf("private to other: %v", err)
 	}
 	if _, _, err := a.Visible(ctx, private, nil, false, domain.CategoryPhotos); !errors.Is(err, domain.ErrNotFound) {

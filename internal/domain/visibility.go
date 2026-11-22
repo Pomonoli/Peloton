@@ -74,6 +74,15 @@ func (s CategorySet) Slice() []Category {
 	return out
 }
 
+// CommunityActivityCategories grants a signed-in member access to a live
+// activity. Administrative hides still apply to viewers other than its owner.
+func CommunityActivityCategories(act *Activity, viewer *UserID) CategorySet {
+	if viewer == nil || act.IsDeleted() || (act.HiddenByAdmin && *viewer != act.UserID) {
+		return nil
+	}
+	return categorySetOf(AllCategories...)
+}
+
 // VisibilityPolicy maps each non-owner audience to the categories it may see.
 // The owner audience is implicit (everything) and never stored.
 type VisibilityPolicy struct {

@@ -26,8 +26,6 @@ type ActivityRepo struct {
 	MatchState  map[domain.ActivityID]string
 	// ReimportStatus records SetSourceReimportStatus calls per source.
 	ReimportStatus map[domain.SourceID]domain.ReimportStatus
-	// Following: viewer → followed users, for ListFollowingFeed.
-	Following map[domain.UserID]map[domain.UserID]bool
 }
 
 // NewActivityRepo returns an empty repo.
@@ -38,7 +36,6 @@ func NewActivityRepo() *ActivityRepo {
 		Redirects:      map[domain.ActivityID]domain.ActivityID{},
 		MatchState:     map[domain.ActivityID]string{},
 		ReimportStatus: map[domain.SourceID]domain.ReimportStatus{},
-		Following:      map[domain.UserID]map[domain.UserID]bool{},
 	}
 }
 
@@ -442,21 +439,22 @@ func (r *ActivityRepo) ActivityYearStats(_ context.Context, userID domain.UserID
 	return out, nil
 }
 
-// Following lists who each user follows, for ListFollowingFeed.
-func (r *ActivityRepo) ListFollowingFeed(_ context.Context, viewerID domain.UserID, limit, offset int) ([]domain.Activity, error) {
+func (r *ActivityRepo) ListCommunityActivities(_ context.Context, viewerID domain.UserID, ownerID *domain.UserID, limit, offset int) ([]domain.Activity, error) {
 	r.mu.Lock()
-	followed := r.Following[viewerID]
 	var out []domain.Activity
 	for _, a := range r.Activities {
-		if a.DeletedAt != nil || a.UserID == viewerID || a.Privacy == domain.PrivacyPrivate {
+		if a.IsDeleted() || (a.HiddenByAdmin && a.UserID != viewerID) || (ownerID != nil && a.UserID != *ownerID) {
 			continue
 		}
-		if followed[a.UserID] {
-			out = append(out, a)
-		}
+		out = append(out, a)
 	}
 	r.mu.Unlock()
-	sort.Slice(out, func(i, j int) bool { return out[i].StartTime.After(out[j].StartTime) })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].StartTime.Equal(out[j].StartTime) {
+			return out[i].ID.String() > out[j].ID.String()
+		}
+		return out[i].StartTime.After(out[j].StartTime)
+	})
 	if offset > 0 {
 		if offset >= len(out) {
 			return nil, nil

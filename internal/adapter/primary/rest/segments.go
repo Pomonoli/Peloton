@@ -43,6 +43,7 @@ type SegmentHandlers struct {
 	// Authoring enables the write routes; nil leaves them unmounted.
 	Authoring  *segment.Authoring
 	Details    *view.Details
+	Access     *view.ActivityAccess
 	Activities *activity.SourceActions
 	// Backfill starts a background rematch of the segment and returns its job id.
 	Backfill    func(userID domain.UserID, id domain.SegmentID, from, to time.Time) string
@@ -53,6 +54,7 @@ type SegmentHandlers struct {
 // MountMine registers the caller's segment library and an activity's efforts.
 func (h *SegmentHandlers) MountMine(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/segments", h.list)
+	mux.HandleFunc("GET /api/segments/catalog", h.catalog)
 	mux.HandleFunc("GET /api/segments/{id}", h.detail)
 	mux.HandleFunc("GET /api/activities/{id}/segment-efforts", h.activityEfforts)
 	if h.QueueRescan != nil {
@@ -116,6 +118,33 @@ func (h *SegmentHandlers) list(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
+	me, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
+	var member *domain.UserID
+	if r.URL.Query().Get("mine") == "true" {
+		member = &me
+	}
+	limit, offset := segListPaging(r)
+	items, hasMore, err := h.Views.Catalog(r.Context(), member, limit, offset)
+	if err != nil {
+		h.Log.Error("load segment catalog", "error", err)
+		writeActionError(w, err, "load failed")
+		return
+	}
+	rows := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, map[string]any{
+			"id": item.ID.String(), "name": item.Name, "distance_m": item.DistanceM,
+			"best_elapsed_s": item.BestElapsedS, "local_kom_holder": item.LocalKOMHolder, "member_count": item.MemberCount,
+			"average_speed_kmh": domain.SegmentAverageSpeedKmh(item.DistanceM, item.BestElapsedS),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"segments": rows, "has_more": hasMore})
+}
+
 func (h *SegmentHandlers) detail(w http.ResponseWriter, r *http.Request) {
 	userID, ok := h.Auth.requireUser(w, r)
 	if !ok {
@@ -159,7 +188,7 @@ func (h *SegmentHandlers) activityEfforts(w http.ResponseWriter, r *http.Request
 		http.Error(w, "bad activity id", http.StatusBadRequest)
 		return
 	}
-	act, err := h.Activities.OwnedActivity(r.Context(), userID, id)
+	act, viewer, err := h.Access.Visible(r.Context(), id, &userID, false, domain.CategorySegments)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -176,7 +205,7 @@ func (h *SegmentHandlers) activityEfforts(w http.ResponseWriter, r *http.Request
 		if row.Segment.Source == domain.SegmentSourceStravaCatalog {
 			record, ok := records[row.Segment.ID]
 			if !ok {
-				_, record, err = h.Views.Leaderboard(r.Context(), userID, row.Segment.ID, domain.LeaderboardQuery{Limit: 1})
+				_, record, err = h.Views.Leaderboard(r.Context(), act.UserID, row.Segment.ID, domain.LeaderboardQuery{Limit: 1})
 				if err != nil {
 					h.Log.Warn("load Local KOM position", "segment_id", row.Segment.ID, "error", err)
 				}
@@ -194,7 +223,7 @@ func (h *SegmentHandlers) activityEfforts(w http.ResponseWriter, r *http.Request
 		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"efforts": out, "can_rescan": h.QueueRescan != nil && act.Type == domain.ActivityTypeRide,
+		"efforts": out, "can_rescan": viewer.IsOwner && h.QueueRescan != nil && act.Type == domain.ActivityTypeRide,
 	})
 }
 
@@ -553,6 +582,7 @@ func segEffortRowJSON(row view.EffortRow) map[string]any {
 		"avg_heart_rate":     e.AvgHeartRateBpm,
 		"avg_power":          e.AvgPowerW,
 		"avg_speed_mps":      e.AvgSpeedMps,
+		"average_speed_kmh":  domain.SegmentAverageSpeedKmh(seg.DistanceM, e.ElapsedS),
 		"is_personal_record": e.IsPersonalRecord,
 		"personal_rank":      e.PersonalRank,
 	}
@@ -599,7 +629,8 @@ func segLeaderboardJSON(entries []domain.LeaderboardEntry) []map[string]any {
 		out = append(out, map[string]any{
 			"rank": e.Rank, "user_id": e.UserID.String(), "display_name": e.DisplayName, "avatar_url": e.AvatarURL,
 			"elapsed_s": e.ElapsedS, "start_time": e.StartTime.UTC().Format(time.RFC3339),
-			"effort_id": e.EffortID.String(), "activity_id": e.ActivityID.String(),
+			"average_speed_kmh": domain.SegmentAverageSpeedKmh(e.DistanceM, e.ElapsedS),
+			"effort_id":         e.EffortID.String(), "activity_id": e.ActivityID.String(),
 		})
 	}
 	return out

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
@@ -18,8 +20,7 @@ func segmentVisibleSQL(viewerParam string) string {
 			SELECT id FROM external_accounts WHERE user_id = ` + viewerParam + `))
 		OR (s.source = 'strava_catalog' AND EXISTS (
 			SELECT 1 FROM segment_efforts e JOIN activities a ON a.id = e.activity_id
-			WHERE e.segment_id = s.id AND e.user_id = ` + viewerParam + `
-			  AND a.deleted_at IS NULL AND a.type = 'ride' AND e.provider_effort_external_id IS NULL))
+			WHERE e.segment_id = s.id AND a.hidden_by_admin = false AND ` + catalogEffortSQL + `))
 	)`
 }
 
@@ -141,31 +142,30 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 	if limit <= 0 {
 		limit = 50
 	}
+	const fastestOrder = "e.elapsed_s, e.start_time, e.id"
 	order := "e.start_time DESC, e.id"
-	if q.FastestFirst {
-		order = "e.elapsed_s ASC, e.start_time ASC, e.id"
+	if q.FastestFirst || q.BestPerUser {
+		order = fastestOrder
 	}
-	var userParam any
-	if q.UserID != nil {
-		userParam = q.UserID.UUID()
-	}
-	// Coarse pre-filter only; the visibility decision is the caller's.
-	rows, err := db.Query(ctx,
-		`SELECT `+prefixedColumns(segmentEffortColumns, "e.")+`,
-		        a.privacy, a.hidden_by_admin, u.display_name, COALESCE(u.avatar_url, '')
-		   FROM segment_efforts e
+	columns := prefixedColumns(segmentEffortColumns, "e.") + ", COALESCE(NULLIF(u.display_name, ''), u.username::text) AS display_name, COALESCE(u.avatar_url, '') AS avatar_url"
+	from := ` FROM segment_efforts e
 		   JOIN activities a ON a.id = e.activity_id
 		   JOIN segments s ON s.id = e.segment_id
 		   JOIN users u ON u.id = e.user_id
 		  WHERE e.segment_id = $1
-		    AND a.deleted_at IS NULL AND `+catalogEffortSQL+`
-		    AND (e.user_id = $2 OR (a.privacy <> 'private' AND a.hidden_by_admin = false))
+		    AND a.deleted_at IS NULL AND ` + catalogEffortSQL + `
+		    AND (a.hidden_by_admin = false OR (s.source <> 'strava_catalog' AND e.user_id = $2))
 		    AND ($3::uuid IS NULL OR e.user_id = $3)
 		    AND ($4::timestamptz IS NULL OR e.start_time >= $4)
-		    AND ($5::timestamptz IS NULL OR e.start_time < $5)
-		  ORDER BY `+order+`
-		  LIMIT $6 OFFSET $7`,
-		segmentID.UUID(), viewer.UUID(), userParam, nullableTime(q.From), nullableTime(q.To), limit, offset)
+		    AND ($5::timestamptz IS NULL OR e.start_time < $5)`
+	query := "SELECT " + columns + from
+	if q.BestPerUser {
+		query = `SELECT e.* FROM (SELECT DISTINCT ON (e.user_id) ` + columns + from +
+			` AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8
+			    ORDER BY e.user_id, ` + fastestOrder + `) e`
+	}
+	rows, err := db.Query(ctx, query+" ORDER BY "+order+" LIMIT $6 OFFSET $7",
+		segmentID.UUID(), viewer.UUID(), userIDParam(q.UserID), nullableTime(q.From), nullableTime(q.To), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list segment efforts: %w", err)
 	}
@@ -173,17 +173,49 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 }
 
 func scanSegmentEffortCandidate(row rowScanner) (domain.SegmentEffortCandidate, error) {
-	var (
-		c       domain.SegmentEffortCandidate
-		privacy string
-	)
-	e, err := scanSegmentEffortRow(multiScanner{row: row, tail: []any{&privacy, &c.Activity.HiddenByAdmin, &c.DisplayName, &c.AvatarURL}})
-	if err != nil {
-		return c, err
-	}
+	var c domain.SegmentEffortCandidate
+	e, err := scanSegmentEffortRow(multiScanner{row: row, tail: []any{&c.DisplayName, &c.AvatarURL}})
 	c.Effort = e
-	c.Activity.ID, c.Activity.UserID, c.Activity.Privacy = e.ActivityID, e.UserID, domain.ActivityPrivacy(privacy)
-	return c, nil
+	return c, err
+}
+
+func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, member *domain.UserID, limit, offset int) ([]domain.CatalogSegment, error) {
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `
+		WITH eligible AS (
+			SELECT e.id, e.segment_id, e.user_id, e.elapsed_s, e.start_time
+			FROM segment_efforts e
+			JOIN activities a ON a.id = e.activity_id
+			JOIN segments s ON s.id = e.segment_id
+			WHERE s.source = 'strava_catalog' AND a.hidden_by_admin = false AND `+catalogEffortSQL+`
+		), summary AS (
+			SELECT segment_id, count(DISTINCT user_id) AS members
+			FROM eligible
+			GROUP BY segment_id
+			HAVING $1::uuid IS NULL OR bool_or(user_id = $1)
+		), page AS (
+			SELECT s.id, s.name, s.distance_m, summary.members
+			FROM summary JOIN segments s ON s.id = summary.segment_id
+			ORDER BY s.name, s.id
+			LIMIT $2 OFFSET $3
+		)
+		SELECT winner.id, winner.name, winner.distance_m, winner.elapsed_s, COALESCE(NULLIF(u.display_name, ''), u.username::text), winner.members
+		FROM (
+			SELECT DISTINCT ON (p.id) p.*, e.elapsed_s, e.user_id
+			FROM page p JOIN eligible e ON e.segment_id = p.id
+			ORDER BY p.id, e.elapsed_s, e.start_time, e.id
+		) winner
+		JOIN users u ON u.id = winner.user_id
+		ORDER BY winner.name, winner.id`, userIDParam(member), limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list catalog segments: %w", err)
+	}
+	return pgCollectRows(rows, func(row rowScanner) (domain.CatalogSegment, error) {
+		var item domain.CatalogSegment
+		var id uuid.UUID
+		err := row.Scan(&id, &item.Name, &item.DistanceM, &item.BestElapsedS, &item.LocalKOMHolder, &item.MemberCount)
+		item.ID = domain.SegmentID(id)
+		return item, err
+	}, "scan catalog segment", "iterate catalog segments")
 }
 
 // multiScanner appends extra destinations to a scan, so a row scanner for a

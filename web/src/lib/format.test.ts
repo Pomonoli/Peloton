@@ -14,6 +14,7 @@ import {
 	formatPower,
 	formatRelativeDate,
 	formatSpeed,
+	formatSpeedKmh,
 	formatTemp
 } from './format';
 import { setPrefs } from './prefs.svelte';
@@ -37,6 +38,7 @@ describe('null handling', () => {
 			formatPace,
 			formatElevation,
 			formatSpeed,
+			formatSpeedKmh,
 			formatTemp,
 			formatHeartRate,
 			formatPower
@@ -180,4 +182,18 @@ describe('formatRelativeDate', () => {
 	it('uses now for zero seconds', () => {
 		expect(formatRelativeDate('2024-03-10T12:00:00Z')).toBe('now');
 	});
+});
+
+it('formats segment speed with one decimal in km/h regardless of unit preferences', () => {
+	locale.current = 'en';
+	setPrefs({ units: 'imperial' });
+	expect(formatSpeedKmh(32.74)).toBe('32.7 km/h');
+	expect(formatSpeedKmh(32)).toBe('32.0 km/h');
+	expect(formatSpeedKmh(0)).toBe('—');
+	expect(formatSpeedKmh(Number.NaN)).toBe('—');
+	expect(formatSpeedKmh(Infinity)).toBe('—');
+	expect(formatSpeedKmh(null)).toBe('—');
+
+	locale.current = 'nl-BE';
+	expect(norm(formatSpeedKmh(32.74))).toBe('32,7 km/h');
 });

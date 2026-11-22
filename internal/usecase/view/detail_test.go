@@ -177,7 +177,7 @@ func TestDetailsKudosAndComments(t *testing.T) {
 		comments: []domain.Comment{{ID: domain.CommentID(uuid.New()), UserID: friend, Body: "nice", CreatedAt: vNow.Add(time.Minute)}},
 		rcs:      []domain.RemoteComment{{ID: "https://o/n/1", Handle: "@x@o", ActorID: "https://o/u/x", Body: "wow", CreatedAt: vNow}},
 	}
-	d := NewDetails(repo, nil, nil, nil, eng, users, nil, nil, NewVisibility(nil, nil, nil))
+	d := NewDetails(repo, nil, nil, nil, eng, users, nil, nil, NewVisibility())
 	if !d.SocialAllowed(context.Background(), act, me) {
 		t.Fatal("owner is always allowed")
 	}

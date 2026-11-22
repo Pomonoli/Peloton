@@ -9,10 +9,10 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
-// ProfileHandlers serve public athlete profiles and the owner's profile and
+// ProfileHandlers serve member athlete profiles and the owner's profile and
 // visibility settings (multi-user v1).
 //
-//	GET     /api/profiles/{username}          public profile (session optional)
+//	GET     /api/profiles/{username}          member profile
 //	PUT     /api/profile/public               owner: toggle profile_is_public
 //	GET/PUT /api/profile/visibility           owner: default visibility policy
 //	GET/POST/DELETE /api/profile/privacy-zones  owner: privacy zones
@@ -24,7 +24,7 @@ type ProfileHandlers struct {
 
 // Mount registers the profile routes.
 func (h *ProfileHandlers) Mount(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/profiles/{username}", h.getPublic)
+	mux.HandleFunc("GET /api/profiles/{username}", h.getProfile)
 	mux.HandleFunc("PUT /api/profile/public", h.setPublic)
 }
 
@@ -37,8 +37,12 @@ func (h *ProfileHandlers) MountVisibility(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/profile/privacy-zones/{id}", h.deleteZone)
 }
 
-func (h *ProfileHandlers) getPublic(w http.ResponseWriter, r *http.Request) {
-	pv, err := h.Profiles.Get(r.Context(), r.PathValue("username"), h.Auth.Viewer(r))
+func (h *ProfileHandlers) getProfile(w http.ResponseWriter, r *http.Request) {
+	me, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
+	pv, err := h.Profiles.GetPage(r.Context(), r.PathValue("username"), &me, parseIntQuery(r, "offset", 0))
 	if err != nil {
 		writeActionError(w, err, "load failed")
 		return
@@ -55,6 +59,7 @@ func (h *ProfileHandlers) getPublic(w http.ResponseWriter, r *http.Request) {
 		"followers_count": pv.Counts.Followers,
 		"following_count": pv.Counts.Following,
 		"activities":      acts,
+		"has_more":        pv.HasMore,
 	})
 }
 

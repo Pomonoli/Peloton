@@ -122,10 +122,9 @@ func TestListHomeFeed(t *testing.T) {
 	repo := inmem.NewActivityRepo()
 	me, friend := domain.UserID(uuid.New()), domain.UserID(uuid.New())
 	users := &fakeUsers{users: map[domain.UserID]domain.User{me: {ID: me, Username: "me"}, friend: {ID: friend, Username: "friend", DisplayName: "F"}}}
-	repo.Following[me] = map[domain.UserID]bool{friend: true}
 	seedPlain(repo, me, domain.ActivityTypeRide, actNow.Add(-2*time.Hour), domain.PrivacyPrivate)
 	theirs := seedPlain(repo, friend, domain.ActivityTypeRun, actNow.Add(-time.Hour), domain.PrivacyPublic)
-	feeds := view.NewFeeds(repo, users, view.NewVisibility(nil, nil, nil), nil, false)
+	feeds := view.NewFeeds(repo, users, view.NewVisibility(), nil, false)
 	s := NewSocialServer(feeds, &fakeContent{}, nil, func(domain.Activity) string { return "e" })
 	ctx := context.WithValue(t.Context(), ctxKeyUserID, me)
 

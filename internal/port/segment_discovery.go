@@ -34,3 +34,14 @@ type SegmentDiscoveryCache interface {
 type SegmentMatchLocker interface {
 	LockSegmentMatch(ctx context.Context, id domain.SourceID) error
 }
+
+// GarminSegmentBackfillRepo tracks GPS rides that still need a discovery scan.
+type GarminSegmentBackfillRepo interface {
+	ListPendingGarminSegmentScans(ctx context.Context, after domain.SourceID, limit int) ([]GarminSegmentScan, error)
+	CompleteGarminSegmentScan(ctx context.Context, source domain.SourceID, updatedAt time.Time) error
+}
+
+type GarminSegmentScan struct {
+	SourceID domain.SourceID
+	UserID   domain.UserID
+}

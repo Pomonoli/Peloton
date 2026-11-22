@@ -172,7 +172,6 @@ var scopeProcedureFamilies = map[string]string{
 var scopeOverrides = map[string]scopePolicy{
 	"/cairn.v1.AuthService/GetLoginMethods":           scopePublic,
 	"/cairn.v1.AuthService/GetInstanceInfo":           scopePublic,
-	"/cairn.v1.SocialService/GetSharedActivity":       scopePublic,
 	"/cairn.v1.AuthService/LoginPassword":             scopePublic,
 	"/cairn.v1.AuthService/Complete2FA":               scopePublic,
 	"/cairn.v1.AuthService/Register":                  scopePublic,

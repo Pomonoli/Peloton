@@ -37,18 +37,18 @@ func addActivity(r *inmem.ActivityRepo, user domain.UserID, t domain.ActivityTyp
 
 func TestFeedsHomeMergesSources(t *testing.T) {
 	repo := inmem.NewActivityRepo()
-	me, friend, stranger := domain.UserID(uuid.New()), domain.UserID(uuid.New()), domain.UserID(uuid.New())
+	me, friend := domain.UserID(uuid.New()), domain.UserID(uuid.New())
 	users := &fakeUsers{users: map[domain.UserID]domain.User{
 		me: {ID: me, Username: "me", DisplayName: "Me"}, friend: {ID: friend, Username: "friend", DisplayName: "Friend"},
 	}}
-	repo.Following[me] = map[domain.UserID]bool{friend: true}
 	own := addActivity(repo, me, domain.ActivityTypeRide, vNow.Add(-2*time.Hour), domain.PrivacyPrivate)
-	theirs := addActivity(repo, friend, domain.ActivityTypeRun, vNow.Add(-1*time.Hour), domain.PrivacyFollowers)
-	addActivity(repo, friend, domain.ActivityTypeRun, vNow.Add(-3*time.Hour), domain.PrivacyPrivate) // private: not in the feed
-	addActivity(repo, stranger, domain.ActivityTypeRun, vNow, domain.PrivacyPublic)                  // not followed
+	theirs := addActivity(repo, friend, domain.ActivityTypeRide, vNow.Add(-time.Hour), domain.PrivacyPrivate)
+	hidden := addActivity(repo, friend, domain.ActivityTypeRide, vNow, domain.PrivacyPublic)
+	act := repo.Activities[hidden]
+	act.HiddenByAdmin = true
+	repo.Activities[hidden] = act
 
-	follows := &fakeFollows{following: repo.Following}
-	feeds := NewFeeds(repo, users, NewVisibility(nil, follows, nil), nil, false)
+	feeds := NewFeeds(repo, users, NewVisibility(), nil, false)
 	items := feeds.Home(context.Background(), me, 10, 0)
 	if len(items) != 2 {
 		t.Fatalf("items %d", len(items))
@@ -59,7 +59,7 @@ func TestFeedsHomeMergesSources(t *testing.T) {
 	if items[1].Source != FeedSelf || items[1].Own == nil || items[1].Own.ID != own || items[1].Owner.Username != "me" {
 		t.Fatalf("second %+v", items[1])
 	}
-	if got := feeds.Home(context.Background(), me, 1, 0); len(got) != 1 {
+	if got := feeds.Home(context.Background(), me, 1, 1); len(got) != 1 || got[0].Own == nil || got[0].Own.ID != own {
 		t.Fatalf("limit: %d", len(got))
 	}
 	if RemoteHandle("https://other.test/users/alice") != "@alice@other.test" {

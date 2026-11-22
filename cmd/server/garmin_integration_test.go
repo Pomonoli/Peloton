@@ -136,7 +136,7 @@ func TestAPI_GarminConnectHistoryAndSegmentDiscovery(t *testing.T) {
 	}
 	def.DistanceM = domain.PolylineDistanceM(points)
 	env.app.DiscoverSegments.Provider = garminTestCatalog{def}
-	startITDiscovery(t, env)
+	startITConsumers(t, env, startFollowUpConsumer)
 
 	alice := env.user("garmin-alice", domain.UserRoleUser)
 	bob := env.user("garmin-bob", domain.UserRoleUser)
@@ -185,6 +185,16 @@ func TestAPI_GarminConnectHistoryAndSegmentDiscovery(t *testing.T) {
 		first.PowerW == nil || *first.PowerW != 225 || *first.AltitudeM != 125 {
 		t.Fatalf("historical recording fields lost: %+v", first)
 	}
+	if got := activitySegmentEfforts(t, bob, src.ActivityID.String()); len(got) != 0 {
+		t.Fatalf("discovery ran before catch-up: %+v", got)
+	}
+	if _, err := env.app.DiscoverSegments.BackfillGarmin(ctx, domain.SourceID{}, 5); err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := env.app.Segments.ListPendingGarminSegmentScans(ctx, domain.SourceID{}, 5); err != nil || len(pending) != 0 {
+		t.Fatalf("completed recordings or summary-only rides are still pending: %+v, %v", pending, err)
+	}
+	startITConsumers(t, env, startSegmentDiscoveryConsumer)
 	efforts := waitForSegmentEfforts(t, alice, src.ActivityID.String(), 1)
 	if math.Abs(efforts[0].Elapsed-200) > 0.1 || !efforts[0].PR || efforts[0].KOM != 1 {
 		t.Fatalf("Garmin ride did not enter segment discovery and ranking: %+v", efforts)
@@ -221,6 +231,10 @@ func TestAPI_GarminConnectHistoryAndSegmentDiscovery(t *testing.T) {
 	bobSource, err := env.app.Activities.FindOwnedSourceByExternalID(ctx, bob.userID, garminProvider, nil, oldRide.ID)
 	if err != nil || bobSource.ID == src.ID || bobSource.ActivityID == src.ActivityID {
 		t.Fatalf("same remote ID was not isolated: %v", err)
+	}
+	waitForSegmentEfforts(t, bob, bobSource.ActivityID.String(), 1)
+	if board := segmentBoard(t, alice, efforts[0].SegmentID); len(board) != 2 {
+		t.Fatalf("Garmin recordings did not enter the shared leaderboard: %+v", board)
 	}
 	bob.do(http.MethodDelete, path, map[string]any{}, http.StatusNoContent)
 

@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { clients } from '#lib/connect.js';
-	import { ActivityType, Discipline, Privacy } from '#lib/proto/cairn/v1/activity_pb.js';
+	import { ActivityType, Discipline } from '#lib/proto/cairn/v1/activity_pb.js';
 	import { enumName, enumValue, protoTimestampToISO } from '#lib/proto-helpers.js';
 	import { ACTIVITY_TYPES, DISCIPLINES, typeLabel } from '#lib/activity-types.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -30,7 +30,6 @@
 	let isRace = $state(init.isRace);
 	let customSubtype = $state(init.customSubtype);
 	let tagsText = $state(init.tags.join(', '));
-	let privacy = $state(init.privacy);
 	// Gear: picking (incl. "no gear") makes it the user's choice; "reset to
 	// automatic" hands it back to the merge.
 	let gearId = $state(init.gearId);
@@ -78,7 +77,6 @@
 		if (isRace !== init.isRace) mask.push('is_race');
 		if (customSubtype !== init.customSubtype) mask.push('custom_subtype');
 		if (tags.join('\0') !== init.tags.join('\0')) mask.push('tags');
-		if (privacy !== init.privacy) mask.push('privacy');
 		if (resetGear) mask.push('reset_gear');
 		else if (gearId !== init.gearId) mask.push('gear_id');
 
@@ -118,7 +116,6 @@
 				isRace,
 				customSubtype,
 				tags,
-				privacy: enumValue(Privacy, privacy),
 				gearId,
 				distanceM,
 				elevationGainM: elevationGain,
@@ -365,21 +362,6 @@
 					><input type="checkbox" bind:checked={resetGear} /> {m.gear_reset_auto()}</label
 				>
 			{/if}
-		</div>
-
-		<div>
-			<label class="block text-xs uppercase tracking-wide text-zinc-500" for="privacy"
-				>Privacy</label
-			>
-			<select
-				id="privacy"
-				bind:value={privacy}
-				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm capitalize"
-			>
-				<option value="private">Private</option>
-				<option value="followers">Followers</option>
-				<option value="public">Public</option>
-			</select>
 		</div>
 
 		{#if errMsg}

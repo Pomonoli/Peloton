@@ -9,6 +9,8 @@
 		formatPace,
 		formatPower,
 		formatSpeed,
+		formatSpeedKmh,
+		formatMetricDistance,
 		formatTemp
 	} from '#lib/format.js';
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
@@ -18,7 +20,6 @@
 	import KudosComments from '#lib/components/KudosComments.svelte';
 	import GearPrompt from '#lib/components/GearPrompt.svelte';
 	import ActivityNav from '#lib/components/ActivityNav.svelte';
-	import { onMount } from 'svelte';
 	import { goto, refreshAll } from '$app/navigation';
 	import { buildSeries } from './streamSeries';
 	import type { PageData } from './$types';
@@ -39,7 +40,7 @@
 		elapsed_s: number;
 		avg_heart_rate: number | null;
 		avg_power: number | null;
-		avg_speed_mps?: number | null;
+		average_speed_kmh: number | null;
 		local_kom_position?: number;
 		is_personal_record: boolean;
 		start_distance_m?: number;
@@ -69,33 +70,41 @@
 	let uploadingPhoto = $state(false);
 	let photoInput = $state<HTMLInputElement | null>(null);
 
-	async function loadAttachments() {
+	async function loadAttachments(activityID: string, signal?: AbortSignal) {
 		try {
-			const res = await fetch(`/api/activities/${a.id}/attachments`);
-			if (res.ok) attachments = (await res.json()).attachments ?? [];
+			const res = await fetch(`/api/activities/${activityID}/attachments`, {
+				signal: signal ?? null
+			});
+			if (!res.ok) return;
+			const result = await res.json();
+			if (activityID === a.id && !signal?.aborted) attachments = result.attachments ?? [];
 		} catch {
-			/* ignore */
+			/* optional detail */
 		}
 	}
 
 	async function uploadPhotos(files: FileList | null) {
 		if (!files || files.length === 0) return;
+		const activityID = a.id;
 		uploadingPhoto = true;
 		try {
 			for (const file of Array.from(files)) {
 				const fd = new FormData();
 				fd.append('file', file);
-				await fetch(`/api/activities/${a.id}/attachments`, { method: 'POST', body: fd });
+				await fetch(`/api/activities/${activityID}/attachments`, { method: 'POST', body: fd });
 			}
-			await loadAttachments();
+			await loadAttachments(activityID);
 		} finally {
 			uploadingPhoto = false;
 		}
 	}
 
 	async function deleteAttachment(id: string) {
-		const res = await fetch(`/api/activities/${a.id}/attachments/${id}`, { method: 'DELETE' });
-		if (res.ok) attachments = attachments.filter((x) => x.id !== id);
+		const activityID = a.id;
+		const res = await fetch(`/api/activities/${activityID}/attachments/${id}`, {
+			method: 'DELETE'
+		});
+		if (res.ok && activityID === a.id) attachments = attachments.filter((x) => x.id !== id);
 	}
 
 	async function loadSegmentEfforts() {
@@ -143,20 +152,32 @@
 		}
 	});
 
-	onMount(async () => {
-		try {
-			const res = await fetch(`/api/activities/${a.id}/zones`);
-			if (res.ok) zones = await res.json();
-		} catch {
-			/* ignore */
-		}
-		try {
-			const res = await fetch(`/api/activities/${a.id}/laps`);
-			if (res.ok) laps = (await res.json()).laps ?? [];
-		} catch {
-			/* ignore */
-		}
-		await loadAttachments();
+	async function loadRideStats(activityID: string, signal: AbortSignal) {
+		const [zoneData, lapData] = await Promise.all(
+			['zones', 'laps'].map(async (detail) => {
+				try {
+					const res = await fetch(`/api/activities/${activityID}/${detail}`, { signal });
+					return res.ok ? await res.json() : null;
+				} catch {
+					return null;
+				}
+			})
+		);
+		if (signal.aborted) return;
+		zones = zoneData;
+		laps = lapData?.laps ?? [];
+	}
+
+	$effect(() => {
+		const activityID = a.id;
+		zones = null;
+		laps = [];
+		attachments = [];
+		hoveredSeg = null;
+		const controller = new AbortController();
+		void loadRideStats(activityID, controller.signal);
+		void loadAttachments(activityID, controller.signal);
+		return () => controller.abort();
 	});
 
 	type Lap = {
@@ -324,7 +345,7 @@
 
 <section class="space-y-8">
 	<header>
-		<ActivityNav id={a.id} />
+		<ActivityNav id={a.id} isOwner={data.isOwner} />
 		<div class="mt-2 flex items-start gap-4">
 			<span
 				class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-accent-300"
@@ -342,7 +363,7 @@
 					· {formatDate(a.startTime)}
 					{#if a.startPlace}· {a.startPlace}{/if}
 				</p>
-				{#if !a.gearId && a.gearSetBy !== 'user' && data.gear.length > 0}
+				{#if data.isOwner && !a.gearId && a.gearSetBy !== 'user' && data.gear.length > 0}
 					<GearPrompt activityId={a.id} type={a.type} gear={data.gear} />
 				{/if}
 				{#if a.gearId}
@@ -445,22 +466,24 @@
 	<section>
 		<div class="mb-2 flex items-center justify-between">
 			<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-500">Photos</h2>
-			<button
-				type="button"
-				disabled={uploadingPhoto}
-				onclick={() => photoInput?.click()}
-				class="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
-			>
-				{uploadingPhoto ? 'Uploading…' : '+ Add photos'}
-			</button>
-			<input
-				bind:this={photoInput}
-				type="file"
-				accept="image/*"
-				multiple
-				class="hidden"
-				onchange={(e) => uploadPhotos(e.currentTarget.files)}
-			/>
+			{#if data.isOwner}
+				<button
+					type="button"
+					disabled={uploadingPhoto}
+					onclick={() => photoInput?.click()}
+					class="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
+				>
+					{uploadingPhoto ? 'Uploading…' : '+ Add photos'}
+				</button>
+				<input
+					bind:this={photoInput}
+					type="file"
+					accept="image/*"
+					multiple
+					class="hidden"
+					onchange={(e) => uploadPhotos(e.currentTarget.files)}
+				/>
+			{/if}
 		</div>
 		{#if attachments.length > 0}
 			<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
@@ -472,15 +495,17 @@
 							loading="lazy"
 							class="h-32 w-full object-cover"
 						/>
-						<button
-							type="button"
-							onclick={() => deleteAttachment(att.id)}
-							title="Remove photo"
-							aria-label="Remove photo"
-							class="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white hover:bg-red-600 group-hover:block"
-						>
-							✕
-						</button>
+						{#if data.isOwner}
+							<button
+								type="button"
+								onclick={() => deleteAttachment(att.id)}
+								title="Remove photo"
+								aria-label="Remove photo"
+								class="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white hover:bg-red-600 group-hover:block"
+							>
+								✕
+							</button>
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -791,16 +816,13 @@
 										{/if}
 									</td>
 									<td class="px-4 py-2 text-right tabular-nums text-zinc-300">
-										{formatDistance(s.segment_distance_m)}
+										{formatMetricDistance(s.segment_distance_m)}
 									</td>
 									<td class="px-4 py-2 text-right tabular-nums text-zinc-100">
 										{formatDuration(s.elapsed_s)}
 									</td>
 									<td class="whitespace-nowrap px-4 py-2 text-right tabular-nums text-zinc-300">
-										{formatSpeed(
-											s.avg_speed_mps ??
-												(s.elapsed_s > 0 ? s.segment_distance_m / s.elapsed_s : null)
-										)}
+										{formatSpeedKmh(s.average_speed_kmh)}
 									</td>
 									{#if hasLocalKOM}
 										<td class="px-4 py-2 text-right tabular-nums text-zinc-300">
@@ -830,7 +852,7 @@
 		</section>
 	{/if}
 
-	{#if a.sources && a.sources.length > 0}
+	{#if data.isOwner && a.sources.length > 0}
 		<section>
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">Sources</h2>
 			<p class="mb-3 text-xs text-zinc-500">

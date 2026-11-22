@@ -11,7 +11,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
-// DetailHandlers serve the owner's per-activity detail reads.
+// DetailHandlers serve per-activity detail reads.
 //
 //	GET /api/activities/{id}/laps            provider-reported laps (richest source)
 //	GET /api/activities/{id}/zones           time-in-zone as of the activity's date   (Streams)
@@ -73,7 +73,7 @@ func detailOwned(w http.ResponseWriter, r *http.Request, auth *Auth, access *vie
 }
 
 func (h *DetailHandlers) laps(w http.ResponseWriter, r *http.Request) {
-	act, ok := h.owned(w, r)
+	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategorySummary, "bad activity id")
 	if !ok {
 		return
 	}
@@ -111,7 +111,7 @@ func detailLapsJSON(laps []domain.ActivityLap) []map[string]any {
 }
 
 func (h *DetailHandlers) zones(w http.ResponseWriter, r *http.Request) {
-	act, ok := h.owned(w, r)
+	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryZones, "bad activity id")
 	if !ok {
 		return
 	}
@@ -139,7 +139,7 @@ func detailZoneSummaryJSON(s *domain.ZoneSummary) any {
 }
 
 func (h *DetailHandlers) mergedStream(w http.ResponseWriter, r *http.Request) {
-	act, ok := h.owned(w, r)
+	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
 	if !ok {
 		return
 	}

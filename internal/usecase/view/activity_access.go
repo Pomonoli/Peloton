@@ -41,6 +41,9 @@ func (a *ActivityAccess) Live(ctx context.Context, id domain.ActivityID) (domain
 // Visible is the activity when viewer (nil = anonymous) may see cat of it;
 // owners always may.
 func (a *ActivityAccess) Visible(ctx context.Context, id domain.ActivityID, viewer *domain.UserID, hasLink bool, cat domain.Category) (domain.Activity, Viewer, error) {
+	if viewer == nil {
+		return domain.Activity{}, Viewer{}, domain.ErrNotFound
+	}
 	act, err := a.activities.GetActivity(ctx, id)
 	if err != nil {
 		return domain.Activity{}, Viewer{}, domain.ErrNotFound

@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -18,13 +17,11 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/attachment"
 	"github.com/opencairn-org/cairn-core/internal/usecase/content"
 	"github.com/opencairn-org/cairn-core/internal/usecase/mapimage"
-	"github.com/opencairn-org/cairn-core/internal/usecase/sharing"
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
-// detailMapCacheControl: short private TTL + ETag revalidation, so a
-// regenerated snapshot shows on the next page load.
-const detailMapCacheControl = "private, max-age=300"
+// Revalidate map images against the member session on each use.
+const detailMapCacheControl = "private, no-cache"
 
 // detailServePNG writes a course image with its ETag, honouring If-None-Match.
 func detailServePNG(w http.ResponseWriter, r *http.Request, data []byte) {
@@ -40,17 +37,15 @@ func detailServePNG(w http.ResponseWriter, r *http.Request, data []byte) {
 	_, _ = w.Write(data) //nolint:gosec // G705: rendered PNG bytes served as image/png
 }
 
-// detailVisible loads the {id} activity when the caller (or the ?share= token)
-// may see cat of it; owners always may. On failure it has written 400 or 404.
-func detailVisible(w http.ResponseWriter, r *http.Request, auth *Auth, access *view.ActivityAccess, shares *sharing.Links,
+// detailVisible loads the {id} activity for a member who may see its category.
+func detailVisible(w http.ResponseWriter, r *http.Request, auth *Auth, access *view.ActivityAccess,
 	cat domain.Category, badID string) (domain.Activity, view.Viewer, bool) {
 	id, err := domain.ParseUUID[domain.ActivityID](r.PathValue("id"))
 	if err != nil {
 		http.Error(w, badID, http.StatusBadRequest)
 		return domain.Activity{}, view.Viewer{}, false
 	}
-	hasLink := shares.Grants(r.Context(), r.URL.Query().Get("share"), id)
-	act, vw, err := access.Visible(r.Context(), id, auth.Viewer(r), hasLink, cat)
+	act, vw, err := access.Visible(r.Context(), id, auth.Viewer(r), false, cat)
 	if err != nil {
 		http.NotFound(w, r)
 		return domain.Activity{}, view.Viewer{}, false
@@ -58,16 +53,13 @@ func detailVisible(w http.ResponseWriter, r *http.Request, auth *Auth, access *v
 	return act, vw, true
 }
 
-// MapImageHandlers serve the static PNG of an activity's course. The owner
-// gets the full track; a non-owner gets it only when the map category is
-// granted, privacy-zone-trimmed.
+// MapImageHandlers serve the activity's course image to authorized members.
 //
 //	GET  /api/activities/{id}/map.png
 //	POST /api/activities/{id}/map/regenerate   owner: drop the cache and re-render
 type MapImageHandlers struct {
 	Auth   *Auth
 	Access *view.ActivityAccess
-	Shares *sharing.Links
 	Images *mapimage.Images
 }
 
@@ -78,11 +70,11 @@ func (h *MapImageHandlers) Mount(mux *http.ServeMux) {
 }
 
 func (h *MapImageHandlers) serve(w http.ResponseWriter, r *http.Request) {
-	act, vw, ok := detailVisible(w, r, h.Auth, h.Access, h.Shares, domain.CategoryMap, "bad id")
+	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad id")
 	if !ok {
 		return
 	}
-	data, ok := h.Images.Load(r.Context(), act, !vw.IsOwner)
+	data, ok := h.Images.Load(r.Context(), act, false)
 	if !ok {
 		http.NotFound(w, r) // no renderable GPS track
 		return
@@ -137,7 +129,6 @@ const (
 type AttachmentHandlers struct {
 	Auth   *Auth
 	Access *view.ActivityAccess
-	Shares *sharing.Links
 	Photos *attachment.Photos
 }
 
@@ -150,7 +141,7 @@ func (h *AttachmentHandlers) Mount(mux *http.ServeMux) {
 }
 
 func (h *AttachmentHandlers) visible(w http.ResponseWriter, r *http.Request) (domain.Activity, bool, bool) {
-	act, vw, ok := detailVisible(w, r, h.Auth, h.Access, h.Shares, domain.CategoryPhotos, "invalid activity id")
+	act, vw, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryPhotos, "invalid activity id")
 	return act, vw.IsOwner, ok
 }
 
@@ -174,16 +165,11 @@ func (h *AttachmentHandlers) list(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "list failed", http.StatusInternalServerError)
 		return
 	}
-	// The raw links point back at a link-gated route; visible already checked it.
-	share := ""
-	if t := r.URL.Query().Get("share"); t != "" {
-		share = "?share=" + url.QueryEscape(t)
-	}
 	out := make([]map[string]any, 0, len(atts))
 	for _, a := range atts {
 		item := map[string]any{
 			"id":           a.ID.String(),
-			"url":          fmt.Sprintf("/api/activities/%s/attachments/%s/raw", act.ID.String(), a.ID.String()) + share,
+			"url":          fmt.Sprintf("/api/activities/%s/attachments/%s/raw", act.ID.String(), a.ID.String()),
 			"caption":      a.Caption,
 			"content_type": a.ContentType,
 			"width":        a.Width,
@@ -232,7 +218,7 @@ func (h *AttachmentHandlers) raw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("Cache-Control", "private, no-store")
 	_, _ = w.Write(data) //nolint:gosec // G705: image bytes served under an image content type
 }
 
@@ -298,12 +284,12 @@ func (h *AttachmentHandlers) remove(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// ContentHandlers serve the signed content route; the token is the whole
-// authorization.
+// ContentHandlers serve signed content to authenticated readers and accept signed uploads.
 //
 //	GET /content/{token}   stored object | course image (rendered on demand) | export (rendered on GET)
 //	PUT /content/{token}   client file upload into the blob store
 type ContentHandlers struct {
+	Auth    *Auth
 	Signer  *content.Signer
 	Access  *view.ActivityAccess
 	Images  *mapimage.Images
@@ -331,12 +317,15 @@ func (h *ContentHandlers) claims(w http.ResponseWriter, r *http.Request, kinds .
 	return content.Claims{}, false
 }
 
-// cacheHeaders: private (the URL is per viewer) for the token's remaining life.
-func (h *ContentHandlers) cacheHeaders(w http.ResponseWriter, cl content.Claims) {
-	w.Header().Set("Cache-Control", "private, max-age="+strconv.FormatInt(h.Signer.Codec.Remaining(cl), 10))
+func (h *ContentHandlers) cacheHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "private, no-store")
 }
 
 func (h *ContentHandlers) get(w http.ResponseWriter, r *http.Request) {
+	me, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
 	cl, ok := h.claims(w, r, content.KindBlob, content.KindMap, content.KindExport)
 	if !ok {
 		return
@@ -345,9 +334,9 @@ func (h *ContentHandlers) get(w http.ResponseWriter, r *http.Request) {
 	case content.KindBlob:
 		h.serveBlob(w, r, cl)
 	case content.KindMap:
-		h.serveMap(w, r, cl)
+		h.serveMap(w, r, cl, me)
 	case content.KindExport:
-		h.serveExport(w, r, cl)
+		h.serveExport(w, r, cl, me)
 	}
 }
 
@@ -365,28 +354,28 @@ func (h *ContentHandlers) serveBlob(w http.ResponseWriter, r *http.Request, cl c
 	if cl.Filename != "" {
 		w.Header().Set("Content-Disposition", "attachment; filename=\""+cl.Filename+"\"")
 	}
-	h.cacheHeaders(w, cl)
+	h.cacheHeaders(w)
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	_, _ = w.Write(data) //nolint:gosec // G705: stored object bytes served under their own content type
 }
 
-// live is the token's activity unless it is gone.
-func (h *ContentHandlers) live(w http.ResponseWriter, r *http.Request, cl content.Claims) (domain.Activity, bool) {
+// signedActivity checks that the member can still access the token's activity.
+func (h *ContentHandlers) signedActivity(w http.ResponseWriter, r *http.Request, cl content.Claims, me domain.UserID) (domain.Activity, bool) {
 	id, err := domain.ParseUUID[domain.ActivityID](cl.ActivityID)
 	if err != nil {
 		http.NotFound(w, r)
 		return domain.Activity{}, false
 	}
-	act, err := h.Access.Live(r.Context(), id)
-	if err != nil {
+	act, vw, err := h.Access.Visible(r.Context(), id, &me, false, domain.CategoryMap)
+	if err != nil || (cl.Kind == content.KindExport && !vw.IsOwner) {
 		http.NotFound(w, r)
 		return domain.Activity{}, false
 	}
 	return act, true
 }
 
-func (h *ContentHandlers) serveMap(w http.ResponseWriter, r *http.Request, cl content.Claims) {
-	act, ok := h.live(w, r, cl)
+func (h *ContentHandlers) serveMap(w http.ResponseWriter, r *http.Request, cl content.Claims, me domain.UserID) {
+	act, ok := h.signedActivity(w, r, cl, me)
 	if !ok {
 		return
 	}
@@ -398,8 +387,8 @@ func (h *ContentHandlers) serveMap(w http.ResponseWriter, r *http.Request, cl co
 	detailServePNG(w, r, data)
 }
 
-func (h *ContentHandlers) serveExport(w http.ResponseWriter, r *http.Request, cl content.Claims) {
-	act, ok := h.live(w, r, cl)
+func (h *ContentHandlers) serveExport(w http.ResponseWriter, r *http.Request, cl content.Claims, me domain.UserID) {
+	act, ok := h.signedActivity(w, r, cl, me)
 	if !ok {
 		return
 	}
@@ -408,7 +397,7 @@ func (h *ContentHandlers) serveExport(w http.ResponseWriter, r *http.Request, cl
 		writeActionError(w, err, "export failed")
 		return
 	}
-	h.cacheHeaders(w, cl)
+	h.cacheHeaders(w)
 	detailWriteFile(w, file)
 }
 

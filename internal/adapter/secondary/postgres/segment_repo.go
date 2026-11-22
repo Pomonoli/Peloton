@@ -375,14 +375,16 @@ func (r *SegmentRepo) DeleteEffortsForSource(ctx context.Context, sourceID domai
 	return nil
 }
 
-// catalogEffortSQL limits catalog results to GPX/FIT/TCX stream matches
+// catalogEffortSQL limits catalog results to locally matched stream efforts
 // on live activities. Prefer the activity's primary stream when it matched;
 // otherwise use one deterministic source. Keep repeat traversals on that source.
 const catalogEffortSQL = `(s.source <> 'strava_catalog' OR (
-	e.provider_effort_external_id IS NULL AND a.deleted_at IS NULL AND a.type = 'ride' AND NOT EXISTS (
+	e.provider_effort_external_id IS NULL AND a.deleted_at IS NULL AND a.type = 'ride'
+	AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8 AND NOT EXISTS (
 		SELECT 1 FROM segment_efforts alt
 		WHERE alt.segment_id = e.segment_id AND alt.activity_id = e.activity_id
 		  AND alt.activity_source_id <> e.activity_source_id AND alt.provider_effort_external_id IS NULL
+		  AND alt.elapsed_s > 0 AND alt.elapsed_s < 'Infinity'::float8
 		  AND (
 		    alt.activity_source_id = a.primary_stream_source_id OR (
 		      e.activity_source_id IS DISTINCT FROM a.primary_stream_source_id

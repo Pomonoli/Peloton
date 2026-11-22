@@ -53,56 +53,25 @@ const (
 	FeedMaxLimit     = 100
 )
 
-// Home merges the caller's own activities, the local following feed
-// (projected through the visibility model) and federated rows, newest first,
-// capped at limit. offset pages the following and federated sources.
+// Home merges local community activities and any enabled federated feed.
 func (f *Feeds) Home(ctx context.Context, me domain.UserID, limit, offset int) []FeedItem {
 	limit, offset = feedPage(limit, offset)
-	var items []FeedItem
-	items = append(items, f.own(ctx, me, limit)...)
-	items = append(items, f.Following(ctx, me, limit, offset)...)
-	if f.federationEnabled && f.federated != nil {
-		items = append(items, f.federatedRows(ctx, me, limit, offset)...)
+	if !f.federationEnabled || f.federated == nil {
+		return f.Following(ctx, me, limit, offset)
 	}
+	// Read enough rows from each source to page their combined timeline.
+	count := offset + limit
+	acts, _ := f.activities.ListCommunityActivities(ctx, me, nil, count, 0)
+	items := append(f.Project(ctx, acts, &me), f.federatedRows(ctx, me, count, 0)...)
 	sort.SliceStable(items, func(i, j int) bool { return items[i].At.After(items[j].At) })
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	return items
+	return items[min(offset, len(items)):min(count, len(items))]
 }
 
-// Following is the local following feed alone: friends on this server,
-// projected per the visibility model. Rows the viewer may not see are dropped.
+// Following is the local community feed, exposed at the existing feed endpoint.
 func (f *Feeds) Following(ctx context.Context, me domain.UserID, limit, offset int) []FeedItem {
 	limit, offset = feedPage(limit, offset)
-	acts, _ := f.activities.ListFollowingFeed(ctx, me, limit, offset)
-	owners := map[domain.UserID]domain.User{}
-	zones := map[domain.UserID][]domain.PrivacyZone{}
-	var items []FeedItem
-	for _, a := range acts {
-		cats := f.visibility.For(ctx, &a, &me, false)
-		if len(cats) == 0 {
-			continue
-		}
-		if _, cached := owners[a.UserID]; !cached {
-			owners[a.UserID], _ = f.users.GetUser(ctx, a.UserID)
-			zones[a.UserID] = f.visibility.OwnerZones(ctx, a.UserID, false)
-		}
-		p := domain.ProjectActivity(a, cats, zones[a.UserID])
-		items = append(items, FeedItem{Source: FeedFollowing, At: a.StartTime, Owner: owners[a.UserID], Projected: &p})
-	}
-	return items
-}
-
-func (f *Feeds) own(ctx context.Context, me domain.UserID, limit int) []FeedItem {
-	meUser, _ := f.users.GetUser(ctx, me)
-	own, _ := f.activities.ListRecentActivitiesForUser(ctx, me, limit)
-	items := make([]FeedItem, 0, len(own))
-	for i := range own {
-		a := own[i]
-		items = append(items, FeedItem{Source: FeedSelf, At: a.StartTime, Owner: meUser, Own: &a})
-	}
-	return items
+	acts, _ := f.activities.ListCommunityActivities(ctx, me, nil, limit, offset)
+	return f.Project(ctx, acts, &me)
 }
 
 func (f *Feeds) federatedRows(ctx context.Context, me domain.UserID, limit, offset int) []FeedItem {

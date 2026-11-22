@@ -29,6 +29,7 @@ type DiscoverSegments struct {
 	Streams    port.StreamRepo
 	Tx         port.TxManager
 	Matcher    *MatchSegmentsForActivity
+	Garmin     port.GarminSegmentBackfillRepo
 }
 
 // DiscoveryResult describes one scan without exposing points, bounds or times.
@@ -61,7 +62,7 @@ func (d *DiscoverSegments) ForSource(ctx context.Context, user domain.UserID, so
 	if err != nil {
 		return DiscoveryResult{}, err
 	}
-	if act.UserID != user || act.IsDeleted() || act.Type != domain.ActivityTypeRide {
+	if act.UserID != user || act.IsDeleted() || act.HiddenByAdmin || act.Type != domain.ActivityTypeRide || source.Status != domain.SourceStatusActive {
 		return DiscoveryResult{}, nil
 	}
 	stream, err := d.Streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: sourceID, Resolution: domain.StreamResolutionRaw})
@@ -70,7 +71,7 @@ func (d *DiscoverSegments) ForSource(ctx context.Context, user domain.UserID, so
 	}
 	windows := routeWindows(stream.Samples)
 	if len(windows) == 0 {
-		return DiscoveryResult{}, nil
+		return DiscoveryResult{}, d.completeGarminScan(ctx, source)
 	}
 	result, lookupErr := d.discover(ctx, windows)
 	match, matchErr := d.Matcher.Execute(ctx, Input{ActivitySourceID: sourceID})
@@ -78,7 +79,43 @@ func (d *DiscoverSegments) ForSource(ctx context.Context, user domain.UserID, so
 	if errors.Is(matchErr, domain.ErrNotFound) {
 		matchErr = nil
 	}
-	return result, errors.Join(lookupErr, matchErr)
+	if err := errors.Join(lookupErr, matchErr); err != nil || result.RequestLimitReached {
+		return result, err
+	}
+	return result, d.completeGarminScan(ctx, source)
+}
+
+func (d *DiscoverSegments) completeGarminScan(ctx context.Context, source domain.ActivitySource) error {
+	if d.Garmin == nil || source.Provider != "garmin" || !source.Parsed.HasStream {
+		return nil
+	}
+	return d.Garmin.CompleteGarminSegmentScan(ctx, source.ID, source.UpdatedAt)
+}
+
+// BackfillGarmin scans a bounded page of existing Garmin rides. It advances
+// past per-ride failures, which remain pending for the next sweep.
+func (d *DiscoverSegments) BackfillGarmin(ctx context.Context, after domain.SourceID, limit int) (domain.SourceID, error) {
+	scans, err := d.Garmin.ListPendingGarminSegmentScans(ctx, after, limit)
+	if err != nil {
+		return after, err
+	}
+	var scanErrors error
+	for _, scan := range scans {
+		if ctx.Err() != nil {
+			return after, errors.Join(scanErrors, ctx.Err())
+		}
+		after = scan.SourceID
+		scanCtx, cancel := context.WithTimeout(ctx, 8*time.Minute)
+		_, err := d.ForSource(scanCtx, scan.UserID, scan.SourceID)
+		cancel()
+		if err != nil {
+			scanErrors = errors.Join(scanErrors, fmt.Errorf("scan Garmin source %s: %w", scan.SourceID, err))
+		}
+	}
+	if len(scans) < limit {
+		after = domain.SourceID{}
+	}
+	return after, scanErrors
 }
 
 func (d *DiscoverSegments) discover(ctx context.Context, windows []port.SegmentDiscoveryWindow) (DiscoveryResult, error) {

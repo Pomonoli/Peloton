@@ -645,6 +645,11 @@ func serveStartBackgroundLoops(ctx context.Context, app *App, cfg *config.Config
 			app.Garmin.Run(ctx, cfg.Scheduler.TickInterval, cfg.Scheduler.BatchSize)
 		})
 	}
+	if app.DiscoverSegments != nil {
+		goSupervised(ctx, logger, "runGarminSegmentBackfill", func(ctx context.Context) {
+			runGarminSegmentBackfill(ctx, app.DiscoverSegments, logger)
+		})
+	}
 	if cfg.Scheduler.Enabled && app.ReconcileAccount != nil {
 		goSupervised(ctx, logger, "runReconcileScheduler", func(ctx context.Context) { runReconcileScheduler(ctx, logger, app, cfg.Scheduler) })
 	} else {

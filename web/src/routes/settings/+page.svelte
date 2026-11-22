@@ -9,7 +9,6 @@
 	import TokenManager from '#lib/components/TokenManager.svelte';
 	import AuthorizedApps from '#lib/components/AuthorizedApps.svelte';
 	import WebhookManager from '#lib/components/WebhookManager.svelte';
-	import PrivacySharingSettings from '#lib/components/PrivacySharingSettings.svelte';
 	import MergePolicyEditor from '#lib/components/MergePolicyEditor.svelte';
 	import { prefs, setPrefs } from '#lib/prefs.svelte.js';
 	import { formatDate, formatDistance, formatElevation } from '#lib/format.js';
@@ -447,8 +446,6 @@
 			<LocaleSwitcher />
 		</section>
 	{/if}
-
-	<PrivacySharingSettings username={data.user.username} />
 
 	<MergePolicyEditor />
 

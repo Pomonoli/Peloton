@@ -82,7 +82,7 @@ func detailFixture(t *testing.T) (*actFixture, domain.ActivityID, domain.SourceI
 		segs:    map[domain.SegmentID]domain.Segment{segID: {ID: segID, Name: "Hill", ClimbCategory: domain.ClimbCategoryHorsCategorie}},
 	}
 	users := &fakeUsers{users: map[domain.UserID]domain.User{f.user: {ID: f.user, Username: "me"}}}
-	f.srv.Details = view.NewDetails(f.repo, &fakeStreams{samples: samples}, segs, nil, &fakeEngagementD{kudosers: []domain.UserID{f.user}}, users, nil, nil, view.NewVisibility(nil, nil, nil))
+	f.srv.Details = view.NewDetails(f.repo, &fakeStreams{samples: samples}, segs, nil, &fakeEngagementD{kudosers: []domain.UserID{f.user}}, users, nil, nil, view.NewVisibility())
 	return f, aid, sid
 }
 
@@ -101,9 +101,12 @@ func TestListLapsAndParsedSource(t *testing.T) {
 	}
 	_, err = f.srv.GetParsedSource(f.ctx, &v1.GetParsedSourceRequest{ActivityId: aid.String(), SourceId: uuid.NewString()})
 	wantCode(t, err, connectrpc.CodeNotFound)
-	// Not the owner.
+	// A member can read laps while raw source access stays owner-only.
 	other := context.WithValue(t.Context(), ctxKeyUserID, domain.UserID(uuid.New()))
-	_, err = f.srv.ListLaps(other, &v1.ListLapsRequest{ActivityId: aid.String()})
+	if _, err = f.srv.ListLaps(other, &v1.ListLapsRequest{ActivityId: aid.String()}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.srv.GetParsedSource(other, &v1.GetParsedSourceRequest{ActivityId: aid.String(), SourceId: sid.String()})
 	wantCode(t, err, connectrpc.CodeNotFound)
 }
 
@@ -151,10 +154,10 @@ func TestKudosAndCommentsGate(t *testing.T) {
 	if err != nil || len(c.GetComments()) != 1 || c.GetComments()[0].GetBody() != "hi" {
 		t.Fatalf("comments %v %v", c, err)
 	}
-	// A stranger on a private activity: the social category is closed.
 	other := context.WithValue(t.Context(), ctxKeyUserID, domain.UserID(uuid.New()))
-	_, err = f.srv.ListKudos(other, &v1.ListKudosRequest{ActivityId: aid.String()})
-	wantCode(t, err, connectrpc.CodePermissionDenied)
+	if _, err = f.srv.ListKudos(other, &v1.ListKudosRequest{ActivityId: aid.String()}); err != nil {
+		t.Fatal(err)
+	}
 	_, err = f.srv.ListComments(t.Context(), &v1.ListCommentsRequest{ActivityId: aid.String()})
 	wantCode(t, err, connectrpc.CodeUnauthenticated)
 	f.srv.Details = nil

@@ -16,7 +16,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Per-activity detail reads (owner only; kudos/comments gated on the social
+// Per-activity detail reads (kudos/comments gated on the social
 // category). All rendered from usecase/view.Details, like the REST routes.
 // ---------------------------------------------------------------------------
 
@@ -32,7 +32,7 @@ func (s *ActivityServer) ListLaps(ctx context.Context, req *v1.ListLapsRequest) 
 	if err != nil {
 		return nil, err
 	}
-	act, err := s.activityUpdateLoad(ctx, req.GetActivityId())
+	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func (s *ActivityServer) GetActivityZones(ctx context.Context, req *v1.GetActivi
 	if err != nil {
 		return nil, err
 	}
-	act, err := s.activityUpdateLoad(ctx, req.GetActivityId())
+	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (s *ActivityServer) ListActivitySegmentEfforts(ctx context.Context, req *v1
 	if err != nil {
 		return nil, err
 	}
-	act, err := s.activityUpdateLoad(ctx, req.GetActivityId())
+	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}

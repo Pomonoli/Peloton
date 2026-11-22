@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -58,6 +59,8 @@ func TestStravaCatalogEffortsUseOneLocalSourcePerActivity(t *testing.T) {
 		}
 	}
 	providerEffort := "external-effort"
+	add(primaryID, 0, 0, nil)
+	add(primaryID, 2, math.NaN(), nil)
 	add(primaryID, 5, 260, nil)
 	add(primaryID, 10, 250, nil)
 	add(secondary.ID, 5, 240, nil)

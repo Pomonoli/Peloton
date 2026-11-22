@@ -65,7 +65,6 @@ func (f *fakeSegAuthorRepo) ListSegmentEffortsFiltered(_ context.Context, _ doma
 	}
 	return []domain.SegmentEffortCandidate{{
 		Effort:      domain.SegmentEffort{ID: domain.SegmentEffortID(uuid.New()), UserID: viewer, ElapsedS: 10},
-		Activity:    domain.Activity{UserID: viewer},
 		DisplayName: f.name,
 	}}, nil
 }
@@ -73,7 +72,7 @@ func (f *fakeSegAuthorRepo) ListSegmentEffortsFiltered(_ context.Context, _ doma
 func TestSegmentAuthoringRPCs(t *testing.T) {
 	repo := &fakeSegAuthorRepo{segs: map[domain.SegmentID]domain.Segment{}}
 	var backfills []domain.SegmentID
-	s := NewSegmentServer(segmentview.NewSegments(repo, nil))
+	s := NewSegmentServer(segmentview.NewSegments(repo))
 	s.Authoring = &segmentuc.Authoring{Segments: repo, Now: func() time.Time { return actNow }}
 	s.Backfill = func(_ domain.UserID, id domain.SegmentID, _, _ time.Time) string {
 		backfills = append(backfills, id)

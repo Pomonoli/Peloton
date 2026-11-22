@@ -6,6 +6,17 @@ import (
 	"testing"
 )
 
+func TestSegmentAverageSpeedKmh(t *testing.T) {
+	if got := SegmentAverageSpeedKmh(1090, 120); got == nil || math.Abs(*got-32.7) > 1e-9 {
+		t.Fatalf("average speed = %v, want 32.7 km/h", got)
+	}
+	for _, pair := range [][2]float64{{0, 100}, {1000, 0}, {-1, 100}, {1000, -1}, {math.NaN(), 1}, {1000, math.NaN()}, {math.Inf(1), 1}, {1000, math.Inf(1)}} {
+		if got := SegmentAverageSpeedKmh(pair[0], pair[1]); got != nil {
+			t.Errorf("invalid distance or time %v produced a speed of %v", pair, *got)
+		}
+	}
+}
+
 func TestSegmentEnumsValid(t *testing.T) {
 	for _, s := range []SegmentSource{SegmentSourceExternal, SegmentSourceNative} {
 		if !s.Valid() {

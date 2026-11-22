@@ -18,7 +18,7 @@ import (
 //	GET    /api/users/{id}/follow-state  { following, followers_count, following_count, is_self }
 //	GET    /api/users/{id}/followers     [{id,username,display_name,avatar_url}]
 //	GET    /api/users/{id}/following
-//	GET    /api/feed/following           projected activities of people you follow
+//	GET    /api/feed/following           activities of community members
 //	GET    /api/activities/{id}/projected  gated cross-user read (session optional)
 type FollowHandlers struct {
 	Auth     *Auth
@@ -134,18 +134,21 @@ func (h *FollowHandlers) followingFeed(w http.ResponseWriter, r *http.Request) {
 		"activities": out,
 		"offset":     offset,
 		"limit":      limit,
-		// A full DB page, independent of how many rows survived the visibility filter.
-		"has_more": len(items) == limit,
+		"has_more":   len(items) == limit,
 	})
 }
 
 func (h *FollowHandlers) projected(w http.ResponseWriter, r *http.Request) {
+	me, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
 	actID, err := domain.ParseUUID[domain.ActivityID](r.PathValue("id"))
 	if err != nil {
 		http.Error(w, "bad id", http.StatusBadRequest)
 		return
 	}
-	p, owner, isOwner, err := h.Feeds.Projected(r.Context(), actID, h.Auth.Viewer(r), false)
+	p, owner, isOwner, err := h.Feeds.Projected(r.Context(), actID, &me, false)
 	if err != nil {
 		writeActionError(w, err, "load failed")
 		return

@@ -114,14 +114,19 @@ func mountRestFederation(mux *http.ServeMux, app *App, cfg *config.Config, logge
 		inbox.Dedup = app.InboxDedup
 	}
 	version, _, _ := buildInfo()
+	auth := restAuth(app)
 	(&appub.Handlers{
 		Actors: actors, Inbox: inbox, Remote: remote,
 		// ~120 inbound activities/min per remote domain; the bucket map is capped.
 		InboxAllow: newIPRateLimiter(120, nil).allow,
 		Version:    version,
-		Log:        logger,
+		IsMember: func(r *http.Request) bool {
+			_, ok := auth.User(r)
+			return ok
+		},
+		Log: logger,
 	}).Mount(mux)
-	(&rest.FederationHandlers{Auth: restAuth(app), Actors: actors, Blocks: app.FedBlocks, Log: logger}).Mount(mux)
+	(&rest.FederationHandlers{Auth: auth, Actors: actors, Blocks: app.FedBlocks, Log: logger}).Mount(mux)
 	logger.Info("federation (ActivityPub phases 1–3) endpoints mounted",
 		"host", in.Host, "paths", []string{"/.well-known/webfinger", "/.well-known/nodeinfo", "/users/{username}"})
 }

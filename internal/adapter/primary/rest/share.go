@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/usecase/sharing"
@@ -16,7 +15,7 @@ import (
 //	POST   /api/activities/{id}/share   owner: mint an unguessable link
 //	GET    /api/activities/{id}/shares  owner: list links
 //	DELETE /api/shares/{token}          owner: revoke
-//	GET    /api/shared/{token}          public: read-only projected activity
+//	GET    /api/shared/{token}          authenticated: read-only projected activity
 type ShareHandlers struct {
 	Auth  *Auth
 	Links *sharing.Links
@@ -29,8 +28,6 @@ func (h *ShareHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/activities/{id}/share", h.create)
 	mux.HandleFunc("GET /api/activities/{id}/shares", h.list)
 	mux.HandleFunc("DELETE /api/shares/{token}", h.revoke)
-	// Public, session-less read of a shared activity, projected via the 'link'
-	// audience (which the owner's policy may further restrict).
 	mux.HandleFunc("GET /api/shared/{token}", h.read)
 }
 
@@ -99,7 +96,11 @@ func (h *ShareHandlers) revoke(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ShareHandlers) read(w http.ResponseWriter, r *http.Request) {
-	p, owner, err := h.Feeds.Shared(r.Context(), h.Links.Repo, r.PathValue("token"), h.Auth.Viewer(r))
+	me, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
+	}
+	p, owner, err := h.Feeds.Shared(r.Context(), h.Links.Repo, r.PathValue("token"), &me)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			http.Error(w, "link not found or revoked", http.StatusNotFound)
@@ -108,15 +109,8 @@ func (h *ShareHandlers) read(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err, "load failed")
 		return
 	}
-	act := projectedJSON(p)
-	// The map and photo endpoints resolve the link audience from ?share=.
-	for _, k := range []string{"map_image_url", "photos_url"} {
-		if u, ok := act[k].(string); ok {
-			act[k] = u + "?share=" + url.QueryEscape(r.PathValue("token"))
-		}
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"activity": act,
+		"activity": projectedJSON(p),
 		"owner":    userCardJSON(owner),
 		"shared":   true,
 	})

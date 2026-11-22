@@ -161,14 +161,9 @@ type ActivityReader interface {
 		filter ActivityListFilter,
 	) (activities []domain.Activity, matched int, err error)
 
-	// ListFollowingFeed returns a reverse-chronological page of activities
-	// owned by users the viewer follows (accepted edges), restricted to
-	// non-private activities. Soft-deleted rows excluded.
-	ListFollowingFeed(
-		ctx context.Context,
-		viewerID domain.UserID,
-		limit, offset int,
-	) ([]domain.Activity, error)
+	// ListCommunityActivities pages live community activities, optionally for
+	// one member. Only the viewer's own administratively hidden rows are included.
+	ListCommunityActivities(ctx context.Context, viewerID domain.UserID, ownerID *domain.UserID, limit, offset int) ([]domain.Activity, error)
 }
 
 // ActivityWriter persists the merged activity row.

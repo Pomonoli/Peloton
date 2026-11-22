@@ -4,7 +4,11 @@
 
 	// Shared header of the activity pages: back link + sub-page buttons. On a
 	// sub-page the back link returns to the activity, on the activity to the list.
-	let { id, title = '' }: { id: string; title?: string } = $props();
+	let {
+		id,
+		title = '',
+		isOwner = true
+	}: { id: string; title?: string; isOwner?: boolean } = $props();
 
 	const base = $derived(`/activities/${id}`);
 	const links = $derived([
@@ -21,21 +25,24 @@
 			← {title || 'Activity'}
 		</a>
 	{:else}
-		<a href="/activities" class="text-xs text-accent-400 hover:text-accent-300">{m.detail_back()}</a
+		<a
+			href={isOwner ? '/activities' : '/feed'}
+			class="text-xs text-accent-400 hover:text-accent-300"
+			>{isOwner ? m.detail_back() : m.community_feed_title()}</a
 		>
 	{/if}
-	<nav class="flex items-center gap-2 max-md:flex-wrap">
-		{#each links as l (l.href)}
-			{@const active = page.url.pathname === l.href}
-			<a
-				href={l.href}
-				aria-current={active ? 'page' : undefined}
-				class="rounded border px-2.5 py-1 text-xs {active
-					? 'border-accent-500 text-accent-300'
-					: 'border-zinc-700 text-zinc-300 hover:border-accent-500 hover:text-accent-300'}"
-			>
-				{l.label}
-			</a>
-		{/each}
-	</nav>
+	{#if isOwner}<nav class="flex items-center gap-2 max-md:flex-wrap">
+			{#each links as l (l.href)}
+				{@const active = page.url.pathname === l.href}
+				<a
+					href={l.href}
+					aria-current={active ? 'page' : undefined}
+					class="rounded border px-2.5 py-1 text-xs {active
+						? 'border-accent-500 text-accent-300'
+						: 'border-zinc-700 text-zinc-300 hover:border-accent-500 hover:text-accent-300'}"
+				>
+					{l.label}
+				</a>
+			{/each}
+		</nav>{/if}
 </div>

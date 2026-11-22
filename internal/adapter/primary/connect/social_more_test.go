@@ -77,20 +77,19 @@ func TestSocialServerReads(t *testing.T) {
 	users := &fakeUsers{users: map[domain.UserID]domain.User{me: {ID: me, Username: "me"}, owner: {ID: owner, Username: "owner", ProfileIsPublic: true}}}
 	pub := seedPlain(repo, owner, domain.ActivityTypeRide, actNow, domain.PrivacyPublic)
 	priv := seedPlain(repo, owner, domain.ActivityTypeRide, actNow.Add(-time.Hour), domain.PrivacyPrivate)
-	repo.Following[me] = map[domain.UserID]bool{owner: true}
-	feeds := view.NewFeeds(repo, users, view.NewVisibility(nil, nil, nil), nil, false)
+	feeds := view.NewFeeds(repo, users, view.NewVisibility(), nil, false)
 	club := domain.Club{ID: domain.ClubID(uuid.New()), Slug: "hills", Name: "Hills", IsPublic: false, Description: "climb"}
 	clubs := &fakeClubsC{club: club, members: map[domain.UserID]domain.ClubMemberRole{me: domain.ClubRoleAdmin}}
 	s := NewSocialServer(feeds, &fakeContent{}, nil, func(domain.Activity) string { return "e" })
 	s.Clubs = view.NewClubs(clubs, users, feeds)
-	s.Profiles = view.NewProfiles(usersByNameC{users}, repo, nil, nil, view.NewVisibility(nil, nil, nil))
+	s.Profiles = view.NewProfiles(usersByNameC{users}, repo, nil, nil, view.NewVisibility())
 	s.ShareLinks = &fakeLinksC{link: domain.ShareLink{Token: "tok", ActivityID: priv}}
 	s.Activities = repo
 	ctx := context.WithValue(t.Context(), ctxKeyUserID, me)
 	anon := t.Context()
 
 	ff, err := s.ListFollowingFeed(ctx, &v1.ListFollowingFeedRequest{})
-	if err != nil || len(ff.GetItems()) != 1 || ff.GetItems()[0].GetProjected().GetId() != pub.String() {
+	if err != nil || len(ff.GetItems()) != 2 || ff.GetItems()[0].GetProjected().GetId() != pub.String() {
 		t.Fatalf("following %v %v", ff, err)
 	}
 	cl, err := s.ListClubs(ctx, &v1.ListClubsRequest{})
@@ -112,21 +111,26 @@ func TestSocialServerReads(t *testing.T) {
 	if _, err := s.ListClubFeed(ctx, &v1.ListClubFeedRequest{Slug: "hills"}); err != nil {
 		t.Fatalf("club feed %v", err)
 	}
-	pr, err := s.GetProfile(anon, &v1.GetProfileRequest{Username: "owner"})
-	if err != nil || !pr.GetIsPublic() || len(pr.GetActivities()) != 1 || pr.GetUser().GetUsername() != "owner" {
+	_, err = s.GetProfile(anon, &v1.GetProfileRequest{Username: "owner"})
+	wantCode(t, err, connectrpc.CodeUnauthenticated)
+	pr, err := s.GetProfile(ctx, &v1.GetProfileRequest{Username: "owner"})
+	if err != nil || !pr.GetIsPublic() || len(pr.GetActivities()) != 2 || pr.GetUser().GetUsername() != "owner" {
 		t.Fatalf("profile %v %v", pr, err)
 	}
 	pa, err := s.GetProjectedActivity(ctx, &v1.GetProjectedActivityRequest{ActivityId: pub.String()})
 	if err != nil || pa.GetIsOwner() || pa.GetOwner().GetUsername() != "owner" || pa.GetActivity().GetId() != pub.String() {
 		t.Fatalf("projected %v %v", pa, err)
 	}
-	_, err = s.GetProjectedActivity(ctx, &v1.GetProjectedActivityRequest{ActivityId: priv.String()})
-	wantCode(t, err, connectrpc.CodePermissionDenied)
-	sh, err := s.GetSharedActivity(anon, &v1.GetSharedActivityRequest{Token: "tok"})
+	if _, err = s.GetProjectedActivity(ctx, &v1.GetProjectedActivityRequest{ActivityId: priv.String()}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.GetSharedActivity(anon, &v1.GetSharedActivityRequest{Token: "tok"})
+	wantCode(t, err, connectrpc.CodeUnauthenticated)
+	sh, err := s.GetSharedActivity(ctx, &v1.GetSharedActivityRequest{Token: "tok"})
 	if err != nil || sh.GetActivity().GetId() != priv.String() {
 		t.Fatalf("shared %v %v", sh, err)
 	}
-	_, err = s.GetSharedActivity(anon, &v1.GetSharedActivityRequest{Token: "nope"})
+	_, err = s.GetSharedActivity(ctx, &v1.GetSharedActivityRequest{Token: "nope"})
 	wantCode(t, err, connectrpc.CodeNotFound)
 	if rq, err := s.ListReviewQueue(ctx, &v1.ListReviewQueueRequest{}); err != nil || rq == nil {
 		t.Fatalf("review queue %v %v", rq, err)

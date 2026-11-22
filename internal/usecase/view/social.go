@@ -14,28 +14,25 @@ var ErrForbidden = port.NewActionError(port.ActionErrorForbidden, "not permitted
 
 // Project renders activities for viewer (nil = anonymous): the viewer's own
 // rows stay full activities, everyone else's are projected through the
-// visibility model, and rows the viewer may not see are dropped. Owner
-// records and privacy zones are cached per owner.
+// community visibility rules. Owner records are cached per owner.
 func (f *Feeds) Project(ctx context.Context, acts []domain.Activity, viewer *domain.UserID) []FeedItem {
 	owners := map[domain.UserID]domain.User{}
-	zones := map[domain.UserID][]domain.PrivacyZone{}
 	out := make([]FeedItem, 0, len(acts))
 	for i := range acts {
 		a := acts[i]
 		isOwner := viewer != nil && *viewer == a.UserID
 		cats := f.visibility.For(ctx, &a, viewer, false)
-		if !isOwner && len(cats) == 0 {
+		if len(cats) == 0 {
 			continue
 		}
 		if _, cached := owners[a.UserID]; !cached {
 			owners[a.UserID], _ = f.users.GetUser(ctx, a.UserID)
-			zones[a.UserID] = f.visibility.OwnerZones(ctx, a.UserID, isOwner)
 		}
 		item := FeedItem{Source: FeedFollowing, At: a.StartTime, Owner: owners[a.UserID]}
 		if isOwner {
 			item.Source, item.Own = FeedSelf, &a
 		} else {
-			p := domain.ProjectActivity(a, cats, zones[a.UserID])
+			p := domain.ProjectActivity(a, cats, nil)
 			item.Projected = &p
 		}
 		out = append(out, item)
@@ -164,6 +161,9 @@ func (c *Clubs) Get(ctx context.Context, slug string, viewer *domain.UserID) (Cl
 
 // Members lists a visible club's members with their user records.
 func (c *Clubs) Members(ctx context.Context, slug string, viewer *domain.UserID, limit, offset int) ([]ClubMemberRow, error) {
+	if viewer == nil {
+		return nil, ErrForbidden
+	}
 	d, err := c.Get(ctx, slug, viewer)
 	if err != nil {
 		return nil, err
@@ -187,6 +187,9 @@ func (c *Clubs) Members(ctx context.Context, slug string, viewer *domain.UserID,
 // Feed lists a visible club's member activities, projected per the
 // visibility model (club membership is not an audience of its own).
 func (c *Clubs) Feed(ctx context.Context, slug string, viewer *domain.UserID, limit, offset int) ([]FeedItem, error) {
+	if viewer == nil {
+		return nil, ErrForbidden
+	}
 	d, err := c.Get(ctx, slug, viewer)
 	if err != nil {
 		return nil, err
@@ -211,6 +214,7 @@ type ProfileView struct {
 	IsFollowing bool
 	Counts      domain.FollowCounts
 	Activities  []domain.ProjectedActivity
+	HasMore     bool
 }
 
 // Profiles are the public profile reads (SocialService.GetProfile, GET /api/profiles/{username}).
@@ -230,49 +234,37 @@ func NewProfiles(users port.UserReader, activities port.ActivityReader, follows 
 // profileRecent is how many recent activities a profile shows.
 const profileRecent = 20
 
-// Get resolves username for viewer (nil = anonymous). A blocked or unknown
-// user is domain.ErrNotFound; a non-public profile is ErrForbidden unless
-// the viewer is the owner or a follower.
+// Get resolves a member's profile and the first page of their history.
 func (p *Profiles) Get(ctx context.Context, username string, viewer *domain.UserID) (ProfileView, error) {
+	return p.GetPage(ctx, username, viewer, 0)
+}
+
+// GetPage pages a member's activity history for a signed-in viewer.
+func (p *Profiles) GetPage(ctx context.Context, username string, viewer *domain.UserID, offset int) (ProfileView, error) {
+	if viewer == nil {
+		return ProfileView{}, ErrForbidden
+	}
 	u, err := p.users.GetUserByUsername(ctx, strings.ToLower(strings.TrimSpace(username)))
 	if err != nil {
 		return ProfileView{}, domain.ErrNotFound
 	}
-	v := ProfileView{User: u, IsOwner: viewer != nil && *viewer == u.ID}
-	if viewer != nil && !v.IsOwner {
-		if p.blocks != nil {
-			if blocked, _ := p.blocks.IsBlockedEitherWay(ctx, *viewer, u.ID); blocked {
-				return ProfileView{}, domain.ErrNotFound
-			}
-		}
-		if p.follows != nil {
+	v := ProfileView{User: u, IsOwner: *viewer == u.ID}
+	if p.follows != nil {
+		if !v.IsOwner {
 			v.IsFollowing, _ = p.follows.IsFollowing(ctx, *viewer, u.ID)
 		}
-	}
-	if !u.ProfileIsPublic && !v.IsOwner && !v.IsFollowing {
-		return ProfileView{}, ErrForbidden
-	}
-	if p.follows != nil {
 		v.Counts, _ = p.follows.Counts(ctx, u.ID)
 	}
-	v.Activities = p.recent(ctx, u, viewer, v.IsOwner)
-	return v, nil
-}
-
-// recent projects the owner's newest activities for the viewer: owners see
-// all, others only non-private ones the visibility model opens.
-func (p *Profiles) recent(ctx context.Context, u domain.User, viewer *domain.UserID, isOwner bool) []domain.ProjectedActivity {
-	recent, _ := p.activities.ListRecentActivitiesForUser(ctx, u.ID, profileRecent)
-	zones := p.visibility.OwnerZones(ctx, u.ID, isOwner)
-	out := make([]domain.ProjectedActivity, 0, len(recent))
-	for _, a := range recent {
-		cats := p.visibility.For(ctx, &a, viewer, false)
-		if !isOwner && len(cats) == 0 {
-			continue
-		}
-		out = append(out, domain.ProjectActivity(a, cats, zones))
+	activities, err := p.activities.ListCommunityActivities(ctx, *viewer, &u.ID, profileRecent+1, max(0, offset))
+	if err != nil {
+		return ProfileView{}, fmt.Errorf("list member activities: %w", err)
 	}
-	return out
+	v.HasMore = len(activities) > profileRecent
+	for _, act := range activities[:min(len(activities), profileRecent)] {
+		cats := p.visibility.For(ctx, &act, viewer, false)
+		v.Activities = append(v.Activities, domain.ProjectActivity(act, cats, nil))
+	}
+	return v, nil
 }
 
 // FollowState is one viewer's relation to a profile with its counts.

@@ -12,7 +12,7 @@ const M_PER_MILE = 1609.344;
 const FT_PER_M = 3.28084;
 
 // Map Paraglide locales to regional formatting conventions.
-const intlLocales: Partial<Record<string, string>> = { en: 'en-US', de: 'de-DE' };
+const intlLocales: Partial<Record<string, string>> = { en: 'en-US', de: 'de-DE', 'nl-BE': 'nl-BE' };
 
 export function intlLocale(): string {
 	return intlLocales[getLocale()] ?? 'en-US';
@@ -31,8 +31,18 @@ export function formatDistance(m: number | null | undefined): string {
 		if (m < M_PER_MILE / 10) return `${Math.round(m * FT_PER_M)} ft`;
 		return `${num(m / M_PER_MILE)} mi`;
 	}
-	if (m < 1000) return `${Math.round(m)} m`;
+	return formatMetricDistance(m);
+}
+
+export function formatMetricDistance(m: number): string {
+	if (!(m > 0) || !Number.isFinite(m)) return Number.isFinite(m) && m === 0 ? '0 m' : DASH;
+	if (m < 1000) return `${num(m, 0)} m`;
 	return `${num(m / 1000)} km`;
+}
+
+export function formatSpeedKmh(kmh: number | null | undefined): string {
+	if (kmh == null || !Number.isFinite(kmh) || kmh <= 0) return DASH;
+	return `${num(kmh, 1)} km/h`;
 }
 
 export function formatDuration(seconds: number | null | undefined): string {

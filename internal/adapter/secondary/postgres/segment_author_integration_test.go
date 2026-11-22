@@ -136,7 +136,7 @@ func TestSegmentEffortCandidatesPrefilter(t *testing.T) {
 	}
 	ownPrivate := effort(owner, domain.PrivacyPrivate, 100)
 	otherPublic := effort(other, domain.PrivacyPublic, 110)
-	effort(other, domain.PrivacyPrivate, 90)
+	otherPrivate := effort(other, domain.PrivacyPrivate, 90)
 	hidden := effort(other, domain.PrivacyPublic, 80)
 	deleted := effort(other, domain.PrivacyPublic, 70)
 	if err := mod.SetActivityHidden(ctx, hidden, true); err != nil {
@@ -150,8 +150,8 @@ func TestSegmentEffortCandidatesPrefilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cands) != 2 || cands[0].Activity.ID != ownPrivate || cands[1].Activity.ID != otherPublic ||
-		cands[1].Activity.Privacy != domain.PrivacyPublic || cands[1].Activity.UserID != other {
+	if len(cands) != 3 || cands[0].Effort.ActivityID != otherPrivate || cands[1].Effort.ActivityID != ownPrivate ||
+		cands[2].Effort.ActivityID != otherPublic || cands[0].Effort.UserID != other {
 		t.Fatalf("prefilter: %+v", cands)
 	}
 	_ = segs.DeleteSegment(ctx, seg.ID)

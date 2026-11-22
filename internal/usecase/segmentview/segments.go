@@ -8,7 +8,6 @@ import (
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
-	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // ErrUnavailable: the read needs a subsystem this instance has not wired.
@@ -17,14 +16,12 @@ var ErrUnavailable = port.NewActionError(port.ActionErrorUnavailable, "not avail
 // Segments are the caller-centric segment reads (SegmentService /
 // GET /api/segments, /api/segments/{id}).
 type Segments struct {
-	segments   port.SegmentReader
-	visibility *view.Visibility
+	segments port.SegmentReader
 }
 
-// NewSegments wires the repo (nil → every read is ErrUnavailable). Without a
-// visibility resolver, effort reads only ever show the viewer's own efforts.
-func NewSegments(segments port.SegmentReader, visibility *view.Visibility) *Segments {
-	return &Segments{segments: segments, visibility: visibility}
+// NewSegments wires the read repository (nil reports ErrUnavailable).
+func NewSegments(segments port.SegmentReader) *Segments {
+	return &Segments{segments: segments}
 }
 
 // Segment list paging bounds.
@@ -77,9 +74,18 @@ func (s *Segments) Mine(ctx context.Context, userID domain.UserID, activityType 
 	return page, nil
 }
 
+// Catalog pages the shared Strava catalog, optionally filtered by member.
+func (s *Segments) Catalog(ctx context.Context, member *domain.UserID, limit, offset int) ([]domain.CatalogSegment, bool, error) {
+	if s.segments == nil {
+		return nil, false, ErrUnavailable
+	}
+	limit = clampLimit(limit)
+	items, err := s.segments.ListCatalogSegments(ctx, member, limit+1, max(0, offset))
+	return items[:min(len(items), limit)], len(items) > limit, err
+}
+
 // Detail returns a segment with the viewer's own efforts (fastest first). A
-// viewer sees a segment they have ridden or one they own; anything else is
-// domain.ErrNotFound.
+// viewer can open a catalog segment as soon as it has a community effort.
 func (s *Segments) Detail(ctx context.Context, userID domain.UserID, id domain.SegmentID) (domain.Segment, []domain.SegmentEffort, error) {
 	if s.segments == nil {
 		return domain.Segment{}, nil, ErrUnavailable
@@ -88,12 +94,17 @@ func (s *Segments) Detail(ctx context.Context, userID domain.UserID, id domain.S
 	if err != nil {
 		return domain.Segment{}, nil, domain.ErrNotFound
 	}
+	if seg.Source == domain.SegmentSourceStravaCatalog {
+		if _, err := s.Visible(ctx, userID, id); err != nil {
+			return domain.Segment{}, nil, err
+		}
+	}
 	efforts, err := s.segments.ListEffortsForSegment(ctx, id, userID, port.LeaderboardScopePersonalOnly, segmentEffortsMax, 0)
 	if err != nil {
 		return domain.Segment{}, nil, fmt.Errorf("list efforts: %w", err)
 	}
 	owns := seg.OwnerUserID != nil && *seg.OwnerUserID == userID
-	if len(efforts) == 0 && !owns {
+	if len(efforts) == 0 && !owns && seg.Source != domain.SegmentSourceStravaCatalog {
 		return domain.Segment{}, nil, domain.ErrNotFound
 	}
 	setCatalogPersonalRanks(seg, efforts, 0)
@@ -141,8 +152,7 @@ func (s *Segments) Visible(ctx context.Context, viewer domain.UserID, id domain.
 		return domain.Segment{}, domain.ErrNotFound
 	}
 	if seg.Source == domain.SegmentSourceStravaCatalog {
-		// Cache population alone must not reveal areas another user rode.
-		efforts, err := s.segments.ListEffortsForSegment(ctx, id, viewer, port.LeaderboardScopePersonalOnly, 1, 0)
+		efforts, err := s.segments.ListSegmentEffortsFiltered(ctx, id, viewer, domain.SegmentEffortQuery{Limit: 1})
 		if err != nil {
 			return domain.Segment{}, err
 		}
@@ -189,117 +199,70 @@ func (s *Segments) SearchBBox(ctx context.Context, viewer domain.UserID, box por
 	return segs, nil
 }
 
-// Efforts lists efforts on a visible segment that the viewer may see: their
-// own, plus other athletes' whose activity shares "segments" with them. A
-// private segment only shows the viewer's own efforts.
+// Efforts lists community efforts on a shared segment or the viewer's own
+// efforts on their personal segment.
 func (s *Segments) Efforts(ctx context.Context, viewer domain.UserID, id domain.SegmentID, q domain.SegmentEffortQuery) ([]domain.SegmentEffort, error) {
 	seg, err := s.Visible(ctx, viewer, id)
 	if err != nil {
 		return nil, err
 	}
-	if !seg.InstanceShared() || s.visibility == nil {
+	if !seg.InstanceShared() {
 		q.UserID = &viewer
 	}
-	want, skip := clampLimit(q.Limit), max(0, q.Offset)
-	out := make([]domain.SegmentEffort, 0, SegmentsDefaultLimit)
-	err = s.scanVisible(ctx, viewer, id, q, func(c domain.SegmentEffortCandidate) bool {
-		if skip > 0 {
-			skip--
-			return true
-		}
-		if seg.Source == domain.SegmentSourceStravaCatalog && c.Effort.UserID != viewer {
-			// Personal standings could reveal a faster, private effort.
-			c.Effort.PersonalRank, c.Effort.IsPersonalRecord = 0, false
-		}
-		out = append(out, c.Effort)
-		return len(out) < want
-	})
+	q.Limit, q.Offset = clampLimit(q.Limit), max(0, q.Offset)
+	rows, err := s.segments.ListSegmentEffortsFiltered(ctx, id, viewer, q)
 	if err != nil {
 		return nil, fmt.Errorf("list efforts: %w", err)
+	}
+	out := make([]domain.SegmentEffort, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.Effort)
 	}
 	return out, nil
 }
 
-// Leaderboard ranks each athlete's fastest effort the viewer may see on an
-// instance-scoped segment; on a private segment the board is just the viewer.
+// Leaderboard ranks each member's fastest valid effort. Exact ties are ordered
+// by the time of the effort and then its ID, matching the catalog's Local KOM.
 func (s *Segments) Leaderboard(ctx context.Context, viewer domain.UserID, id domain.SegmentID, q domain.LeaderboardQuery) ([]domain.LeaderboardEntry, *domain.LeaderboardEntry, error) {
 	seg, err := s.Visible(ctx, viewer, id)
 	if err != nil {
 		return nil, nil, err
 	}
-	eq := domain.SegmentEffortQuery{From: q.From, To: q.To, FastestFirst: true}
-	if !seg.InstanceShared() || s.visibility == nil {
+	const scanPage = 200
+	eq := domain.SegmentEffortQuery{From: q.From, To: q.To, BestPerUser: true, Limit: scanPage}
+	if !seg.InstanceShared() {
 		eq.UserID = &viewer
 	}
 	limit, offset := clampLimit(q.Limit), max(0, q.Offset)
-	var (
-		ranked []domain.LeaderboardEntry
-		mine   *domain.LeaderboardEntry
-		seen   = map[domain.UserID]bool{}
-	)
-	err = s.scanVisible(ctx, viewer, id, eq, func(c domain.SegmentEffortCandidate) bool {
-		if seen[c.Effort.UserID] {
-			return true
-		}
-		seen[c.Effort.UserID] = true
-		e := domain.LeaderboardEntry{
-			Rank: len(ranked) + 1, UserID: c.Effort.UserID, DisplayName: c.DisplayName, AvatarURL: c.AvatarURL,
-			ElapsedS: c.Effort.ElapsedS, StartTime: c.Effort.StartTime, EffortID: c.Effort.ID, ActivityID: c.Effort.ActivityID,
-		}
-		if n := len(ranked); n > 0 && ranked[n-1].ElapsedS == e.ElapsedS && ranked[n-1].StartTime.Equal(e.StartTime) {
-			e.Rank = ranked[n-1].Rank
-		}
-		ranked = append(ranked, e)
-		if e.UserID == viewer {
-			m := e
-			mine = &m
-		}
-		// Ranks only depend on faster rows, so stop once the page and the
-		// viewer's own row are known.
-		return len(ranked) < offset+limit || mine == nil
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("leaderboard: %w", err)
-	}
-	if offset >= len(ranked) {
-		return []domain.LeaderboardEntry{}, mine, nil
-	}
-	return ranked[offset:min(len(ranked), offset+limit)], mine, nil
-}
-
-// effortScanPage / effortScanMax bound how many effort rows one read walks.
-const (
-	effortScanPage = 200
-	effortScanMax  = 20000
-)
-
-// scanVisible walks efforts in q's order and calls yield for each the viewer
-// may see ("segments" category), until yield returns false.
-func (s *Segments) scanVisible(ctx context.Context, viewer domain.UserID, id domain.SegmentID, q domain.SegmentEffortQuery, yield func(domain.SegmentEffortCandidate) bool) error {
-	var chk *view.Checker
-	if s.visibility != nil {
-		chk = s.visibility.Checker(&viewer)
-	}
-	visible := func(c *domain.SegmentEffortCandidate) bool {
-		return c.Effort.UserID == viewer || (chk != nil && chk.For(ctx, &c.Activity).Has(domain.CategorySegments))
-	}
-	q.Limit, q.Offset = effortScanPage, 0
-	for q.Offset < effortScanMax {
-		page, err := s.segments.ListSegmentEffortsFiltered(ctx, id, viewer, q)
+	ranked := make([]domain.LeaderboardEntry, 0, limit)
+	var mine *domain.LeaderboardEntry
+	for {
+		rows, err := s.segments.ListSegmentEffortsFiltered(ctx, id, viewer, eq)
 		if err != nil {
-			return err
+			return nil, nil, fmt.Errorf("leaderboard: %w", err)
 		}
-		for i := range page {
-			if visible(&page[i]) && !yield(page[i]) {
-				return nil
+		for i, row := range rows {
+			pos := eq.Offset + i
+			entry := domain.LeaderboardEntry{
+				Rank: pos + 1, UserID: row.Effort.UserID, DisplayName: row.DisplayName, AvatarURL: row.AvatarURL,
+				ElapsedS: row.Effort.ElapsedS, DistanceM: seg.DistanceM, StartTime: row.Effort.StartTime,
+				EffortID: row.Effort.ID, ActivityID: row.Effort.ActivityID,
+			}
+			if pos >= offset && len(ranked) < limit {
+				ranked = append(ranked, entry)
+			}
+			if entry.UserID == viewer {
+				mine = &entry
+			}
+			if len(ranked) == limit && mine != nil {
+				return ranked, mine, nil
 			}
 		}
-		if len(page) < q.Limit {
-			return nil
+		if len(rows) < scanPage {
+			return ranked, mine, nil
 		}
-		q.Offset += q.Limit
+		eq.Offset += scanPage
 	}
-	return nil
 }
 
 func clampLimit(limit int) int {

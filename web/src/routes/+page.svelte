@@ -208,7 +208,7 @@
 							>Segments</a
 						>
 						<a href="/athlete" class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
-							>Find athletes</a
+							>{m.nav_athlete()}</a
 						>
 					</div>
 				</nav>
@@ -274,10 +274,7 @@
 										</div>
 									</a>
 								{:else}
-									<a
-										href={a.source === 'self' ? `/activities/${a.id}` : `/a/${a.id}`}
-										class="flex items-center gap-3 hover:opacity-90"
-									>
+									<a href={`/activities/${a.id}`} class="flex items-center gap-3 hover:opacity-90">
 										<SportIcon type={a.type} size={24} />
 										<div class="min-w-0 flex-1">
 											<div class="truncate font-medium">{a.title || 'Untitled'}</div>
@@ -325,11 +322,7 @@
 								{/if}
 								{#if a.map_image_url}
 									<a
-										href={a.source === 'federated'
-											? a.url || '#'
-											: a.source === 'self'
-												? `/activities/${a.id}`
-												: `/a/${a.id}`}
+										href={a.source === 'federated' ? a.url || '#' : `/activities/${a.id}`}
 										target={a.source === 'federated' ? '_blank' : undefined}
 										rel="noopener"
 										class="mt-3 block"
@@ -357,11 +350,7 @@
 					<div
 						class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
 					>
-						Nothing in your feed yet. Follow other athletes — or a remote handle over federation —
-						to see their activities here.
-						<div class="mt-2">
-							<a href="/athlete" class="text-accent-400 hover:underline">Find athletes →</a>
-						</div>
+						{m.community_feed_empty()}
 					</div>
 				{/if}
 			</main>

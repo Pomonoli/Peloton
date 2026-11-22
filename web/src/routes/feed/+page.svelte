@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
 
@@ -51,7 +52,7 @@
 <svelte:head><title>Feed · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-6">
-	<h1 class="mb-4 text-xl font-semibold">Following</h1>
+	<h1 class="mb-4 text-xl font-semibold">{m.community_feed_title()}</h1>
 
 	{#if error}
 		<p class="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>
@@ -59,10 +60,7 @@
 
 	{#if items.length === 0 && !loading}
 		<div class="rounded-lg border border-dashed p-8 text-center text-sm text-zinc-400">
-			Nothing here yet. Follow other athletes to see their activities.
-			<div class="mt-2">
-				<a href="/athlete" class="text-accent-400 hover:underline">Find athletes →</a>
-			</div>
+			{m.community_feed_empty()}
 		</div>
 	{/if}
 
@@ -76,7 +74,7 @@
 					<span>·</span>
 					<span>{formatRelativeDate(a.start_time)}</span>
 				</div>
-				<a href={`/a/${a.id}`} class="flex items-center gap-3 hover:opacity-90">
+				<a href={`/activities/${a.id}`} class="flex items-center gap-3 hover:opacity-90">
 					<SportIcon type={a.type} size={24} />
 					<div class="min-w-0 flex-1">
 						<div class="truncate font-medium">{a.title || 'Untitled'}</div>
@@ -104,7 +102,7 @@
 					{/if}
 				</div>
 				{#if a.map_image_url}
-					<a href={`/a/${a.id}`} class="mt-3 block">
+					<a href={`/activities/${a.id}`} class="mt-3 block">
 						<img
 							src={a.map_image_url}
 							alt="Course map"
@@ -125,7 +123,7 @@
 				disabled={loading}
 				class="rounded border px-4 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
 			>
-				{loading ? 'Loading…' : 'Load more'}
+				{loading ? m.community_loading() : m.community_load_more()}
 			</button>
 		</div>
 	{/if}
