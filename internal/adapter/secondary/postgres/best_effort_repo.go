@@ -106,6 +106,16 @@ func (r *BestEffortRepo) DeleteForSource(ctx context.Context, sourceID domain.So
 
 // SaveEfforts inserts a batch of best_efforts in one pgx.Batch round trip.
 func (r *BestEffortRepo) SaveEfforts(ctx context.Context, efforts []domain.BestEffort) error {
+	return r.saveEfforts(ctx, efforts, "")
+}
+
+// SaveMissingEfforts adds historical windows without replacing results that
+// an import or another backfill already computed.
+func (r *BestEffortRepo) SaveMissingEfforts(ctx context.Context, efforts []domain.BestEffort) error {
+	return r.saveEfforts(ctx, efforts, ` ON CONFLICT (activity_source_id, metric, window_kind, window_value) DO NOTHING`)
+}
+
+func (r *BestEffortRepo) saveEfforts(ctx context.Context, efforts []domain.BestEffort, onConflict string) error {
 	if len(efforts) == 0 {
 		return nil
 	}
@@ -137,7 +147,7 @@ func (r *BestEffortRepo) SaveEfforts(ctx context.Context, efforts []domain.BestE
 				$10,
 				$11, $12, $13,
 				$14, COALESCE($15, now())
-			)`,
+			)`+onConflict,
 			e.ID.UUID(), e.ActivityID.UUID(), e.ActivitySourceID.UUID(), e.UserID.UUID(),
 			string(e.ActivityType), disciplineParam,
 			string(e.Metric), string(e.WindowKind), e.WindowValue,

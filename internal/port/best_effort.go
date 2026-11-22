@@ -56,3 +56,10 @@ type CustomBestEffortRepo interface {
 type CommunityRecordReader interface {
 	ListCommunityRecords(ctx context.Context, bucket *domain.RecordBucket) ([]domain.CommunityRecord, error)
 }
+
+// CyclingRecordBackfillStore finds historical ride recordings and inserts
+// missing standard records without replacing results of normal imports.
+type CyclingRecordBackfillStore interface {
+	ListCyclingSourcesForRecordBackfill(ctx context.Context, after domain.SourceID, limit int) ([]domain.SourceID, error)
+	SaveMissingEfforts(ctx context.Context, efforts []domain.BestEffort) error
+}

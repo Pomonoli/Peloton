@@ -115,7 +115,8 @@
 				{ href: '/analysis', label: m.nav_analysis(), icon: icons.analysis },
 				{ href: '/stats', label: m.nav_stats(), icon: icons.stats },
 				{ href: '/records', label: 'Records', icon: icons.records },
-				{ href: '/segments', label: m.nav_segments(), icon: icons.segments }
+				{ href: '/segments', label: m.nav_segments(), icon: icons.segments },
+				{ href: '/head-to-head', label: m.comparison_title(), icon: icons.friends }
 			]
 		},
 		{

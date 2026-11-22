@@ -55,6 +55,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newRotateKeyCmd())
 	root.AddCommand(newGenSecretsCmd())
 	root.AddCommand(newAttachmentsCmd())
+	root.AddCommand(newRecordsCmd())
 	return root
 }
 

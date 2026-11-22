@@ -100,6 +100,30 @@ The [build-core workflow](../.github/workflows/build-core.yml) uses the same
 Dockerfile. It generates Protobuf stubs in the build image with local Buf
 plugins. Provider workers publish their own images.
 
+## Head-to-Head records
+
+New cycling imports compute the 20 km and 50 km distance records. To add
+those windows to earlier rides, run the following with the instance's
+existing database configuration.
+
+```sh
+cairn records backfill-cycling-distances
+```
+
+The command reads recordings in batches and can be rerun. A ride contributes
+to another member's comparison only when its visibility and the owner's
+Head-to-Head sharing settings allow the relevant result.
+
+To run the responsive browser smoke test from `web/`:
+
+```sh
+npm run build:static
+npx playwright-core install chromium
+npm run test:head-to-head
+```
+
+Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use a local Chromium executable.
+
 ## Secrets
 
 `dev.env` holds throwaway dev secrets so the stack runs with zero setup. **Never

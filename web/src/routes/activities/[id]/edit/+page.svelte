@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { clients } from '#lib/connect.js';
-	import { ActivityType, Discipline } from '#lib/proto/cairn/v1/activity_pb.js';
+	import { ActivityType, Discipline, Privacy } from '#lib/proto/cairn/v1/activity_pb.js';
 	import { enumName, enumValue, protoTimestampToISO } from '#lib/proto-helpers.js';
 	import { ACTIVITY_TYPES, DISCIPLINES, typeLabel } from '#lib/activity-types.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -24,6 +24,7 @@
 	let description = $state(init.description);
 	let type = $state(init.type);
 	let discipline = $state(init.discipline);
+	let privacy = $state(init.privacy);
 	let isVirtual = $state(init.isVirtual);
 	let isEbike = $state(init.isEbike);
 	let isCommute = $state(init.isCommute);
@@ -71,6 +72,7 @@
 		if (description !== init.description) mask.push('description');
 		if (type !== init.type) mask.push('type');
 		if (discipline !== init.discipline) mask.push('discipline');
+		if (privacy !== init.privacy) mask.push('privacy');
 		if (isVirtual !== init.isVirtual) mask.push('is_virtual');
 		if (isEbike !== init.isEbike) mask.push('is_ebike');
 		if (isCommute !== init.isCommute) mask.push('is_commute');
@@ -110,6 +112,7 @@
 				description,
 				type: enumValue(ActivityType, type),
 				discipline: enumValue(Discipline, discipline),
+				privacy,
 				isVirtual,
 				isEbike,
 				isCommute,
@@ -234,6 +237,30 @@
 				rows="3"
 				class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"></textarea>
 		</div>
+
+		{#if type === 'ride'}
+			<div>
+				<label for="ride-visibility" class="block text-xs uppercase tracking-wide text-zinc-500">
+					{m.comparison_privacy()}
+				</label>
+				<select
+					id="ride-visibility"
+					bind:value={privacy}
+					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
+					aria-describedby="ride-visibility-help"
+				>
+					<option value={Privacy.PRIVATE}>{m.comparison_privacy_private()}</option>
+					<option value={Privacy.FOLLOWERS}>{m.comparison_privacy_followers()}</option>
+					<option value={Privacy.PUBLIC}>{m.comparison_privacy_public()}</option>
+				</select>
+				<p id="ride-visibility-help" class="mt-1 text-xs text-quiet">
+					{m.comparison_privacy_help()}
+					<a href="/settings#comparison-sharing" class="text-accent-300 hover:underline"
+						>{m.comparison_sharing()}</a
+					>
+				</p>
+			</div>
+		{/if}
 
 		<div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
 			<div>

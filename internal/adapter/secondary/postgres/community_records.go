@@ -14,6 +14,17 @@ import (
 // the provider default. Peloton's browser estimates never reach this table.
 const measuredPowerSQL = "COALESCE((src.parsed->>'power_recorded')::boolean, src.provider IN ('garmin', 'upload'))"
 
+// validRecordSQL keeps community comparisons on plausible, measured efforts.
+const validRecordSQL = `b.achieved_value > 0 AND b.achieved_value < 'Infinity'::float8
+	AND CASE b.metric
+		WHEN 'power' THEN b.achieved_value <= 3000 AND ` + measuredPowerSQL + `
+		WHEN 'heart_rate' THEN b.achieved_value BETWEEN 25 AND 250
+		WHEN 'speed' THEN b.achieved_value <= 50
+		WHEN 'pace' THEN b.achieved_value >= 20
+		WHEN 'vam' THEN b.achieved_value <= 15000
+		ELSE false
+	END`
+
 func (r *BestEffortRepo) ListCommunityRecords(ctx context.Context, bucket *domain.RecordBucket) ([]domain.CommunityRecord, error) {
 	args := []any{smallerIsBetterMetrics()}
 	filter, winners := "", "WHERE place = 1"
@@ -32,15 +43,7 @@ func (r *BestEffortRepo) ListCommunityRecords(ctx context.Context, bucket *domai
 			JOIN activities a ON a.id = b.activity_id AND a.type = b.activity_type AND a.user_id = b.user_id
 			JOIN activity_sources src ON src.id = b.activity_source_id AND src.activity_id = a.id AND src.status <> 'detached'
 			WHERE a.deleted_at IS NULL AND NOT a.hidden_by_admin
-				AND b.achieved_value > 0 AND b.achieved_value < 'Infinity'::float8
-				AND CASE b.metric
-					WHEN 'power' THEN b.achieved_value <= 3000 AND `+measuredPowerSQL+`
-					WHEN 'heart_rate' THEN b.achieved_value BETWEEN 25 AND 250
-					WHEN 'speed' THEN b.achieved_value <= 50
-					WHEN 'pace' THEN b.achieved_value >= 20
-					WHEN 'vam' THEN b.achieved_value <= 15000
-					ELSE false
-				END`+filter+`
+				AND `+validRecordSQL+filter+`
 		), personal AS (
 			SELECT DISTINCT ON (activity_type, metric, window_kind, window_value, user_id) *
 			FROM eligible
