@@ -32,6 +32,8 @@ type RecomputeActivityFromSources struct {
 	gear          port.GearRepo                   // optional; nil → gear is never derived
 	tx            port.TxManager
 	now           func() time.Time
+
+	Streams port.StreamRepo
 }
 
 // NewRecomputeActivityFromSources wires the dependencies. now defaults
@@ -220,6 +222,9 @@ func (uc *RecomputeActivityFromSources) applyOverlays(
 	resolver domain.PolicyResolver,
 ) error {
 	if err := uc.applyClassificationOverride(ctx, id, merged); err != nil {
+		return err
+	}
+	if err := applyCyclingSummary(ctx, uc.Streams, merged); err != nil {
 		return err
 	}
 	uc.fillEstimatedTSS(ctx, merged)

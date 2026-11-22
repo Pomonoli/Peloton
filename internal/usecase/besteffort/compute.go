@@ -5,6 +5,7 @@ package besteffort
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -26,11 +27,8 @@ import (
 //
 // Assumptions (v1):
 //
-//   - Streams are ~1Hz. Windows are interpreted as "this many consecutive
-//     samples". Sparse or variable-rate streams will produce approximate
-//     results; that's acceptable for v1 since most workers up-sample to 1Hz.
-//   - Windows requiring more samples than the stream contains are skipped
-//     silently — short activities legitimately have no "20 minute power".
+// Cycling speed and pace use validated intervals and elapsed time. Other
+// duration metrics assume ~1 Hz.
 type ComputeBestEffortsForSource struct {
 	activities  port.ActivityAggregateReader
 	streams     port.StreamRepo
@@ -159,51 +157,80 @@ func standardWindowsFor(activityType domain.ActivityType) []windowSpec {
 // ---------------------------------------------------------------------------
 
 func (uc *ComputeBestEffortsForSource) Execute(ctx context.Context, in Input) (Result, error) {
-	// Read context (source → activity → user).
-	src, err := uc.activities.GetSource(ctx, in.ActivitySourceID)
-	if err != nil {
-		return Result{}, fmt.Errorf("load source %s: %w", in.ActivitySourceID, err)
-	}
-	act, err := uc.activities.GetActivity(ctx, src.ActivityID)
-	if err != nil {
-		return Result{}, fmt.Errorf("load activity %s: %w", src.ActivityID, err)
-	}
+	return uc.replaceEfforts(ctx, in.ActivitySourceID, true)
+}
 
-	stream, err := uc.streams.QueryStream(ctx, domain.StreamQuery{
-		ActivitySourceID: in.ActivitySourceID,
-		Resolution:       domain.StreamResolutionRaw,
-	})
-	if err != nil {
-		return Result{}, fmt.Errorf("read stream for %s: %w", in.ActivitySourceID, err)
-	}
-	if len(stream.Samples) == 0 {
-		// Persist the "no efforts" state by wiping any prior efforts. This
-		// keeps the table consistent if a previous import had a stream and
-		// a reimport doesn't.
-		if err := uc.tx.InTx(ctx, func(ctx context.Context) error {
-			return uc.bestEfforts.DeleteForSource(ctx, in.ActivitySourceID)
-		}); err != nil {
-			return Result{}, fmt.Errorf("clear efforts: %w", err)
+// Recalculate replaces historical efforts without emitting new-record events.
+func (uc *ComputeBestEffortsForSource) Recalculate(ctx context.Context, id domain.SourceID) error {
+	_, err := uc.replaceEfforts(ctx, id, false)
+	return err
+}
+
+func (uc *ComputeBestEffortsForSource) replaceEfforts(ctx context.Context, id domain.SourceID, notify bool) (Result, error) {
+	var res Result
+	var act domain.Activity
+	var before []domain.PersonalRecord
+	err := uc.withSourceLock(ctx, id, func(ctx context.Context) error {
+		src, err := uc.activities.GetSource(ctx, id)
+		if errors.Is(err, domain.ErrNotFound) && !notify {
+			return nil // a maintenance scan can race a source deletion
 		}
-		return Result{NoStream: true}, nil
-	}
-
-	// Compute.
-	efforts := uc.computeAll(act, src, stream.Samples, uc.windowsFor(ctx, act))
-	before, _ := uc.bestEfforts.ListPersonalRecords(ctx, act.UserID) // best-effort: only feeds live events
-
-	// Persist atomically.
-	err = uc.tx.InTx(ctx, func(ctx context.Context) error {
-		if err := uc.bestEfforts.DeleteForSource(ctx, in.ActivitySourceID); err != nil {
+		if err != nil {
+			return fmt.Errorf("load source: %w", err)
+		}
+		act, err = uc.activities.GetActivity(ctx, src.ActivityID)
+		if err != nil {
+			return fmt.Errorf("load activity: %w", err)
+		}
+		if act.IsDeleted() || src.Status == domain.SourceStatusDetached {
+			return nil
+		}
+		stream, err := uc.streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: id, Resolution: domain.StreamResolutionRaw})
+		if err != nil {
+			return fmt.Errorf("read stream: %w", err)
+		}
+		res.NoStream = len(stream.Samples) == 0
+		var efforts []domain.BestEffort
+		if !res.NoStream {
+			windows, err := uc.windowsFor(ctx, act)
+			if err != nil {
+				return err
+			}
+			efforts = uc.computeAll(act, src, stream.Samples, windows)
+			res.EffortsCount = len(efforts)
+			if notify {
+				// Only feeds live events. A lookup error inside this transaction
+				// would also prevent the write, so propagate it for retry.
+				before, err = uc.bestEfforts.ListPersonalRecords(ctx, act.UserID)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if err := uc.bestEfforts.DeleteForSource(ctx, id); err != nil {
 			return err
 		}
 		return uc.bestEfforts.SaveEfforts(ctx, efforts)
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("persist efforts: %w", err)
+		return Result{}, fmt.Errorf("replace efforts for %s: %w", id, err)
 	}
-	after, _ := uc.bestEfforts.ListPersonalRecords(ctx, act.UserID)
-	return Result{EffortsCount: len(efforts), NewRecords: newRecords(before, after, act.ID)}, nil
+	if notify && res.EffortsCount > 0 {
+		after, _ := uc.bestEfforts.ListPersonalRecords(ctx, act.UserID)
+		res.NewRecords = newRecords(before, after, act.ID)
+	}
+	return res, nil
+}
+
+func (uc *ComputeBestEffortsForSource) withSourceLock(ctx context.Context, id domain.SourceID, run func(context.Context) error) error {
+	return uc.tx.InTx(ctx, func(ctx context.Context) error {
+		if locker, ok := uc.bestEfforts.(port.BestEffortSourceLocker); ok {
+			if err := locker.LockBestEffortSource(ctx, id); err != nil {
+				return fmt.Errorf("lock source: %w", err)
+			}
+		}
+		return run(ctx)
+	})
 }
 
 // newRecords returns the records of after held by activityID that before
@@ -235,22 +262,18 @@ func newRecords(before, after []domain.PersonalRecord, activityID domain.Activit
 // Compute pipeline
 // ---------------------------------------------------------------------------
 
-// computeAll runs each StandardWindow against the source's samples and
-// returns the populated BestEffort rows. Dispatches by Kind: duration
-// windows use the sample-count sliding-window scan; distance windows use
-// a two-pointer scan over the cumulative-distance channel.
 // windowsFor returns the standard windows plus the user's custom ones for
-// the activity's type; a failed custom lookup falls back to the standard set.
-func (uc *ComputeBestEffortsForSource) windowsFor(ctx context.Context, act domain.Activity) []windowSpec {
+// the activity's type.
+func (uc *ComputeBestEffortsForSource) windowsFor(ctx context.Context, act domain.Activity) ([]windowSpec, error) {
 	standard := standardWindowsFor(act.Type)
 	if uc.Customs == nil {
-		return standard
+		return standard, nil
 	}
 	customs, err := uc.Customs.ListForUser(ctx, act.UserID, act.Type)
 	if err != nil {
-		return standard
+		return nil, fmt.Errorf("load custom effort windows: %w", err)
 	}
-	return mergeWindows(standard, customs)
+	return mergeWindows(standard, customs), nil
 }
 
 // mergeWindows appends custom windows that are not already standard.
@@ -279,6 +302,9 @@ func (uc *ComputeBestEffortsForSource) computeAll(
 	windows []windowSpec,
 ) []domain.BestEffort {
 	now := uc.now()
+	if act.Type == domain.ActivityTypeRide {
+		return uc.computeCycling(act, src, samples, windows, now)
+	}
 	var out []domain.BestEffort
 	for _, w := range windows {
 		switch w.Kind {
@@ -402,7 +428,7 @@ func extractAltitude(samples []domain.StreamSample) []float64 {
 	out := make([]float64, len(samples))
 	valid := 0
 	for i, s := range samples {
-		if s.AltitudeM != nil {
+		if s.AltitudeM != nil && !math.IsNaN(*s.AltitudeM) && !math.IsInf(*s.AltitudeM, 0) {
 			out[i] = *s.AltitudeM
 			valid++
 		} else {

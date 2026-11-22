@@ -110,9 +110,10 @@ existing database configuration.
 cairn records backfill-cycling-distances
 ```
 
-The command reads recordings in batches and can be rerun. A ride contributes
-to another member's comparison only when its visibility and the owner's
-Head-to-Head sharing settings allow the relevant result.
+The command reads recordings in batches and can be rerun. Head-to-Head uses
+the same activity access rules as the community views. Another member's ride
+can contribute only if it is live, visible to the community, and free of
+provider restrictions.
 
 To run the responsive browser smoke test from `web/`:
 

@@ -158,17 +158,27 @@ func (uc *MatchSegmentsForActivity) replaceMatches(ctx context.Context, in Input
 	if err != nil {
 		return Result{}, nil, fmt.Errorf("read stream for %s: %w", in.ActivitySourceID, err)
 	}
+	touched := make(map[domain.SegmentID]struct{})
+	if index, ok := uc.segments.(port.SegmentEffortSourceIndex); ok && uc.recomputeRanks != nil {
+		previous, err := index.ListEffortSegmentsForSource(ctx, in.ActivitySourceID)
+		if err != nil {
+			return Result{}, nil, err
+		}
+		for _, id := range previous {
+			touched[id] = struct{}{}
+		}
+	}
 	if len(stream.Samples) == 0 {
 		// Wipe any prior efforts — a reimport that lost its stream should
 		// not leave dangling efforts.
-		return Result{NoStream: true}, nil, uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID)
+		return Result{NoStream: true, SegmentsRanked: len(touched)}, touched, uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID)
 	}
 
 	minLat, maxLat, minLon, maxLon, ok := domain.SampleBoundingBox(stream.Samples)
 	if !ok {
 		// Stream has no GPS-bearing samples (e.g. an indoor trainer ride
 		// with power+HR but no GPS). Wipe any prior efforts and return.
-		return Result{NoGPS: true}, nil, uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID)
+		return Result{NoGPS: true, SegmentsRanked: len(touched)}, touched, uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID)
 	}
 
 	minLat, maxLat, minLon, maxLon = domain.ExpandBoundingBox(minLat, maxLat, minLon, maxLon, uc.bboxBufferMeters)
@@ -184,7 +194,7 @@ func (uc *MatchSegmentsForActivity) replaceMatches(ctx context.Context, in Input
 	// (the bbox filter is selective on a well-tuned PostGIS GIST index)
 	// and the algorithm itself is O(N·M) where N is stream length and
 	// M is segment-polyline vertex count — both small.
-	efforts, touchedSegments := uc.matchCandidates(act, src, candidates, stream.Samples)
+	efforts := uc.matchCandidates(act, src, candidates, stream.Samples, touched)
 
 	if err := uc.segments.DeleteEffortsForSource(ctx, in.ActivitySourceID); err != nil {
 		return Result{}, nil, fmt.Errorf("replace segment efforts: %w", err)
@@ -198,8 +208,8 @@ func (uc *MatchSegmentsForActivity) replaceMatches(ctx context.Context, in Input
 	return Result{
 		CandidatesEvaluated: len(candidates),
 		EffortsWritten:      len(efforts),
-		SegmentsRanked:      len(touchedSegments),
-	}, touchedSegments, nil
+		SegmentsRanked:      len(touched),
+	}, touched, nil
 }
 
 // matchCandidates runs the matcher per candidate segment.
@@ -208,9 +218,18 @@ func (uc *MatchSegmentsForActivity) matchCandidates(
 	src domain.ActivitySource,
 	candidates []domain.Segment,
 	samples []domain.StreamSample,
-) ([]domain.SegmentEffort, map[domain.SegmentID]struct{}) {
+	touched map[domain.SegmentID]struct{},
+) []domain.SegmentEffort {
+	sections := [][2]int{{0, len(samples)}}
+	var validated domain.CyclingStream
+	if act.Type == domain.ActivityTypeRide {
+		sections = nil
+		validated = domain.ValidateCyclingStream(samples)
+		validated.Sections(func(start, end int) {
+			sections = append(sections, [2]int{start, end})
+		})
+	}
 	var efforts []domain.SegmentEffort
-	touchedSegments := make(map[domain.SegmentID]struct{})
 	for _, seg := range candidates {
 		polyline, err := seg.DecodedPolyline()
 		if err != nil {
@@ -218,20 +237,31 @@ func (uc *MatchSegmentsForActivity) matchCandidates(
 				"segment_id", seg.ID, "error", err)
 			continue
 		}
-		var matches []domain.SegmentMatch
-		if seg.Source == domain.SegmentSourceStravaCatalog {
-			matches = domain.MatchRecordedSegment(samples, polyline)
-		} else {
-			matches = domain.MatchSegment(samples, polyline, seg.EffectiveTolerances(uc.tol))
-		}
-		for _, m := range matches {
-			efforts = append(efforts, uc.buildEffort(act, src, seg, samples, m))
-		}
-		if len(matches) > 0 {
-			touchedSegments[seg.ID] = struct{}{}
+		for _, section := range sections {
+			start, end := section[0], section[1]
+			var matches []domain.SegmentMatch
+			if seg.Source == domain.SegmentSourceStravaCatalog {
+				matches = domain.MatchRecordedSegment(samples[start:end], polyline)
+			} else {
+				matches = domain.MatchSegment(samples[start:end], polyline, seg.EffectiveTolerances(uc.tol))
+			}
+			for _, m := range matches {
+				m.StartOffset += start
+				m.EndOffset += start
+				effort := uc.buildEffort(act, src, seg, samples, m)
+				if len(validated.Legs) > 0 && seg.Source != domain.SegmentSourceStravaCatalog {
+					var distance float64
+					for _, leg := range validated.Legs[m.StartOffset+1 : m.EndOffset+1] {
+						distance += leg.DistanceM
+					}
+					effort.AvgSpeedMps = new(distance / effort.ElapsedS)
+				}
+				efforts = append(efforts, effort)
+				touched[seg.ID] = struct{}{}
+			}
 		}
 	}
-	return efforts, touchedSegments
+	return efforts
 }
 
 // matchRefreshRanks refreshes rank denormalizations as a separate follow-up —

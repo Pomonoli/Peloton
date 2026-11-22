@@ -157,11 +157,13 @@ func Aggregate(samples []domain.StreamSample) [3][]Bin {
 		readings[i] = reading{point: domain.GeoPoint{Lat: *s.Latitude, Lon: *s.Longitude}, projected: Project(*s.Longitude, *s.Latitude),
 			altitude: smoothAltitude(samples, i), valid: true}
 	}
-	smoothGPS(readings, samples)
+	validated := domain.ValidateCyclingStream(samples)
+	smoothGPS(readings, samples, validated.Legs)
 	legs := make([]float64, len(samples))
 	for i := 1; i < len(samples); i++ {
-		dt := samples[i].Timestamp.Sub(samples[i-1].Timestamp).Seconds()
-		legs[i], _ = movingLeg(samples[i-1], samples[i], readings[i-1], readings[i], dt)
+		if readings[i-1].valid && readings[i].valid {
+			legs[i] = validated.Legs[i].DistanceM
+		}
 	}
 	var levels [3]map[Key]*Bin
 	var visits [3]map[Key]visit
@@ -172,9 +174,14 @@ func Aggregate(samples []domain.StreamSample) [3][]Bin {
 	for i := 1; i < len(samples); i++ {
 		a, b := samples[i-1], samples[i]
 		pa, pb := readings[i-1], readings[i]
-		dt := b.Timestamp.Sub(a.Timestamp).Seconds()
+		legTime := validated.Legs[i]
 		distance := legs[i]
 		if distance == 0 {
+			if !legTime.Valid {
+				for _, previous := range visits {
+					clear(previous)
+				}
+			}
 			continue
 		}
 		dx, dy := pb.projected.X-pa.projected.X, pb.projected.Y-pa.projected.Y
@@ -189,7 +196,7 @@ func Aggregate(samples []domain.StreamSample) [3][]Bin {
 		if gradient == nil && a.Grade != nil && b.Grade != nil {
 			gradient = mean(smoothGrade(samples, i-1), smoothGrade(samples, i))
 		}
-		leg := contribution{distance: distance, time: dt, hr: meanInt(a.HeartRateBpm, b.HeartRateBpm, 25, 250),
+		leg := contribution{distance: distance, time: legTime.Seconds, hr: meanInt(a.HeartRateBpm, b.HeartRateBpm, 25, 250),
 			power: meanInt(a.PowerW, b.PowerW, 0, 3000), altitude: altitude, gradient: gradient, traveled: traveled}
 		for level := range levels {
 			bins, previous := levels[level], visits[level]
@@ -212,13 +219,13 @@ func Aggregate(samples []domain.StreamSample) [3][]Bin {
 
 // Blend only small cross-track deviations toward the neighboring points.
 // Large bends, gaps and differences between distinct roads are retained.
-func smoothGPS(readings []reading, samples []domain.StreamSample) {
+func smoothGPS(readings []reading, samples []domain.StreamSample, legs []domain.CyclingLeg) {
 	smoothed := make([]Point, len(readings))
 	for i := 1; i+1 < len(readings); i++ {
 		a, b, c := readings[i-1], readings[i], readings[i+1]
 		smoothed[i] = b.projected
 		dt := samples[i+1].Timestamp.Sub(samples[i-1].Timestamp)
-		if !a.valid || !b.valid || !c.valid || dt <= 0 || dt > 12*time.Second {
+		if !a.valid || !b.valid || !c.valid || !legs[i].Valid || !legs[i+1].Valid || dt > 12*time.Second {
 			continue
 		}
 		dx, dy := c.projected.X-a.projected.X, c.projected.Y-a.projected.Y
@@ -242,25 +249,6 @@ func smoothGPS(readings []reading, samples []domain.StreamSample) {
 }
 
 func within(v *float64, lower, upper float64) bool { return v != nil && *v >= lower && *v <= upper }
-
-func movingLeg(a, b domain.StreamSample, pa, pb reading, dt float64) (float64, bool) {
-	if !pa.valid || !pb.valid || dt <= 0 || dt > 20 ||
-		(a.SpeedMps != nil && !within(a.SpeedMps, 0, 40)) || (b.SpeedMps != nil && !within(b.SpeedMps, 0, 40)) {
-		return 0, false
-	}
-	gps := domain.HaversineMeters(pa.point, pb.point)
-	if gps/dt < 0.65 || gps/dt > 36 ||
-		(a.SpeedMps != nil && b.SpeedMps != nil && (*a.SpeedMps+*b.SpeedMps)/2 < 0.55) {
-		return 0, false
-	}
-	if a.DistanceM != nil && b.DistanceM != nil {
-		delta := *b.DistanceM - *a.DistanceM
-		if delta >= gps*0.55 && delta <= gps*1.5 && delta/dt <= 36 {
-			return delta, true
-		}
-	}
-	return gps, true
-}
 
 func direction(dx, dy float64) int {
 	a := int(math.Round(math.Atan2(dy, dx) * 4 / math.Pi))

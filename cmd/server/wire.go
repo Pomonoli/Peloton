@@ -516,6 +516,7 @@ func wireAppIngestUseCases(app *App, pool *pgxpool.Pool, logger *slog.Logger) {
 		app.Tx,
 		nil, // default time.Now
 	)
+	app.RecomputeActivity.Streams = app.Streams
 	app.Gear = gearuc.NewService(
 		gearRepo,
 		app.ExternalAccounts,
@@ -1144,10 +1145,7 @@ func wireMaintenance(app *App, pool *pgxpool.Pool) {
 		}
 	}
 	if app.ComputeBestEfforts != nil {
-		r.ComputeBestEfforts = func(ctx context.Context, id domain.SourceID) error {
-			_, err := app.ComputeBestEfforts.Execute(ctx, besteffort.Input{ActivitySourceID: id})
-			return err
-		}
+		r.ComputeBestEfforts = app.ComputeBestEfforts.Recalculate
 	}
 	if app.RecomputeActivity != nil {
 		r.RecomputeActivity = func(ctx context.Context, id domain.ActivityID) error { return reclusterAndRecompute(ctx, app, id) }

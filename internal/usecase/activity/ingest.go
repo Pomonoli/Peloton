@@ -278,6 +278,11 @@ func (uc *IngestActivityFromWorker) handleCreateNew(
 	}
 	merged.ProviderRestricted = domain.ProviderDataRestricted(src.Provider)
 	merged.CreatedAt = uc.now()
+	if merged.Type == domain.ActivityTypeRide {
+		motion := domain.ValidateCyclingStream(in.Stream)
+		applyCyclingDistance(&merged, motion)
+		applyCyclingSpeed(&merged, motion)
+	}
 	if uc.recompute != nil {
 		if err := uc.recompute.assignGear(ctx, &merged, nil, []domain.ActivitySource{src}, nil, resolver); err != nil {
 			return fmt.Errorf("initial gear: %w", err)

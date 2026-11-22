@@ -18,6 +18,11 @@ type BestEffortRepo struct {
 	pool *pgxpool.Pool
 }
 
+func (r *BestEffortRepo) LockBestEffortSource(ctx context.Context, id domain.SourceID) error {
+	_, err := dbtx(ctx, r.pool).Exec(ctx, `SELECT id FROM activity_sources WHERE id = $1 FOR UPDATE`, id.UUID())
+	return err
+}
+
 // ListPersonalRecords returns the user's all-time best per (activity type,
 // metric, window) across every activity. DISTINCT ON keeps only the best row
 // per group; "best" is ASC for the domain's smaller-is-better metrics and DESC
@@ -299,9 +304,13 @@ func smallerIsBetterMetrics() []string {
 	return out
 }
 
+// canonicalPerformanceSourceSQL keeps provider-restricted sources out of
+// activities with independent recordings.
+const canonicalPerformanceSourceSQL = `src.status <> 'detached' AND (src.provider <> 'strava' OR a.provider_restricted)`
+
 // canonicalEffortSourceSQL also excludes stale or detached efforts.
 func canonicalEffortSourceSQL(e string) string {
 	return `EXISTS (SELECT 1 FROM activity_sources src
 		WHERE src.id = ` + e + `activity_source_id AND src.activity_id = a.id
-		  AND src.status <> 'detached' AND (src.provider <> 'strava' OR a.provider_restricted))`
+		  AND ` + canonicalPerformanceSourceSQL + `)`
 }

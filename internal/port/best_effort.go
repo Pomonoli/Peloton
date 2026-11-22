@@ -39,6 +39,12 @@ type BestEffortRepo interface {
 	DeleteForUserWindow(ctx context.Context, userID domain.UserID, activityType domain.ActivityType, metric domain.BestEffortMetric, kind domain.BestEffortWindowKind, value int) error
 }
 
+// BestEffortSourceLocker serializes a source's effort rebuild with raw stream
+// replacement. The lock is held until the surrounding transaction ends.
+type BestEffortSourceLocker interface {
+	LockBestEffortSource(ctx context.Context, sourceID domain.SourceID) error
+}
+
 // CustomBestEffortRepo persists user-defined best-effort windows.
 type CustomBestEffortRepo interface {
 	// Create inserts a window; a duplicate (user, type, metric, kind, value)

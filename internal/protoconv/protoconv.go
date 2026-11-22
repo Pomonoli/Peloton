@@ -260,7 +260,7 @@ const MaxStreamSamples = 1 << 22
 // recorded float channel, NaN marks a per-sample gap (→ nil pointer); int
 // channels are dense (0 is a real value, e.g. coasting power).
 func ActivityStreamSamplesFromProto(s *cairnv1.ActivityStream, start time.Time) []domain.StreamSample {
-	if s == nil || s.GetSampleCount() == 0 {
+	if s == nil || s.GetSampleCount() <= 0 {
 		return nil
 	}
 	n := int(s.GetSampleCount())
@@ -272,9 +272,12 @@ func ActivityStreamSamplesFromProto(s *cairnv1.ActivityStream, start time.Time) 
 
 	for i := 0; i < n; i++ {
 		smp := domain.StreamSample{}
-		if i < len(s.TimeS) {
-			smp.Timestamp = start.Add(time.Duration(s.TimeS[i] * float64(time.Second)))
-		} else {
+		if i < len(s.TimeS) && !start.IsZero() {
+			nanos := s.TimeS[i] * float64(time.Second)
+			if nanos > math.MinInt64 && nanos < float64(math.MaxInt64) {
+				smp.Timestamp = start.Add(time.Duration(nanos))
+			}
+		} else if len(s.TimeS) == 0 && len(s.Latitude) == 0 && len(s.Longitude) == 0 && !start.IsZero() {
 			smp.Timestamp = start.Add(time.Duration(i) * time.Second)
 		}
 		smp.Latitude = f64At(s.Latitude, i)

@@ -25,7 +25,9 @@ func (uc *ComputeBestEffortsForSource) BackfillCyclingDistances(ctx context.Cont
 			if ctx.Err() != nil {
 				return count, errors.Join(append(failures, ctx.Err())...)
 			}
-			if err := uc.backfillCyclingSource(ctx, store, id); err != nil {
+			if err := uc.withSourceLock(ctx, id, func(ctx context.Context) error {
+				return uc.backfillCyclingSource(ctx, store, id)
+			}); err != nil {
 				failures = append(failures, fmt.Errorf("backfill source %s: %w", id, err))
 			} else {
 				count++
@@ -59,7 +61,6 @@ func (uc *ComputeBestEffortsForSource) backfillCyclingSource(ctx context.Context
 	stream, err := uc.streams.QueryStream(ctx, domain.StreamQuery{
 		ActivitySourceID: id,
 		Resolution:       domain.StreamResolutionRaw,
-		Channels:         []domain.StreamChannel{domain.StreamChannelDistance},
 	})
 	if err != nil {
 		return err

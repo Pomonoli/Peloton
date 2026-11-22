@@ -375,6 +375,19 @@ func (r *SegmentRepo) DeleteEffortsForSource(ctx context.Context, sourceID domai
 	return nil
 }
 
+func (r *SegmentRepo) ListEffortSegmentsForSource(ctx context.Context, sourceID domain.SourceID) ([]domain.SegmentID, error) {
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT DISTINCT segment_id FROM segment_efforts WHERE activity_source_id = $1`,
+		sourceID.UUID())
+	if err != nil {
+		return nil, fmt.Errorf("list segments for source %s: %w", sourceID, err)
+	}
+	return pgCollectRows(rows, func(row rowScanner) (domain.SegmentID, error) {
+		var id uuid.UUID
+		err := row.Scan(&id)
+		return domain.SegmentID(id), err
+	}, "scan effort segment", "iterate effort segments")
+}
+
 // catalogEffortSQL selects a single recording per segment and ride,
 // preferring the canonical stream and retaining repeat traversals on it.
 const catalogEffortSQL = `
@@ -389,7 +402,7 @@ const catalogEffortSQL = `
 		JOIN activity_sources src ON src.id = alt.activity_source_id AND src.activity_id = a.id
 		WHERE alt.segment_id = e.segment_id AND alt.activity_id = e.activity_id
 		  AND alt.activity_source_id <> e.activity_source_id
-		  AND src.status <> 'detached' AND (src.provider <> 'strava' OR a.provider_restricted)
+		  AND ` + canonicalPerformanceSourceSQL + `
 		  AND (s.source <> 'strava_catalog' OR (
 		       alt.provider_effort_external_id IS NULL AND alt.elapsed_s > 0 AND alt.elapsed_s < 'Infinity'::float8))
 		  AND (alt.activity_source_id = a.primary_stream_source_id OR (
@@ -400,7 +413,7 @@ const catalogEffortSQL = `
 const canonicalSegmentSourceSQL = `EXISTS (
 	SELECT 1 FROM activity_sources src
 	WHERE src.id = e.activity_source_id AND src.activity_id = a.id
-	  AND src.status <> 'detached' AND (src.provider <> 'strava' OR a.provider_restricted)
+	  AND ` + canonicalPerformanceSourceSQL + `
 )`
 
 // ListEffortsForActivity returns every effort across every source of the

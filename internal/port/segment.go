@@ -142,6 +142,12 @@ type SegmentEffortStore interface {
 	AttachProviderEffortRef(ctx context.Context, segmentID domain.SegmentID, sourceID domain.SourceID, providerEffortExternalID string, startTime time.Time, toleranceS int) (bool, error)
 }
 
+// SegmentEffortSourceIndex identifies segments whose ranks may change when
+// replacing the efforts from one recording.
+type SegmentEffortSourceIndex interface {
+	ListEffortSegmentsForSource(ctx context.Context, sourceID domain.SourceID) ([]domain.SegmentID, error)
+}
+
 // SegmentRanker refreshes denormalized leaderboard ranks.
 type SegmentRanker interface {
 	// RecomputeRanksForSegment refreshes the denormalized rank columns

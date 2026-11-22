@@ -95,29 +95,24 @@ func parseGPX(raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStre
 		return nil, nil, fmt.Errorf("gpx: no tracks")
 	}
 
-	var pts []gpxPt
+	b := newActivityBuilder(g.Trk[0].Name, g.Trk[0].Type)
 	for _, trk := range g.Trk {
 		for _, seg := range trk.Seg {
-			pts = append(pts, seg.Pt...)
+			if len(b.pts) > 0 && len(seg.Pt) > 0 {
+				b.add(samplePoint{})
+			}
+			for _, p := range seg.Pt {
+				t, _ := time.Parse(time.RFC3339, p.Time)
+				power := p.Ext.Power
+				if power == nil {
+					power = p.Ext.PowerInWatts
+				}
+				b.add(samplePoint{
+					Time: t, HasLatLon: true, Lat: p.Lat, Lon: p.Lon,
+					Alt: p.Ele, HR: p.Ext.HR, Cad: p.Ext.Cad, Power: power, Temp: p.Ext.ATemp,
+				})
+			}
 		}
-	}
-	if len(pts) == 0 {
-		return nil, nil, fmt.Errorf("gpx: no track points")
-	}
-
-	b := newActivityBuilder(g.Trk[0].Name, g.Trk[0].Type)
-	for _, p := range pts {
-		t, _ := time.Parse(time.RFC3339, p.Time)
-		var power *int
-		if p.Ext.Power != nil {
-			power = p.Ext.Power
-		} else if p.Ext.PowerInWatts != nil {
-			power = p.Ext.PowerInWatts
-		}
-		b.add(samplePoint{
-			Time: t, HasLatLon: true, Lat: p.Lat, Lon: p.Lon,
-			Alt: p.Ele, HR: p.Ext.HR, Cad: p.Ext.Cad, Power: power, Temp: p.Ext.ATemp,
-		})
 	}
 	return b.finish()
 }
@@ -207,9 +202,6 @@ func parseFIT(raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStre
 
 	b := newActivityBuilder("", sport)
 	for _, rec := range act.Records {
-		if rec.Timestamp.IsZero() {
-			continue
-		}
 		b.add(fitRecordSample(rec))
 	}
 	return b.finish()
@@ -286,9 +278,6 @@ func newActivityBuilder(name, sport string) *activityBuilder {
 }
 
 func (b *activityBuilder) add(p samplePoint) {
-	if p.Time.IsZero() {
-		return
-	}
 	b.pts = append(b.pts, p)
 }
 
@@ -318,19 +307,19 @@ func clampInt32(v int) int32 {
 }
 
 // addGeo records position, distance and altitude for sample i.
-func (c *columns) addGeo(pts []samplePoint, i int) {
+func (c *columns) addGeo(pts []samplePoint, i int, recordedDistance bool) {
 	p := pts[i]
 	if p.HasLatLon {
 		c.lat[i], c.lon[i] = p.Lat, p.Lon
 		c.haveLL = true
-		if i > 0 && pts[i-1].HasLatLon {
+		if i > 0 && pts[i-1].HasLatLon && !pts[i-1].Time.IsZero() {
 			c.cumDist += haversine(pts[i-1].Lat, pts[i-1].Lon, p.Lat, p.Lon)
 		}
 	}
 	if p.Dist != nil {
 		c.dist[i] = *p.Dist
 		c.haveDist = true
-	} else if c.haveLL {
+	} else if p.HasLatLon && !recordedDistance {
 		c.dist[i] = c.cumDist
 		c.haveDist = true
 	}
@@ -414,8 +403,12 @@ func (c *columns) fillStream(st *cairnv1.ActivityStream) {
 func (c *columns) summary(n int) *cairnv1.ActivitySummary {
 	summary := &cairnv1.ActivitySummary{}
 	if c.haveDist {
-		d := c.dist[n-1]
-		summary.DistanceM = &d
+		for i := n - 1; i >= 0; i-- {
+			if !math.IsNaN(c.dist[i]) {
+				summary.DistanceM = &c.dist[i]
+				break
+			}
+		}
 	}
 	if c.haveAlt {
 		summary.ElevationGainM = &c.elevGain
@@ -432,11 +425,27 @@ func (c *columns) summary(n int) *cairnv1.ActivitySummary {
 }
 
 func (b *activityBuilder) finish() (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, error) {
-	if len(b.pts) == 0 {
+	pts := b.pts
+	for len(pts) > 0 && pts[0].Time.IsZero() {
+		pts = pts[1:]
+	}
+	for len(pts) > 0 && pts[len(pts)-1].Time.IsZero() {
+		pts = pts[:len(pts)-1]
+	}
+	if len(pts) == 0 {
 		return nil, nil, fmt.Errorf("no timestamped track points")
 	}
-	start := b.pts[0].Time
-	end := b.pts[len(b.pts)-1].Time
+	start, end := pts[0].Time, pts[len(pts)-1].Time
+	if end.Before(start) {
+		// Keep the recorded order in the stream even when the final point's
+		// clock rolled backwards.
+		end = start
+		for _, p := range pts {
+			if p.Time.After(end) {
+				end = p.Time
+			}
+		}
+	}
 
 	typ, disc := mapSport(b.sport)
 	title := b.name
@@ -444,14 +453,24 @@ func (b *activityBuilder) finish() (*cairnv1.ActivitySourcePayload, *cairnv1.Act
 		title = "Imported Activity"
 	}
 
-	n := len(b.pts)
+	n := len(pts)
 	st := &cairnv1.ActivityStream{SampleCount: clampInt32(n), ResolutionHz: 1.0}
 	st.TimeS = make([]float64, n)
 
 	c := newColumns(n)
-	for i, p := range b.pts {
+	recordedDistance := false
+	for _, p := range pts {
+		recordedDistance = recordedDistance || p.Dist != nil
+	}
+	for i, p := range pts {
+		if p.Time.IsZero() {
+			// NaN marks a recording boundary. The stored stream preserves
+			// the skipped ordinal even though there is no timestamp to store.
+			st.TimeS[i] = math.NaN()
+			continue
+		}
 		st.TimeS[i] = p.Time.Sub(start).Seconds()
-		c.addGeo(b.pts, i)
+		c.addGeo(pts, i, recordedDistance)
 		c.addSensors(p, i)
 	}
 	c.fillStream(st)
@@ -488,8 +507,14 @@ func mapSport(sport string) (cairnv1.ActivityType, cairnv1.Discipline) {
 	return cairnv1.ActivityType_ACTIVITY_TYPE_WORKOUT, cairnv1.Discipline_DISCIPLINE_UNSPECIFIED
 }
 
-func mkF(n int) []float64 { return make([]float64, n) }
-func mkI(n int) []int32   { return make([]int32, n) }
+func mkF(n int) []float64 {
+	values := make([]float64, n)
+	for i := range values {
+		values[i] = math.NaN()
+	}
+	return values
+}
+func mkI(n int) []int32 { return make([]int32, n) }
 
 // haversine returns the great-circle distance in metres.
 func haversine(lat1, lon1, lat2, lon2 float64) float64 {

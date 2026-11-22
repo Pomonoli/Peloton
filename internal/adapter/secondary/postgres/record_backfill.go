@@ -9,6 +9,18 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
+// DeleteDetachedCyclingEfforts clears stale derived rows that can no longer
+// be rebuilt from an attached recording.
+func (r *BestEffortRepo) DeleteDetachedCyclingEfforts(ctx context.Context) error {
+	_, err := dbtx(ctx, r.pool).Exec(ctx, `
+		DELETE FROM best_efforts b USING activity_sources src
+		WHERE src.id = b.activity_source_id AND src.status = 'detached' AND b.activity_type = 'ride'`)
+	if err != nil {
+		return fmt.Errorf("clear detached cycling efforts: %w", err)
+	}
+	return nil
+}
+
 func (r *BestEffortRepo) ListCyclingSourcesForRecordBackfill(ctx context.Context, after domain.SourceID, limit int) ([]domain.SourceID, error) {
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		SELECT src.id

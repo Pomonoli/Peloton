@@ -58,7 +58,7 @@ func (r *StreamRepo) dbCopier(ctx context.Context) copier {
 // streamRawColumns is the column list used for raw inserts. Order matches
 // the streamRowSource below — keep them in sync.
 var streamRawColumns = []string{
-	"activity_source_id", "ts",
+	"activity_source_id", "ts", "recording_index",
 	"latitude", "longitude", "altitude_m", "distance_m", "speed_mps",
 	"heart_rate_bpm", "power_w", "cadence", "temperature_c", "grade",
 	"left_right_balance", "left_torque_effectiveness", "right_torque_effectiveness",
@@ -100,7 +100,15 @@ func (r *StreamRepo) replaceStream(ctx context.Context, sourceID domain.SourceID
 	// The table's (source, ts) primary key makes that a COPY failure that
 	// poisons the whole ingest, so collapse duplicates here — last sample
 	// wins, order preserved.
-	samples = dedupeSamplesByTimestamp(samples)
+	timed := make([]domain.StreamSample, 0, len(samples))
+	for i := range samples {
+		sample := samples[i]
+		if !sample.Timestamp.IsZero() {
+			sample.RecordingIndex = int32(i + 1) //nolint:gosec // stream size is bounded at ingest
+			timed = append(timed, sample)
+		}
+	}
+	samples = dedupeSamplesByTimestamp(timed)
 
 	src := &streamRowSource{sourceID: sourceID, samples: samples}
 	if _, err := db.CopyFrom(ctx,
@@ -117,10 +125,10 @@ func (r *StreamRepo) replaceStream(ctx context.Context, sourceID domain.SourceID
 // last occurrence, preserving the original order otherwise. Returns the
 // input slice unchanged when there are no duplicates (the common case).
 func dedupeSamplesByTimestamp(samples []domain.StreamSample) []domain.StreamSample {
-	seen := make(map[int64]int, len(samples)) // unix-nano ts → index in out
+	seen := make(map[int64]int, len(samples)) // DB timestamp precision → index in out
 	out := samples[:0:0]
 	for _, s := range samples {
-		key := s.Timestamp.UnixNano()
+		key := s.Timestamp.UnixMicro()
 		if i, dup := seen[key]; dup {
 			out[i] = s
 			continue
@@ -148,7 +156,7 @@ func (s *streamRowSource) Err() error { return nil }
 func (s *streamRowSource) Values() ([]any, error) {
 	sample := s.samples[s.idx-1]
 	return []any{
-		s.sourceID.UUID(), sample.Timestamp,
+		s.sourceID.UUID(), sample.Timestamp, sample.RecordingIndex,
 		sample.Latitude, sample.Longitude, sample.AltitudeM, sample.DistanceM, sample.SpeedMps,
 		sample.HeartRateBpm, sample.PowerW, sample.Cadence, sample.TemperatureC, sample.Grade,
 		sample.LeftRightBalance, sample.LeftTorqueEffectiveness, sample.RightTorqueEffectiveness,
@@ -202,7 +210,7 @@ func (r *StreamRepo) queryRaw(ctx context.Context, q domain.StreamQuery) (domain
 	args, where := timeFilters(args, "ts", q)
 
 	sql := `SELECT
-		ts,
+		ts, COALESCE(recording_index, 0),
 		latitude, longitude, altitude_m, distance_m, speed_mps,
 		heart_rate_bpm, power_w, cadence, temperature_c, grade,
 		left_right_balance, left_torque_effectiveness, right_torque_effectiveness,
@@ -321,7 +329,7 @@ func joinCols(cols []string) string {
 
 func scanRawSample(row rowScanner, s *domain.StreamSample) error {
 	return row.Scan(
-		&s.Timestamp,
+		&s.Timestamp, &s.RecordingIndex,
 		&s.Latitude, &s.Longitude, &s.AltitudeM, &s.DistanceM, &s.SpeedMps,
 		&s.HeartRateBpm, &s.PowerW, &s.Cadence, &s.TemperatureC, &s.Grade,
 		&s.LeftRightBalance, &s.LeftTorqueEffectiveness, &s.RightTorqueEffectiveness,

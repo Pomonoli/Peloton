@@ -71,6 +71,12 @@ docker rm peloton
 
 Repeat the `docker run` command above with the same environment file. Peloton applies pending migrations on startup with `CAIRN_DATABASE_AUTO_MIGRATE=true`. The Compose volumes hold the database and activity files.
 
+### Rebuild cycling records
+
+After updating Peloton and applying its migrations, run `cairn records recompute-cycling` with the instance's database configuration. The command rebuilds personal and community cycling records, including custom windows, and refreshes ride distance and speed statistics from stored recordings. It covers every user and historical Garmin rides with recorded streams. It can be rerun and preserves the uploaded files and raw samples.
+
+With the container setup above, run `docker exec peloton /usr/local/bin/cairn records recompute-cycling`. Existing performance heatmaps rebuild as they are opened. To refresh historical segment efforts, use **Rematch all segments** in admin maintenance.
+
 ## Attribution and license
 
 Peloton is a fork of [Cairn](https://github.com/opencairn-org/cairn-core).

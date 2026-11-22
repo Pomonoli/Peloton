@@ -7,41 +7,21 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
-	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
-// Apply the stored activity audience and category policies before ranking.
-// The default policy comes from domain, so missing audience keys fall back
-// in the same order as ResolveVisibility. Comparisons do not use share links.
-func comparisonRidesSQL(ctx context.Context) string {
-	return `
-		WITH audience AS (
-			SELECT CASE WHEN EXISTS (
-				SELECT 1 FROM follows
-				WHERE follower_id = $1 AND followee_id = $2 AND status = 'accepted'
-			) THEN 'followers' ELSE 'public' END AS name
-		), rides AS (
-			SELECT a.id, a.user_id, a.primary_stream_source_id,
-				COALESCE(a.visibility_override -> audience.name,
-				         defaults.policy -> audience.name, $3::jsonb -> audience.name) AS categories
-			FROM activities a
-			CROSS JOIN audience
-			LEFT JOIN user_visibility_defaults defaults ON defaults.user_id = a.user_id
-			WHERE a.user_id IN ($1, $2) AND a.type = 'ride' AND a.deleted_at IS NULL
-				AND (a.user_id = $1 OR (
-					(a.privacy = 'public' OR (a.privacy = 'followers' AND audience.name = 'followers'))
-					` + communityReadSQL(port.WithActivityReadViewer(ctx, false), "a.") + `
-				))
-		)`
-}
+const comparisonRidesSQL = `
+	WITH rides AS (
+		SELECT a.id, a.user_id, a.primary_stream_source_id, a.provider_restricted
+		FROM activities a
+		WHERE a.user_id IN ($1, $2) AND a.type = 'ride' AND ` + communityActivitySQL + `
+	)`
 
 // Head-to-Head uses recorded local efforts. Derived sources may copy data
 // from another ride whose permissions cannot be inferred from this one.
-const comparisonSourceSQL = `src.status <> 'detached' AND src.provider <> 'derived'
-	AND (src.provider <> 'strava' OR a.user_id = $1)`
+const comparisonSourceSQL = canonicalPerformanceSourceSQL + ` AND src.provider <> 'derived'`
 
 func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent domain.UserID) ([]domain.SharedSegment, error) {
-	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL(ctx)+`,
+	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL+`,
 		recordings AS (
 			SELECT e.id, e.segment_id, e.user_id, e.activity_id, e.elapsed_s, e.start_time,
 				dense_rank() OVER (PARTITION BY e.segment_id, e.activity_id ORDER BY
@@ -57,7 +37,6 @@ func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent d
 					s.source <> 'strava_catalog' AND src.start_lat IS NOT NULL AND src.parsed @> '{"has_stream":true}'
 				))
 				AND `+comparisonSourceSQL+`
-				AND (a.user_id = $1 OR a.categories ? 'segments')
 				AND (s.source = 'strava_catalog'
 					OR (s.source = 'native' AND (s.scope = 'instance' OR s.owner_user_id = $1))
 					OR (s.source = 'external' AND EXISTS (
@@ -75,7 +54,7 @@ func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent d
 		JOIN segments s ON s.id = you.segment_id
 		WHERE you.user_id = $1
 		ORDER BY lower(s.name), s.id`,
-		viewer.UUID(), opponent.UUID(), domain.MarshalPolicy(domain.DefaultVisibilityPolicy()))
+		viewer.UUID(), opponent.UUID())
 	if err != nil {
 		return nil, fmt.Errorf("list shared segments: %w", err)
 	}
@@ -89,7 +68,9 @@ func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent d
 }
 
 func (r *BestEffortRepo) ListComparisonRecords(ctx context.Context, viewer, opponent domain.UserID) ([]domain.MemberRecord, error) {
-	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL(ctx)+`
+	// Use the stored window bucket. Historical sample-count windows can span
+	// a different duration when the recording was not sampled at 1 Hz.
+	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL+`
 		SELECT DISTINCT ON (b.user_id, b.metric, b.window_kind, b.window_value)
 			b.user_id, b.metric, b.window_kind, b.window_value, b.activity_id, b.achieved_value
 		FROM rides a
@@ -99,20 +80,10 @@ func (r *BestEffortRepo) ListComparisonRecords(ctx context.Context, viewer, oppo
 			AND `+comparisonSourceSQL+`
 			AND `+validRecordSQL+`
 			AND ((b.metric = 'pace' AND b.window_kind = 'distance')
-				OR (b.metric <> 'pace' AND b.window_kind = 'duration'
-					-- Existing duration efforts use N samples. At 1 Hz their endpoints span N-1 seconds.
-					AND b.duration_s BETWEEN b.window_value - 1.5 AND b.window_value + 0.5))
-			AND (a.user_id = $1 OR (a.categories ? 'best_efforts'
-				AND CASE b.metric
-					WHEN 'power' THEN a.categories ? 'power'
-					WHEN 'heart_rate' THEN a.categories ? 'hr'
-					WHEN 'speed' THEN a.categories ? 'pace_speed'
-					WHEN 'pace' THEN a.categories ? 'pace_speed'
-					ELSE true
-				END))
+				OR (b.metric <> 'pace' AND b.window_kind = 'duration'))
 		ORDER BY b.user_id, b.metric, b.window_kind, b.window_value,
-			CASE WHEN b.metric = ANY($4) THEN b.achieved_value ELSE -b.achieved_value END, b.ts, b.id`,
-		viewer.UUID(), opponent.UUID(), domain.MarshalPolicy(domain.DefaultVisibilityPolicy()), smallerIsBetterMetrics())
+			CASE WHEN b.metric = ANY($3) THEN b.achieved_value ELSE -b.achieved_value END, b.ts, b.id`,
+		viewer.UUID(), opponent.UUID(), smallerIsBetterMetrics())
 	if err != nil {
 		return nil, fmt.Errorf("list comparison records: %w", err)
 	}

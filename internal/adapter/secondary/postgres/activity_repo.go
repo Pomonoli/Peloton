@@ -25,6 +25,17 @@ func NewActivityRepo(pool *pgxpool.Pool) *ActivityRepo {
 	return &ActivityRepo{pool: pool}
 }
 
+func (r *ActivityRepo) SaveCyclingSummary(ctx context.Context, act domain.Activity) error {
+	tag, err := dbtx(ctx, r.pool).Exec(ctx, `
+		UPDATE activities SET distance_m = $3, avg_speed_mps = $4, max_speed_mps = $5
+		WHERE id = $1 AND updated_at = $2 AND deleted_at IS NULL AND type = 'ride'`,
+		act.ID.UUID(), act.UpdatedAt, act.Summary.DistanceM, act.Summary.AvgSpeedMps, act.Summary.MaxSpeedMps)
+	if err == nil && tag.RowsAffected() == 0 {
+		return errors.New("activity changed while rebuilding its cycling summary")
+	}
+	return err
+}
+
 // ---------------------------------------------------------------------------
 // Activity (the merged row)
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ func TestActivityStreamSamplesFromProto(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("len = %d, want 3", len(got))
 	}
-	if !got[1].Timestamp.Equal(start.Add(2*time.Second)) || !got[2].Timestamp.Equal(start.Add(2*time.Second)) {
+	if !got[1].Timestamp.Equal(start.Add(2*time.Second)) || !got[2].Timestamp.IsZero() {
 		t.Errorf("timestamps = %v, %v", got[1].Timestamp, got[2].Timestamp)
 	}
 	if got[0].Latitude == nil || *got[0].Latitude != 47.1 || got[1].Latitude != nil {

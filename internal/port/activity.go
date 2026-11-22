@@ -7,6 +7,12 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
+// CyclingSummaryStore updates historical derived motion without re-merging
+// the activity or overwriting edits made concurrently.
+type CyclingSummaryStore interface {
+	SaveCyclingSummary(ctx context.Context, act domain.Activity) error
+}
+
 // ActivityYearStat is a per-year aggregate for the Stats page.
 type ActivityYearStat struct {
 	Year           int

@@ -31,6 +31,8 @@ type Stream struct {
 // from "the source recorded zero".
 type StreamSample struct {
 	Timestamp time.Time
+	// RecordingIndex is the one-based input order, or zero for older streams.
+	RecordingIndex int32
 
 	// Core channels — present in almost every stream.
 	Latitude     *float64

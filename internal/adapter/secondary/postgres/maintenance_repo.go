@@ -77,6 +77,11 @@ func (r *MaintenanceRepo) ListActivityIDs(ctx context.Context, users []domain.Us
 		`SELECT id FROM `+liveActivities+userScope("user_id")+` AND id > $2 ORDER BY id LIMIT $3`, uuidsOf(users), after.UUID(), limit)
 }
 
+func (r *MaintenanceRepo) ListCyclingActivityIDs(ctx context.Context, after domain.ActivityID, limit int) ([]domain.ActivityID, error) {
+	return listIDs[domain.ActivityID](ctx, r.pool, "cycling activity ids",
+		`SELECT id FROM activities WHERE deleted_at IS NULL AND type = 'ride' AND id > $1 ORDER BY id LIMIT $2`, after.UUID(), limit)
+}
+
 func (r *MaintenanceRepo) CountSources(ctx context.Context, users []domain.UserID) (int64, error) {
 	return r.count(ctx, `SELECT count(*) FROM `+liveSources+userScope("s.user_id"), uuidsOf(users))
 }
