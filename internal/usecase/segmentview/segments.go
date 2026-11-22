@@ -5,6 +5,7 @@ package segmentview
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
@@ -74,13 +75,18 @@ func (s *Segments) Mine(ctx context.Context, userID domain.UserID, activityType 
 	return page, nil
 }
 
-// Catalog pages the shared Strava catalog, optionally filtered by member.
-func (s *Segments) Catalog(ctx context.Context, member *domain.UserID, limit, offset int) ([]domain.CatalogSegment, bool, error) {
+// Catalog pages the shared Strava catalog by member, name, and map viewport.
+func (s *Segments) Catalog(ctx context.Context, q domain.CatalogSegmentQuery) ([]domain.CatalogSegment, bool, error) {
 	if s.segments == nil {
 		return nil, false, ErrUnavailable
 	}
-	limit = clampLimit(limit)
-	items, err := s.segments.ListCatalogSegments(ctx, member, limit+1, max(0, offset))
+	q.Name = strings.TrimSpace(q.Name)
+	if q.Bounds != nil && !q.Bounds.Valid() {
+		return nil, false, port.NewActionError(port.ActionErrorInvalid, "invalid segment map bounds")
+	}
+	limit := clampLimit(q.Limit)
+	q.Limit, q.Offset = limit+1, max(0, q.Offset)
+	items, err := s.segments.ListCatalogSegments(ctx, q)
 	return items[:min(len(items), limit)], len(items) > limit, err
 }
 
@@ -104,7 +110,7 @@ func (s *Segments) Detail(ctx context.Context, userID domain.UserID, id domain.S
 		return domain.Segment{}, nil, fmt.Errorf("list efforts: %w", err)
 	}
 	owns := seg.OwnerUserID != nil && *seg.OwnerUserID == userID
-	if len(efforts) == 0 && !owns && seg.Source != domain.SegmentSourceStravaCatalog {
+	if len(efforts) == 0 && !owns && !seg.InstanceShared() && seg.Source != domain.SegmentSourceStravaCatalog {
 		return domain.Segment{}, nil, domain.ErrNotFound
 	}
 	setCatalogPersonalRanks(seg, efforts, 0)
@@ -246,6 +252,7 @@ func (s *Segments) Leaderboard(ctx context.Context, viewer domain.UserID, id dom
 			entry := domain.LeaderboardEntry{
 				Rank: pos + 1, UserID: row.Effort.UserID, DisplayName: row.DisplayName, AvatarURL: row.AvatarURL,
 				ElapsedS: row.Effort.ElapsedS, DistanceM: seg.DistanceM, StartTime: row.Effort.StartTime,
+				EffortCount: row.EffortCount, MeanElapsedS: row.MeanElapsedS,
 				EffortID: row.Effort.ID, ActivityID: row.Effort.ActivityID,
 			}
 			if pos >= offset && len(ranked) < limit {

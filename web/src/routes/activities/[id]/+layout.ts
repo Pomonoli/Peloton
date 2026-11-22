@@ -2,7 +2,6 @@ import { error, redirect } from '@sveltejs/kit';
 import { connectClients, isUnauthenticated, Code, ConnectError } from '#lib/connect.js';
 import {
 	type Activity,
-	type ActivityStream,
 	type BestEffort,
 	ActivityType,
 	ActivitySourceStatus,
@@ -10,11 +9,12 @@ import {
 	BestEffortMetric,
 	BestEffortWindowKind,
 	Discipline,
-	ReimportStatus,
-	StreamChannel
+	ReimportStatus
 } from '#lib/proto/cairn/v1/activity_pb.js';
 import { enumName, protoDurationToSeconds, protoTimestampToISO } from '#lib/proto-helpers.js';
 import { gearToView, type GearView } from '#lib/gear.js';
+import { alignTrackSensors, streamToView, type ActivityStreamView } from '#lib/ride-stream.js';
+export type { ActivityStreamView } from '#lib/ride-stream.js';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
@@ -66,18 +66,20 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 
 	// Per-channel merged stream (best field from best source) — only worth
 	// fetching when the activity has more than one source. Used by the charts;
-	// the map stays on the single primary stream.
+	// the map keeps the primary GPS route.
 	const merged =
 		a.sources.length > 1
-			? await loadMergedStream(fetch, url.origin, a)
-			: { stream: null, provenance: [] };
+			? await loadMergedStream(fetch, url.origin, a, streamResult.stream?.track ?? [])
+			: { stream: null, provenance: [], mapTrack: null };
 
 	return {
 		activity: activityToView(a),
+		viewerId: user.id,
 		isOwner,
 		stream: streamResult.stream,
 		mergedStream: merged.stream,
 		mergedProvenance: merged.provenance,
+		mapTrack: merged.mapTrack ?? streamResult.stream?.track ?? [],
 		// streamStatus distinguishes the blank states so the page can explain
 		// itself instead of silently dropping the map/streams/elevation:
 		//   'ok'     — stream loaded with samples
@@ -124,25 +126,31 @@ export interface ChannelProvenance {
 // loadMergedStream fetches the per-channel-merged, aligned stream
 // (GET /api/activities/{id}/merged-stream) and projects it into the same
 // ActivityStreamView the charts consume. Returns a null stream on any failure
-// (the caller falls back to the single primary stream). Map fields
-// (coordinates/track) are left empty — the map renders from the primary source.
+// (the caller falls back to the single primary stream). The primary GPS
+// geometry can use sensor data from other active sources on the same clock.
 async function loadMergedStream(
 	fetch: typeof globalThis.fetch,
 	origin: string,
-	a: Activity
-): Promise<{ stream: ActivityStreamView | null; provenance: ChannelProvenance[] }> {
+	a: Activity,
+	track: ActivityStreamView['track']
+): Promise<{
+	stream: ActivityStreamView | null;
+	provenance: ChannelProvenance[];
+	mapTrack: ActivityStreamView['track'] | null;
+}> {
 	try {
 		const res = await fetch(`${origin}/api/activities/${a.id}/merged-stream`);
-		if (!res.ok) return { stream: null, provenance: [] };
+		if (!res.ok) return { stream: null, provenance: [], mapTrack: null };
 		const b = (await res.json()) as {
 			grid: number[];
+			primary_start?: number;
 			channels: Record<string, (number | null)[]>;
 			provenance: Record<string, string>;
 		};
 		const grid = b.grid ?? [];
 		const ch = b.channels ?? {};
 		const base = grid[0];
-		if (base === undefined) return { stream: null, provenance: [] };
+		if (base === undefined) return { stream: null, provenance: [], mapTrack: null };
 		const offsets = grid.map((t) => t - base);
 		const pick = (name: string) => (ch[name] && ch[name].length ? ch[name] : null);
 		const hr = pick('heart_rate');
@@ -151,7 +159,7 @@ async function loadMergedStream(
 		const speed = pick('speed');
 		const altitude = pick('altitude');
 		if (!hr && !power && !cadence && !speed && !altitude) {
-			return { stream: null, provenance: [] };
+			return { stream: null, provenance: [], mapTrack: null };
 		}
 
 		const stream: ActivityStreamView = {
@@ -174,10 +182,18 @@ async function loadMergedStream(
 			.map(([channel, sid]) => ({ channel, provider: providerBySource.get(sid) ?? 'unknown' }))
 			.sort((x, y) => x.channel.localeCompare(y.channel));
 
-		return { stream, provenance };
+		const active = new Set(
+			a.sources.filter((s) => s.status === ActivitySourceStatus.ACTIVE).map((s) => s.id)
+		);
+		const sensor = (name: string) => (active.has(b.provenance?.[name] ?? '') ? pick(name) : null);
+		const mapTrack =
+			typeof b.primary_start === 'number'
+				? alignTrackSensors(track, grid, b.primary_start, sensor('heart_rate'), sensor('power'))
+				: null;
+		return { stream, provenance, mapTrack };
 	} catch (err) {
 		console.warn('merged-stream load failed', err);
-		return { stream: null, provenance: [] };
+		return { stream: null, provenance: [], mapTrack: null };
 	}
 }
 
@@ -240,38 +256,6 @@ export interface SourceView {
 	importedAt: string;
 	isPrimary: boolean;
 	hasRawBlob: boolean;
-}
-
-export interface ActivityStreamView {
-	sourceID: string;
-	resolutionHz: number;
-	sampleCount: number;
-	coordinates: [number, number][];
-	offsets: number[];
-	hr: (number | null)[] | null;
-	power: (number | null)[] | null;
-	cadence: (number | null)[] | null;
-	speed: (number | null)[] | null;
-	altitude: (number | null)[] | null;
-	// One entry per GPS-bearing sample, index-aligned with `coordinates`. Carries
-	// the time offset + per-point values so the map can snap to the route, show a
-	// value overlay, and sync a hover position with the streams chart.
-	track: TrackPoint[];
-}
-
-// TrackPoint is a single GPS vertex with its time offset and the channel values
-// at that point. `t` (seconds offset) is the shared key the map and chart hover
-// on. Null = channel not present / missing at this sample.
-export interface TrackPoint {
-	t: number;
-	lon: number;
-	lat: number;
-	distM: number | null;
-	eleM: number | null;
-	speedKmh: number | null;
-	hr: number | null;
-	power: number | null;
-	cadence: number | null;
 }
 
 export interface BestEffortView {
@@ -341,61 +325,6 @@ function activityToView(a: Activity): ActivityView {
 	};
 }
 
-function streamToView(s: ActivityStream | undefined): ActivityStreamView | null {
-	if (!s) return null;
-	const channels = new Set<StreamChannel>(s.channels);
-	const hasGPS = channels.has(StreamChannel.LATITUDE) && channels.has(StreamChannel.LONGITUDE);
-	const hasDist = channels.has(StreamChannel.DISTANCE);
-	const hasEle = channels.has(StreamChannel.ALTITUDE);
-	const hasSpeed = channels.has(StreamChannel.SPEED);
-	const hasHR = channels.has(StreamChannel.HEART_RATE);
-	const hasPower = channels.has(StreamChannel.POWER);
-	const hasCad = channels.has(StreamChannel.CADENCE);
-
-	const coordinates: [number, number][] = [];
-	const track: TrackPoint[] = [];
-	// floats use NaN for missing (but 0 is valid, e.g. distance at start);
-	// ints use 0 for missing.
-	// Out-of-range samples count as missing too.
-	const nf = (v: number | undefined) => (v === undefined || Number.isNaN(v) ? null : v);
-	const nz = (v: number | undefined) => (v === undefined || v === 0 ? null : v);
-	if (hasGPS) {
-		for (let i = 0; i < s.sampleCount; i++) {
-			const lat = s.latitude[i];
-			const lon = s.longitude[i];
-			const t = s.timeS[i];
-			if (lat === undefined || lon === undefined || t === undefined) continue;
-			if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-			coordinates.push([lon, lat]);
-			const speedMps = hasSpeed ? nf(s.speedMps[i]) : null;
-			track.push({
-				t,
-				lon,
-				lat,
-				distM: hasDist ? nf(s.distanceM[i]) : null,
-				eleM: hasEle ? nf(s.altitudeM[i]) : null,
-				speedKmh: speedMps == null ? null : Math.round(speedMps * 3.6 * 10) / 10,
-				hr: hasHR ? nz(s.heartRateBpm[i]) : null,
-				power: hasPower ? nz(s.powerW[i]) : null,
-				cadence: hasCad ? nz(s.cadence[i]) : null
-			});
-		}
-	}
-	return {
-		sourceID: s.activitySourceId,
-		resolutionHz: s.resolutionHz,
-		sampleCount: s.sampleCount,
-		coordinates,
-		track,
-		offsets: s.timeS,
-		hr: channels.has(StreamChannel.HEART_RATE) ? intColToNullable(s.heartRateBpm) : null,
-		power: channels.has(StreamChannel.POWER) ? intColToNullable(s.powerW) : null,
-		cadence: channels.has(StreamChannel.CADENCE) ? intColToNullable(s.cadence) : null,
-		speed: channels.has(StreamChannel.SPEED) ? floatColToNullable(s.speedMps) : null,
-		altitude: channels.has(StreamChannel.ALTITUDE) ? floatColToNullable(s.altitudeM) : null
-	};
-}
-
 function bestEffortToView(b: BestEffort): BestEffortView {
 	return {
 		id: b.id,
@@ -407,16 +336,4 @@ function bestEffortToView(b: BestEffort): BestEffortView {
 		durationS: protoDurationToSeconds(b.duration),
 		startOffsetS: b.startOffset
 	};
-}
-
-// In the proto column-oriented stream format int columns use 0 for
-// "missing" (repeated int32 has no in-band null). For chart rendering we
-// want real nulls so uPlot draws gaps; map 0 → null.
-function intColToNullable(col: number[]): (number | null)[] {
-	return col.map((v) => (v === 0 ? null : v));
-}
-
-// Float columns use NaN for missing.
-function floatColToNullable(col: number[]): (number | null)[] {
-	return col.map((v) => (Number.isNaN(v) ? null : v));
 }

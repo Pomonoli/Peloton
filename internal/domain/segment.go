@@ -414,12 +414,54 @@ func (s *Segment) EffectiveTolerances(base MatchTolerances) MatchTolerances {
 
 // CatalogSegment summarizes one discovered segment ridden by the community.
 type CatalogSegment struct {
-	ID             SegmentID
-	Name           string
-	DistanceM      float64
-	BestElapsedS   float64
-	LocalKOMHolder string
-	MemberCount    int
+	ID                SegmentID
+	Name              string
+	DistanceM         float64
+	BestElapsedS      float64
+	LocalKOMHolder    string
+	MemberCount       int
+	Start             GeoPoint
+	Polyline          string // populated for viewport queries
+	PolylinePrecision int
+}
+
+// CatalogSegmentSort selects a column of the shared segment catalog.
+type CatalogSegmentSort string
+
+const (
+	CatalogSortName         CatalogSegmentSort = "name"
+	CatalogSortDistance     CatalogSegmentSort = "distance_m"
+	CatalogSortBestTime     CatalogSegmentSort = "best_elapsed_s"
+	CatalogSortAverageSpeed CatalogSegmentSort = "average_speed_kmh"
+	CatalogSortLocalKOM     CatalogSegmentSort = "local_kom_holder"
+	CatalogSortMembers      CatalogSegmentSort = "member_count"
+)
+
+// CatalogSegmentQuery filters, sorts and pages the shared segment catalog.
+type CatalogSegmentQuery struct {
+	Member     *UserID
+	Name       string
+	Bounds     *CatalogSegmentBounds
+	Sort       CatalogSegmentSort
+	Descending bool
+	Limit      int
+	Offset     int
+}
+
+// CatalogSegmentBounds is a map viewport. MinLon > MaxLon denotes a
+// viewport wrapping across the antimeridian.
+type CatalogSegmentBounds struct {
+	MinLon, MinLat, MaxLon, MaxLat float64
+}
+
+func (b CatalogSegmentBounds) Valid() bool {
+	width := b.MaxLon - b.MinLon
+	if width < 0 {
+		width += 360
+	}
+	return b.MinLon >= -180 && b.MinLon <= 180 && b.MaxLon >= -180 && b.MaxLon <= 180 &&
+		b.MinLat >= -90 && b.MaxLat <= 90 && b.MaxLat > b.MinLat &&
+		width > 0 && width <= 120 && b.MaxLat-b.MinLat <= 120
 }
 
 // SegmentAverageSpeedKmh uses elapsed time over the matched segment distance.

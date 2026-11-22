@@ -191,7 +191,13 @@ func (d *Details) MergedStream(ctx context.Context, act domain.Activity) (stream
 	if len(streams) == 0 {
 		return streamalign.MergedStream{}, false, nil
 	}
-	return streamalign.Build(streams, nil, streamalign.Options{}), true, nil
+	merged := streamalign.Build(streams, nil, streamalign.Options{})
+	if act.PrimaryStreamSourceID != nil {
+		if st, ok := streams[*act.PrimaryStreamSourceID]; ok {
+			merged.PrimaryStart = st.Samples[0].Timestamp
+		}
+	}
+	return merged, true, nil
 }
 
 // EngagementCard is who reacted: a local user or a federated actor.

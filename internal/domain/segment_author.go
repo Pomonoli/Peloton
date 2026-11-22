@@ -226,27 +226,32 @@ type SegmentEffortQuery struct {
 	From, To      time.Time // zero = unbounded; [From, To)
 	FastestFirst  bool      // default: newest first
 	BestPerUser   bool      // select each rider's fastest valid effort
+	ValidOnly     bool
 	Limit, Offset int
 }
 
 // LeaderboardEntry is one athlete's best effort on a segment.
 type LeaderboardEntry struct {
-	Rank        int
-	UserID      UserID
-	DisplayName string
-	AvatarURL   string
-	ElapsedS    float64
-	DistanceM   float64
-	StartTime   time.Time
-	EffortID    SegmentEffortID
-	ActivityID  ActivityID
+	Rank         int
+	EffortCount  int
+	MeanElapsedS float64
+	UserID       UserID
+	DisplayName  string
+	AvatarURL    string
+	ElapsedS     float64
+	DistanceM    float64
+	StartTime    time.Time
+	EffortID     SegmentEffortID
+	ActivityID   ActivityID
 }
 
 // SegmentEffortCandidate is an effort with its athlete's card.
 type SegmentEffortCandidate struct {
-	Effort      SegmentEffort
-	DisplayName string
-	AvatarURL   string
+	Effort       SegmentEffort
+	EffortCount  int
+	MeanElapsedS float64
+	DisplayName  string
+	AvatarURL    string
 }
 
 // LeaderboardQuery narrows GetSegmentLeaderboard.

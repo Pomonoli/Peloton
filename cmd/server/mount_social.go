@@ -28,6 +28,9 @@ func mountRestSocial(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	(&rest.HomeFeedHandlers{Auth: auth, Feeds: app.Feeds}).Mount(mux)
 	logger.Info("home feed endpoint mounted", "path", "/api/feed/home")
 	mountRestProfiles(mux, app, auth, logger)
+	if app.FriendViews != nil {
+		(&rest.FriendsHandlers{Auth: auth, Friends: app.FriendViews}).Mount(mux)
+	}
 	mountRestShare(mux, app, logger)
 	if app.Engagement != nil {
 		eng := &social.Engagement{Activities: app.Activities, Repo: app.Engagement, Gate: app.Details}

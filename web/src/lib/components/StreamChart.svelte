@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import uPlot, { type AlignedData, type Options } from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
+	import { formatDateOnly } from '#lib/format.js';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { m } from '#lib/paraglide/messages.js';
 
@@ -19,11 +20,13 @@
 		height = 300,
 		syncKey,
 		hoverT = null,
+		calendar = false,
 		onHover
 	}: {
 		offsets: number[];
 		series: Series[];
 		height?: number;
+		calendar?: boolean; // dated efforts with a shared elapsed-time scale
 		syncKey?: string;
 		// hoverT: externally-driven hover position (seconds offset) — shows the
 		// cursor at that x without emitting. null clears it.
@@ -65,10 +68,12 @@
 		// each visible across the full height instead of one flattening the
 		// rest. A single shared y-axis would be meaningless across mixed units,
 		// so we render only the x-axis; per-series values appear in the legend.
-		const scales: Options['scales'] = { x: { time: false } };
-		ordered.forEach((_, i) => {
-			scales![`y${i}`] = {};
-		});
+		const scales: Options['scales'] = { x: { time: calendar } };
+		if (calendar) scales.y = {};
+		else
+			ordered.forEach((_, i) => {
+				scales[`y${i}`] = {};
+			});
 
 		const opts: Options = {
 			width: container.clientWidth || 800,
@@ -84,8 +89,21 @@
 				{
 					stroke: appearanceColor('--plot-axis'),
 					grid: { stroke: appearanceColor('--plot-grid') },
-					values: (_u, splits) => splits.map((s) => formatSeconds(s))
-				}
+					values: (_u, splits) =>
+						splits.map((s) =>
+							calendar ? formatDateOnly(new Date(s * 1000).toISOString()) : formatSeconds(s)
+						)
+				},
+				...(calendar
+					? [
+							{
+								scale: 'y',
+								stroke: appearanceColor('--plot-axis'),
+								grid: { stroke: appearanceColor('--plot-grid') },
+								values: (_u: uPlot, splits: number[]) => splits.map(formatSeconds)
+							}
+						]
+					: [])
 			],
 			series: [
 				{ label: m.detail_label_time() },
@@ -96,8 +114,9 @@
 						stroke,
 						width: s.fill ? 1 : 1.5,
 						...(s.fill ? { fill: stroke + '2e' } : {}),
-						scale: `y${i}`,
-						points: { show: false }
+						scale: calendar ? 'y' : `y${i}`,
+						spanGaps: calendar,
+						points: { show: calendar }
 					};
 				})
 			],
@@ -142,13 +161,21 @@
 
 	onMount(() => {
 		build();
-		const ro = new ResizeObserver(() => {
-			if (plot && container) {
-				plot.setSize({ width: container.clientWidth, height });
-			}
+		let resizeFrame = 0;
+		const observer = new ResizeObserver(() => {
+			cancelAnimationFrame(resizeFrame);
+			resizeFrame = requestAnimationFrame(() => {
+				const width = container.clientWidth;
+				if (width && plot && (plot.width !== width || plot.height !== height)) {
+					plot.setSize({ width, height });
+				}
+			});
 		});
-		ro.observe(container);
-		return () => ro.disconnect();
+		observer.observe(container);
+		return () => {
+			observer.disconnect();
+			cancelAnimationFrame(resizeFrame);
+		};
 	});
 
 	onDestroy(() => {
@@ -185,7 +212,7 @@
 			onclick={resetZoom}
 			class="absolute right-2 top-2 z-10 rounded border border-zinc-700 bg-zinc-900/90 px-2 py-1 text-xs text-zinc-300 shadow hover:border-accent-500 hover:text-accent-300 max-md:py-2"
 		>
-			Reset zoom
+			{m.ride_chart_reset()}
 		</button>
 	{/if}
 	<div bind:this={container} class="w-full"></div>

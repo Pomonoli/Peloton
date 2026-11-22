@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { APP_NAME } from '$app/env/public';
 	import { m } from '#lib/paraglide/messages.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -54,6 +55,10 @@
 				offset === 0
 					? next
 					: { ...next, activities: [...(profile?.activities ?? []), ...next.activities] };
+			if (offset === 0 && location.hash === '#activity-history') {
+				await tick();
+				if (!signal?.aborted) document.getElementById('activity-history')?.scrollIntoView();
+			}
 		} catch {
 			if (!signal?.aborted && username === data.username) error = m.community_profile_failed();
 		} finally {
@@ -142,7 +147,10 @@
 			{/if}
 		</header>
 
-		<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+		<h2
+			id="activity-history"
+			class="mb-3 scroll-mt-16 text-sm font-semibold uppercase tracking-wide text-zinc-400"
+		>
 			{m.community_activity_history()}
 		</h2>
 		{#if profile.activities.length === 0}

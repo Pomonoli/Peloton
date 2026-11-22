@@ -22,6 +22,7 @@ import (
 // MountMine:
 //
 //	GET    /api/segments                         ?type=&limit=&offset=
+//	GET    /api/segments/catalog                 ?q=&mine=&sort=&direction=asc|desc&limit=&offset=&min_lon=&min_lat=&max_lon=&max_lat=
 //	GET    /api/segments/{id}
 //	GET    /api/activities/{id}/segment-efforts
 //	POST   /api/activities/{id}/rescan-segments
@@ -123,12 +124,34 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var member *domain.UserID
-	if r.URL.Query().Get("mine") == "true" {
-		member = &me
-	}
+	query := r.URL.Query()
 	limit, offset := segListPaging(r)
-	items, hasMore, err := h.Views.Catalog(r.Context(), member, limit, offset)
+	q := domain.CatalogSegmentQuery{
+		Sort: domain.CatalogSegmentSort(query.Get("sort")), Descending: query.Get("direction") == "desc",
+		Name: query.Get("q"), Limit: limit, Offset: offset,
+	}
+	if query.Get("mine") == "true" {
+		q.Member = &me
+	}
+	if query.Has("min_lon") || query.Has("min_lat") || query.Has("max_lon") || query.Has("max_lat") {
+		bounds := domain.CatalogSegmentBounds{}
+		for _, coord := range []struct {
+			key    string
+			result *float64
+		}{
+			{"min_lon", &bounds.MinLon}, {"min_lat", &bounds.MinLat},
+			{"max_lon", &bounds.MaxLon}, {"max_lat", &bounds.MaxLat},
+		} {
+			value, err := strconv.ParseFloat(query.Get(coord.key), 64)
+			if err != nil {
+				http.Error(w, "invalid segment map bounds", http.StatusBadRequest)
+				return
+			}
+			*coord.result = value
+		}
+		q.Bounds = &bounds
+	}
+	items, hasMore, err := h.Views.Catalog(r.Context(), q)
 	if err != nil {
 		h.Log.Error("load segment catalog", "error", err)
 		writeActionError(w, err, "load failed")
@@ -136,11 +159,16 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, map[string]any{
+		row := map[string]any{
 			"id": item.ID.String(), "name": item.Name, "distance_m": item.DistanceM,
 			"best_elapsed_s": item.BestElapsedS, "local_kom_holder": item.LocalKOMHolder, "member_count": item.MemberCount,
 			"average_speed_kmh": domain.SegmentAverageSpeedKmh(item.DistanceM, item.BestElapsedS),
-		})
+			"start":             [2]float64{item.Start.Lon, item.Start.Lat},
+		}
+		if q.Bounds != nil {
+			row["polyline"], row["polyline_precision"] = item.Polyline, item.PolylinePrecision
+		}
+		rows = append(rows, row)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"segments": rows, "has_more": hasMore})
 }
@@ -163,6 +191,7 @@ func (h *SegmentHandlers) detail(w http.ResponseWriter, r *http.Request) {
 		"segment": map[string]any{
 			"id":                 seg.ID.String(),
 			"source":             string(seg.Source),
+			"instance_shared":    seg.InstanceShared(),
 			"external_id":        seg.ExternalID,
 			"name":               seg.Name,
 			"distance_m":         seg.DistanceM,
@@ -313,6 +342,7 @@ func (h *SegmentHandlers) efforts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	eq := domain.SegmentEffortQuery{FastestFirst: q.Get("sort") == "fastest", Limit: parseIntQuery(r, "limit", segmentview.SegmentsDefaultLimit), Offset: parseIntQuery(r, "offset", 0)}
 	eq.From, eq.To = segTime(q.Get("from")), segTime(q.Get("to"))
+	eq.ValidOnly = q.Get("valid_only") == "true"
 	if raw := q.Get("user_id"); raw != "" {
 		u, err := domain.ParseUUID[domain.UserID](raw)
 		if err != nil {
@@ -629,8 +659,10 @@ func segLeaderboardJSON(entries []domain.LeaderboardEntry) []map[string]any {
 		out = append(out, map[string]any{
 			"rank": e.Rank, "user_id": e.UserID.String(), "display_name": e.DisplayName, "avatar_url": e.AvatarURL,
 			"elapsed_s": e.ElapsedS, "start_time": e.StartTime.UTC().Format(time.RFC3339),
-			"average_speed_kmh": domain.SegmentAverageSpeedKmh(e.DistanceM, e.ElapsedS),
-			"effort_id":         e.EffortID.String(), "activity_id": e.ActivityID.String(),
+			"average_speed_kmh":     domain.SegmentAverageSpeedKmh(e.DistanceM, e.ElapsedS),
+			"effort_count":          e.EffortCount,
+			"all_efforts_speed_kmh": domain.SegmentAverageSpeedKmh(e.DistanceM, e.MeanElapsedS),
+			"effort_id":             e.EffortID.String(), "activity_id": e.ActivityID.String(),
 		})
 	}
 	return out

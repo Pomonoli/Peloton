@@ -182,6 +182,7 @@ type App struct {
 	AccountRemover          *accountsuc.Remover
 	ClubViews               *view.Clubs
 	ProfileViews            *view.Profiles
+	FriendViews             *view.Friends
 	QuotaViews              *quota.Policy
 	NotificationPreferences *notification.Preferences
 	AttachmentVariants      *attachmentuc.Variants
@@ -882,6 +883,9 @@ func wireAppViews(app *App, logger *slog.Logger) {
 	}
 	app.ClubViews = view.NewClubs(clubs, app.Users, app.Feeds)
 	app.ProfileViews = view.NewProfiles(app.Users, app.Activities, app.Follows, app.Blocks, app.Visibility2)
+	if app.Activities != nil {
+		app.FriendViews = &view.Friends{Directory: app.Activities}
+	}
 	wireUserViews(app)
 	app.Accounts = providerlink.NewAccounts(app.ExternalAccounts, app.Activities, queue, events, conns, syncInsight{app: app, logger: logger}, nil)
 	app.Details = view.NewDetails(app.Activities, app.Streams, nilIfNilSegments(app), app.AthleteProfiles, nilIfNilEngagement(app),

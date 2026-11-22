@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
+	import SegmentRivalries from '#lib/components/SegmentRivalries.svelte';
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { decodePolylineLonLat } from '#lib/polyline.js';
@@ -8,15 +9,14 @@
 		formatMetricDistance,
 		formatDuration,
 		formatDate,
-		formatDateOnly,
-		formatElevation,
-		formatSpeedKmh
+		formatElevation
 	} from '#lib/format.js';
 
 	type Segment = {
 		id: string;
 		name: string;
 		source: string;
+		instance_shared: boolean;
 		distance_m: number;
 		activity_type: string;
 		climb_category: string | null;
@@ -38,42 +38,6 @@
 		is_personal_record: boolean;
 	};
 
-	type LeaderboardEntry = {
-		rank: number;
-		user_id: string;
-		display_name: string;
-		elapsed_s: number;
-		average_speed_kmh: number | null;
-		start_time: string;
-		activity_id: string;
-	};
-
-	const leaderboardPageSize = 20;
-	let board = $state<LeaderboardEntry[]>([]);
-	let moreRiders = $state(false);
-	let boardLoading = $state(false);
-	let boardError = $state(false);
-
-	async function loadLeaderboard(id: string, offset: number) {
-		boardLoading = true;
-		boardError = false;
-		try {
-			const res = await fetch(
-				`/api/segments/${id}/leaderboard?limit=${leaderboardPageSize}&offset=${offset}`
-			);
-			if (!res.ok) throw new Error();
-			const entries: LeaderboardEntry[] = (await res.json()).entries ?? [];
-			if (id === page.params.id) {
-				board = offset === 0 ? entries : [...board, ...entries];
-				moreRiders = entries.length === leaderboardPageSize;
-			}
-		} catch {
-			if (id === page.params.id) boardError = true;
-		} finally {
-			if (id === page.params.id) boardLoading = false;
-		}
-	}
-
 	let segment = $state<Segment | null>(null);
 	let efforts = $state<Effort[]>([]);
 	let loading = $state(true);
@@ -87,7 +51,6 @@
 			if (signal.aborted) return;
 			segment = result.segment;
 			efforts = result.efforts ?? [];
-			if (segment?.source === 'strava_catalog') void loadLeaderboard(id, 0);
 		} catch {
 			if (!signal.aborted) notFound = true;
 		} finally {
@@ -102,10 +65,6 @@
 		notFound = false;
 		segment = null;
 		efforts = [];
-		board = [];
-		boardError = false;
-		boardLoading = false;
-		moreRiders = false;
 		const controller = new AbortController();
 		void loadSegment(id, controller.signal);
 		return () => controller.abort();
@@ -185,65 +144,8 @@
 			</section>
 		{/if}
 
-		{#if segment.source === 'strava_catalog'}
-			<section>
-				<h2 class="text-sm font-medium">{m.segment_local_kom()}</h2>
-				<p class="mb-3 text-sm text-quiet">{m.segment_leaderboard_intro()}</p>
-				{#if boardError}
-					<p role="status" class="mb-2 text-sm text-quiet">{m.segment_leaderboard_failed()}</p>
-				{/if}
-				{#if board.length > 0}
-					<p class="mb-2 text-sm text-accent-300">
-						{m.segment_winner({ name: board[0]?.display_name ?? '' })}
-					</p>
-					<div class="overflow-x-auto rounded-xl border border-zinc-800">
-						<table class="w-full text-sm">
-							<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
-								<tr>
-									<th scope="col" class="px-4 py-2 text-left">{m.segment_leaderboard_rank()}</th>
-									<th scope="col" class="px-4 py-2 text-left">{m.segment_leaderboard_rider()}</th>
-									<th scope="col" class="px-4 py-2 text-right">{m.segment_leaderboard_time()}</th>
-									<th scope="col" class="px-4 py-2 text-right">{m.segment_avg_speed()}</th>
-									<th scope="col" class="px-4 py-2 text-right">{m.segment_leaderboard_date()}</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-zinc-800">
-								{#each board as entry (entry.user_id)}
-									<tr>
-										<td class="px-4 py-2 tabular-nums">#{entry.rank}</td>
-										<td class="px-4 py-2">{entry.display_name}</td>
-										<td class="px-4 py-2 text-right tabular-nums"
-											>{formatDuration(entry.elapsed_s)}</td
-										>
-										<td class="px-4 py-2 text-right whitespace-nowrap tabular-nums"
-											>{formatSpeedKmh(entry.average_speed_kmh)}</td
-										>
-										<td class="px-4 py-2 text-right whitespace-nowrap">
-											<a
-												href={`/activities/${entry.activity_id}`}
-												class="text-accent-400 hover:underline"
-												>{formatDateOnly(entry.start_time)}</a
-											>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				{:else if !boardLoading && !boardError}
-					<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
-				{/if}
-				{#if moreRiders || boardError}
-					<button
-						type="button"
-						class="mt-2 text-sm text-accent-400 hover:underline disabled:opacity-50"
-						disabled={boardLoading}
-						onclick={() => loadLeaderboard(page.params.id ?? '', board.length)}
-					>
-						{boardError ? m.community_retry() : m.segment_leaderboard_next()}
-					</button>
-				{/if}
-			</section>
+		{#if segment.instance_shared}
+			<SegmentRivalries id={segment.id} />
 		{/if}
 
 		{#if chrono.length > 1}

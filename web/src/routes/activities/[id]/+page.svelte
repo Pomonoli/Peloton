@@ -13,6 +13,7 @@
 		formatMetricDistance,
 		formatTemp
 	} from '#lib/format.js';
+	import EstimatedPower from '#lib/components/EstimatedPower.svelte';
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
 	import StreamChart from '#lib/components/StreamChart.svelte';
 	import ElevationProfile from '#lib/components/ElevationProfile.svelte';
@@ -454,12 +455,32 @@
 				<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">
 					{m.detail_section_route()}
 				</h2>
-				<a href={`/activities/${a.id}/map`} class="text-xs text-accent-400 hover:text-accent-300">
-					Full screen ↗
-				</a>
+				<div class="flex items-center gap-4 text-sm text-accent-300">
+					{#if a.type === 'ride' && track.length > 1}
+						<a href={`/activities/${a.id}/replay`} class="hover:underline">{m.ride_replay()}</a>
+					{/if}
+					<a href={`/activities/${a.id}/map`} class="hover:underline">{m.ride_full_screen()} ↗</a>
+				</div>
 			</div>
-			<ActivityMap {coordinates} {track} {hoverT} onHover={(t) => (hoverT = t)} />
+			{#key a.id}
+				<ActivityMap {coordinates} track={data.mapTrack} {hoverT} onHover={(t) => (hoverT = t)} />
+			{/key}
 		</section>
+	{/if}
+
+	{#if data.isOwner && a.type === 'ride' && !a.isEbike && !a.isVirtual && a.primaryStreamSourceId && track.length > 1 && a.summary.avgPowerW == null && a.summary.maxPowerW == null && a.summary.normalizedPowerW == null && !stream?.power && !data.mergedStream?.power}
+		{#key a.id}
+			<EstimatedPower
+				sourceId={a.primaryStreamSourceId}
+				otherSourceIds={a.sources
+					.filter((source) => source.status === 'active' && !source.isPrimary)
+					.map((source) => source.id)}
+				startTime={a.startTime}
+				userId={data.viewerId}
+				{hoverT}
+				onHover={(t) => (hoverT = t)}
+			/>
+		{/key}
 	{/if}
 
 	<!-- Photos / attachments -->

@@ -1335,8 +1335,7 @@ func (r *ActivityRepo) ListCommunityActivities(
 	rows, err := db.Query(ctx,
 		`SELECT `+activityColumns+`
 		   FROM activities a
-		   WHERE a.deleted_at IS NULL
-		     AND (a.hidden_by_admin = false OR a.user_id = $1)
+		   WHERE `+communityActivitySQL+`
 		     AND ($2::uuid IS NULL OR a.user_id = $2)
 		   ORDER BY a.start_time DESC, a.id DESC
 		   LIMIT $3 OFFSET $4`,

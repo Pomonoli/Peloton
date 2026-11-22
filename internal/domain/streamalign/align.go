@@ -34,9 +34,10 @@ func (o Options) withDefaults() Options {
 // MergedStream is the aligned result: a regular grid, per-channel values
 // (nil = missing), and per-channel source provenance.
 type MergedStream struct {
-	Grid       []time.Time
-	Channels   map[domain.StreamChannel][]*float64
-	Provenance map[domain.StreamChannel]domain.SourceID
+	Grid         []time.Time
+	PrimaryStart time.Time // first sample of the primary stream, when available
+	Channels     map[domain.StreamChannel][]*float64
+	Provenance   map[domain.StreamChannel]domain.SourceID
 }
 
 // continuousChannels are interpolated linearly. No discrete channels exist yet

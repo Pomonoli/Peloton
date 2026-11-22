@@ -89,6 +89,8 @@
 		settings: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M2 14h4 M10 8h4 M18 16h4',
 		admin: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
 		moderation: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22v-7',
+		friends:
+			'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M22 21v-2a4 4 0 0 0-3-4 M16 3.2a4 4 0 0 1 0 7.6',
 		logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9'
 	};
 
@@ -116,6 +118,7 @@
 			title: 'Social',
 			items: [
 				{ href: '/feed', label: 'Feed', icon: icons.feed },
+				{ href: '/friends', label: m.friends_title(), icon: icons.friends },
 				{ href: '/clubs', label: 'Clubs', icon: icons.clubs }
 			]
 		},

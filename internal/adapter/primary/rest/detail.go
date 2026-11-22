@@ -168,7 +168,11 @@ func detailMergedStreamJSON(merged streamalign.MergedStream) map[string]any {
 	for ch, sid := range merged.Provenance {
 		provenance[string(ch)] = sid.String()
 	}
-	return map[string]any{"grid": grid, "channels": channels, "provenance": provenance}
+	out := map[string]any{"grid": grid, "channels": channels, "provenance": provenance}
+	if !merged.PrimaryStart.IsZero() {
+		out["primary_start"] = merged.PrimaryStart.Unix()
+	}
+	return out
 }
 
 func (h *DetailHandlers) similar(w http.ResponseWriter, r *http.Request) {

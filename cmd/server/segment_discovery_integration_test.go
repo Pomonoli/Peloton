@@ -7,15 +7,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats-server/v2/server"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
@@ -124,13 +127,15 @@ func setITSegmentVisibility(c *itestClient, activityID, privacy string) {
 }
 
 type boardRow struct {
-	Rank       int       `json:"rank"`
-	UserID     string    `json:"user_id"`
-	ActivityID string    `json:"activity_id"`
-	Name       string    `json:"display_name"`
-	Elapsed    float64   `json:"elapsed_s"`
-	SpeedKmh   float64   `json:"average_speed_kmh"`
-	StartTime  time.Time `json:"start_time"`
+	EffortCount        int       `json:"effort_count"`
+	AllEffortsSpeedKmh float64   `json:"all_efforts_speed_kmh"`
+	Rank               int       `json:"rank"`
+	UserID             string    `json:"user_id"`
+	ActivityID         string    `json:"activity_id"`
+	Name               string    `json:"display_name"`
+	Elapsed            float64   `json:"elapsed_s"`
+	SpeedKmh           float64   `json:"average_speed_kmh"`
+	StartTime          time.Time `json:"start_time"`
 }
 
 func segmentBoard(t *testing.T, c *itestClient, segmentID string) []boardRow {
@@ -252,6 +257,30 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 		t.Fatalf("a slower historical import replaced the PR: %+v", efforts)
 	}
 
+	if board := segmentBoard(t, bob, segmentID); len(board) != 2 || board[0].EffortCount != 1 ||
+		board[1].EffortCount != 2 || math.Abs(board[1].AllEffortsSpeedKmh-seg.DistanceM/300*3.6) > 0.000001 {
+		t.Fatalf("leaderboard rivalry counts and speeds: %+v", board)
+	}
+	var period struct{ Entries []boardRow }
+	query := "/api/segments/" + segmentID + "/leaderboard?from=2020-01-01T00:00:00Z&to=2022-01-01T00:00:00Z"
+	if err := json.Unmarshal(alice.do(http.MethodGet, query, nil, http.StatusOK), &period); err != nil {
+		t.Fatal(err)
+	}
+	if len(period.Entries) != 1 || period.Entries[0].UserID != bob.userID.String() || period.Entries[0].EffortCount != 1 {
+		t.Fatalf("date window: %+v", period.Entries)
+	}
+	var history struct {
+		Efforts []struct {
+			ActivityID string `json:"activity_id"`
+		}
+	}
+	query = "/api/segments/" + segmentID + "/efforts?valid_only=true&user_id=" + alice.userID.String() + "&from=2020-01-01T00:00:00Z"
+	if err := json.Unmarshal(bob.do(http.MethodGet, query, nil, http.StatusOK), &history); err != nil {
+		t.Fatal(err)
+	}
+	if len(history.Efforts) != 1 || history.Efforts[0].ActivityID != activity {
+		t.Fatalf("visible rider history: %+v", history.Efforts)
+	}
 	sid, err := domain.ParseUUID[domain.SourceID](str(upload, "source_id"))
 	if err != nil {
 		t.Fatal(err)
@@ -271,6 +300,116 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 	}
 	alice.do(http.MethodGet, "/api/segments/"+segmentID, nil, http.StatusOK)
 	alice.do(http.MethodGet, "/api/segments", nil, http.StatusOK)
+}
+
+func TestAPI_SegmentCatalogSorting(t *testing.T) {
+	env := newITestEnv(t)
+	ctx := t.Context()
+	riders := []*itestClient{
+		env.user("alex", domain.UserRoleUser),
+		env.user("zoe", domain.UserRoleUser),
+		env.user("mira", domain.UserRoleUser),
+	}
+	if err := env.app.Users.UpdateProfile(ctx, riders[2].userID, port.ProfileUpdate{
+		DisplayName: " ", Locale: "en", Timezone: "UTC", Units: "metric",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Date(2022, 9, 21, 12, 0, 0, 0, time.UTC)
+	activities := make([]domain.ActivityID, len(riders))
+	sources := make([]domain.SourceID, len(riders))
+	for i, rider := range riders {
+		upload := rider.upload("catalog-ride.gpx", gpxRide(start))
+		var err error
+		activities[i], err = domain.ParseUUID[domain.ActivityID](str(upload, "activity_id"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sources[i], err = domain.ParseUUID[domain.SourceID](str(upload, "source_id"))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	names := make(map[string]string)
+	provider := "test-map"
+	for i, fixture := range []struct {
+		name     string
+		distance float64
+		times    []float64 // by rider, with zero for no effort
+	}{
+		{"Dune", 400, []float64{7500, 0, 7200}},
+		{"Brook", 1200, []float64{120, 145, 0}},
+		{"alpine", 90, []float64{0, 9, 0}},
+		{"Canal", 200, []float64{10.25, 0, 0}},
+	} {
+		externalID := fmt.Sprint(i + 1)
+		seg := domain.Segment{
+			ID: domain.SegmentID(uuid.New()), Source: domain.SegmentSourceStravaCatalog, ExternalID: &externalID,
+			CatalogProvider: &provider, Scope: domain.SegmentScopeInstance, Name: fixture.name,
+			ActivityType: domain.ActivityTypeRide, DistanceM: fixture.distance,
+			Polyline: "gt{}G_hzo@o}@_q@", PolylinePrecision: 5,
+		}
+		if err := env.app.Segments.SaveSegment(ctx, seg); err != nil {
+			t.Fatal(err)
+		}
+		names[seg.ID.String()] = seg.Name
+		for j, elapsed := range fixture.times {
+			if elapsed == 0 {
+				continue
+			}
+			if err := env.app.Segments.SaveSegmentEffort(ctx, domain.SegmentEffort{
+				ID: domain.SegmentEffortID(uuid.New()), SegmentID: seg.ID, ActivityID: activities[j],
+				ActivitySourceID: sources[j], UserID: riders[j].userID, StartTime: start,
+				ElapsedS: elapsed, MovingS: elapsed, EndOffset: 1,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"", []string{"alpine", "Brook", "Canal", "Dune"}},
+		{"sort=name&direction=desc", []string{"Dune", "Canal", "Brook", "alpine"}},
+		{"sort=distance_m", []string{"alpine", "Canal", "Dune", "Brook"}},
+		{"sort=distance_m&direction=desc", []string{"Brook", "Dune", "Canal", "alpine"}},
+		{"sort=best_elapsed_s", []string{"alpine", "Canal", "Brook", "Dune"}},
+		{"sort=best_elapsed_s&direction=desc", []string{"Dune", "Brook", "Canal", "alpine"}},
+		{"sort=average_speed_kmh", []string{"Dune", "alpine", "Brook", "Canal"}},
+		{"sort=average_speed_kmh&direction=desc", []string{"Canal", "alpine", "Brook", "Dune"}},
+		{"sort=local_kom_holder", []string{"Brook", "Canal", "alpine", "Dune"}},
+		{"sort=local_kom_holder&direction=desc", []string{"alpine", "Brook", "Canal", "Dune"}},
+		{"sort=member_count", []string{"alpine", "Canal", "Brook", "Dune"}},
+		{"sort=member_count&direction=desc", []string{"Brook", "Dune", "alpine", "Canal"}},
+		{"mine=true&sort=member_count&direction=desc", []string{"Brook", "Dune", "Canal"}},
+		{"mine=true&sort=average_speed_kmh&direction=desc", []string{"Canal", "Brook", "Dune"}},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			const limit = 2
+			for offset := 0; offset < len(tc.want); offset += limit {
+				path := fmt.Sprintf("/api/segments/catalog?limit=%d&offset=%d&%s", limit, offset, tc.query)
+				var page struct {
+					Segments []catalogRow
+					HasMore  bool `json:"has_more"`
+				}
+				if err := json.Unmarshal(riders[0].do(http.MethodGet, path, nil, http.StatusOK), &page); err != nil {
+					t.Fatal(err)
+				}
+				got := make([]string, 0, len(page.Segments))
+				for _, row := range page.Segments {
+					got = append(got, names[row.ID])
+				}
+				want := tc.want[offset:min(offset+limit, len(tc.want))]
+				if !slices.Equal(got, want) || page.HasMore != (offset+limit < len(tc.want)) {
+					t.Fatalf("offset %d: got %v (has_more %t), want %v", offset, got, page.HasMore, want)
+				}
+			}
+		})
+	}
 }
 
 func TestAPI_StravaDiscoveryRecordedGPX(t *testing.T) {

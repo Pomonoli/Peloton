@@ -62,9 +62,9 @@ type SegmentReader interface {
 	// applying moderation and the caller's filters.
 	ListSegmentEffortsFiltered(ctx context.Context, segmentID domain.SegmentID, viewer domain.UserID, q domain.SegmentEffortQuery) ([]domain.SegmentEffortCandidate, error)
 
-	// ListCatalogSegments pages discovered segments with valid group efforts.
+	// ListCatalogSegments sorts and pages discovered segments with valid group efforts.
 	// A member filter selects segments without changing their group results.
-	ListCatalogSegments(ctx context.Context, member *domain.UserID, limit, offset int) ([]domain.CatalogSegment, error)
+	ListCatalogSegments(ctx context.Context, q domain.CatalogSegmentQuery) ([]domain.CatalogSegment, error)
 
 	// UserSegmentStats is the viewer's headline block: distinct segments
 	// with efforts, efforts, records, external vs native.
