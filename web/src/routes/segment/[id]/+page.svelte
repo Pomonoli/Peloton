@@ -44,32 +44,38 @@
 	let segment = $state<Segment | null>(null);
 	let efforts = $state<Effort[]>([]);
 	let loading = $state(true);
-	let notFound = $state(false);
+	let failure = $state<'not-found' | 'request' | null>(null);
+	const segmentId = $derived(page.params.id);
+	const detailURL = $derived(segmentId && memberURL(`/api/segments/${segmentId}`, data.member));
 
-	async function loadSegment(id: string, signal: AbortSignal) {
+	async function loadSegment(url: string, signal: AbortSignal) {
 		try {
-			const res = await fetch(memberURL(`/api/segments/${id}`, data.member), { signal });
+			const res = await fetch(url, { signal });
+			if (res.status === 404) {
+				if (!signal.aborted) failure = 'not-found';
+				return;
+			}
 			if (!res.ok) throw new Error();
 			const result = await res.json();
 			if (signal.aborted) return;
 			segment = result.segment;
 			efforts = result.efforts ?? [];
 		} catch {
-			if (!signal.aborted) notFound = true;
+			if (!signal.aborted) failure = 'request';
 		} finally {
 			if (!signal.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		const id = page.params.id;
-		if (!id) return;
+		const url = detailURL;
+		if (!url) return;
 		loading = true;
-		notFound = false;
+		failure = null;
 		segment = null;
 		efforts = [];
 		const controller = new AbortController();
-		void loadSegment(id, controller.signal);
+		void loadSegment(url, controller.signal);
 		return () => controller.abort();
 	});
 
@@ -115,10 +121,13 @@
 
 <div class="space-y-6">
 	{#if loading}
-		<div class="text-sm text-zinc-500">Loading…</div>
-	{:else if notFound || !segment}
-		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
-			{m.segment_not_found()}
+		<div class="text-sm text-zinc-500">{m.community_loading()}</div>
+	{:else if failure || !segment}
+		<div
+			role="status"
+			class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
+		>
+			{failure === 'request' ? m.segment_detail_failed() : m.segment_not_found()}
 		</div>
 	{:else}
 		<header class="flex items-center gap-3">

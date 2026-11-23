@@ -27,6 +27,7 @@
 	"segment_catalog_empty": "No discovered segments have been completed yet.",
 	"segment_catalog_empty_mine": "You haven’t completed any discovered segments yet.",
 	"segment_catalog_failed": "Could not load the segment catalog.",
+	"segment_detail_failed": "Could not load the segment.",
 	"segment_not_found": "Segment not found.",
 	"segment_no_personal_efforts": "You haven’t completed this segment yet.",
 	"segment_avg_speed": "Avg speed",

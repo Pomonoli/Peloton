@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { onDestroy } from 'svelte';
 	import {
 		formatDateOnly,
 		formatDistanceEffort,
@@ -45,13 +45,15 @@
 	let loading = $state(true);
 	let boardError = $state(false);
 	let more = $state(false);
-	let selected = $state<string[]>([]);
+	let selected = $state.raw<string[]>([]);
 	let histories = $state<HistoryEffort[][]>([]);
 	let historyError = $state(false);
 	let historyLoading = $state(false);
 	let boardRequest: AbortController | undefined;
 
 	const from = $derived(rivalryFrom(period, new Date()));
+	const boardURL = $derived(memberURL(`/api/segments/${id}/leaderboard?limit=${pageSize}`, member));
+	const memberId = $derived(member?.id);
 	const compared = $derived(
 		selected
 			.map((uid) => board.find((entry) => entry.user_id === uid))
@@ -67,34 +69,36 @@
 		}))
 	);
 
-	async function loadBoard(segmentId: string, cutoff: string | null, offset: number) {
+	async function loadBoard(
+		url: string,
+		riderId: string | undefined,
+		cutoff: string | null,
+		offset: number
+	) {
 		boardRequest?.abort();
 		const request = new AbortController();
 		boardRequest = request;
 		loading = true;
 		boardError = false;
-		const params = new SvelteURLSearchParams({ limit: String(pageSize), offset: String(offset) });
-		if (cutoff) params.set('from', cutoff);
+		const params = new URLSearchParams({
+			offset: String(offset),
+			...(cutoff ? { from: cutoff } : {})
+		});
 		try {
-			const response = await fetch(
-				memberURL(`/api/segments/${segmentId}/leaderboard?${params}`, member),
-				{
-					signal: request.signal
-				}
-			);
+			const response = await fetch(`${url}&${params}`, { signal: request.signal });
 			if (!response.ok) throw new Error();
 			const { entries }: { entries: Entry[] } = await response.json();
 			if (request.signal.aborted) return;
 			board = offset ? [...board, ...entries] : entries;
 			more = entries.length === pageSize;
 			if (!offset) {
-				const contenders = entries.filter((entry) => entry.user_id !== member?.id);
-				selected = member
-					? [member.id, contenders[0]?.user_id].filter(
+				const contender = entries.find((entry) => entry.user_id !== riderId);
+				const preferred = riderId
+					? [riderId, contender?.user_id].filter(
 							(id): id is string => !!id && entries.some((entry) => entry.user_id === id)
 						)
-					: entries.slice(0, 2).map((entry) => entry.user_id);
-				if (selected.length === 0) selected = entries.slice(0, 2).map((entry) => entry.user_id);
+					: [];
+				selected = preferred.length ? preferred : entries.slice(0, 2).map((entry) => entry.user_id);
 			}
 		} catch {
 			if (!request.signal.aborted) boardError = true;
@@ -104,50 +108,79 @@
 	}
 
 	$effect(() => {
-		const segmentId = id;
-		const cutoff = from;
 		board = [];
 		selected = [];
 		more = false;
-		void loadBoard(segmentId, cutoff, 0);
+		void loadBoard(boardURL, memberId, from, 0);
 		return () => boardRequest?.abort();
 	});
 
 	let historyRetry = $state(0);
+	const historyScope = $derived({ id, from, historyRetry });
+	let previousHistoryScope: typeof historyScope | undefined;
+	let historyRequests: {
+		uid: string;
+		controller: AbortController;
+		result: Promise<HistoryEffort[]>;
+	}[] = [];
+
+	async function loadHistory(
+		segmentId: string,
+		cutoff: string | null,
+		uid: string,
+		signal: AbortSignal
+	) {
+		const params = new URLSearchParams({
+			user_id: uid,
+			limit: String(historySize),
+			valid_only: 'true',
+			...(cutoff ? { from: cutoff } : {})
+		});
+		const response = await fetch(`/api/segments/${segmentId}/efforts?${params}`, { signal });
+		if (!response.ok) throw new Error();
+		return (await response.json()).efforts as HistoryEffort[];
+	}
+
 	$effect(() => {
-		const segmentId = id;
-		const cutoff = from;
-		const ids = [...selected];
-		void historyRetry;
+		const scope = historyScope;
+		const ids = selected;
+		// Keep in-flight and completed histories for riders still in the comparison.
+		historyRequests = historyRequests.filter(({ uid, controller }) => {
+			if (scope === previousHistoryScope && ids.includes(uid)) return true;
+			controller.abort();
+			return false;
+		});
+		previousHistoryScope = scope;
 		histories = [];
 		historyError = false;
-		historyLoading = !!ids.length;
+		historyLoading = ids.length > 0;
 		if (!ids.length) return;
-		const request = new AbortController();
-		const rows = ids.map(async (uid) => {
-			const params = new SvelteURLSearchParams({
-				user_id: uid,
-				limit: String(historySize),
-				valid_only: 'true'
-			});
-			if (cutoff) params.set('from', cutoff);
-			const response = await fetch(`/api/segments/${segmentId}/efforts?${params}`, {
-				signal: request.signal
-			});
-			if (!response.ok) throw new Error();
-			return (await response.json()).efforts as HistoryEffort[];
+		const rows = ids.map((uid) => {
+			const cached = historyRequests.find((request) => request.uid === uid);
+			if (cached) return cached.result;
+			const controller = new AbortController();
+			const result = loadHistory(scope.id, scope.from, uid, controller.signal);
+			historyRequests.push({ uid, controller, result });
+			return result;
 		});
+		let active = true;
 		void Promise.all(rows)
 			.then((efforts) => {
-				if (!request.signal.aborted) histories = efforts;
+				if (active) histories = efforts;
 			})
 			.catch(() => {
-				if (!request.signal.aborted) historyError = true;
+				if (active) historyError = true;
 			})
 			.finally(() => {
-				if (!request.signal.aborted) historyLoading = false;
+				if (active) historyLoading = false;
 			});
-		return () => request.abort();
+		return () => {
+			active = false;
+		};
+	});
+
+	onDestroy(() => {
+		for (const request of historyRequests) request.controller.abort();
 	});
 
 	function seconds(value: number) {
@@ -251,7 +284,7 @@
 			type="button"
 			disabled={loading}
 			class="min-h-10 text-sm text-accent-300 hover:underline disabled:opacity-50"
-			onclick={() => loadBoard(id, from, board.length)}
+			onclick={() => loadBoard(boardURL, memberId, from, board.length)}
 		>
 			{boardError ? m.community_retry() : m.segment_leaderboard_next()}
 		</button>

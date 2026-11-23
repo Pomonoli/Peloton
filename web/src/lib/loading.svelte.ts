@@ -13,6 +13,8 @@
 // (await A; await B — or headers, then body) within IDLE_GRACE_MS count as
 // one load rather than restarting the delay.
 
+import { untrack } from 'svelte';
+
 export const SHOW_DELAY_MS = 300;
 export const IDLE_GRACE_MS = 150;
 export const MIN_VISIBLE_MS = 500;
@@ -38,7 +40,8 @@ export class LoadingIndicator {
 		this.#pending++;
 		clearTimeout(this.#idleTimer);
 		this.#idleTimer = undefined;
-		if (!this.visible) {
+		// Fetch and navigation callers should only subscribe to their own inputs.
+		if (!untrack(() => this.visible)) {
 			if (this.#overdue) this.#show();
 			else this.#showTimer ??= setTimeout(() => this.#delayElapsed(), SHOW_DELAY_MS);
 		}
@@ -47,7 +50,9 @@ export class LoadingIndicator {
 			if (released) return;
 			released = true;
 			if (--this.#pending > 0) return;
-			const remaining = this.visible ? MIN_VISIBLE_MS - (Date.now() - this.#shownAt) : 0;
+			const remaining = untrack(() => this.visible)
+				? MIN_VISIBLE_MS - (Date.now() - this.#shownAt)
+				: 0;
 			this.#idleTimer = setTimeout(() => this.#settle(), Math.max(IDLE_GRACE_MS, remaining));
 		};
 	}
