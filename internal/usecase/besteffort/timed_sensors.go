@@ -16,11 +16,7 @@ func (uc *ComputeBestEffortsForSource) timedSensorEffort(
 	var bestValue float64
 	var bestStart time.Time
 	width := float64(w.Value)
-	var points []cyclingPoint
-	var start time.Time
-	var previous float64
-	var lastIndex int32
-	finish := func() {
+	consider := func(start time.Time, points []cyclingPoint) {
 		offset, _, amount := fastestCyclingWindow(points, width, false)
 		value := amount / width
 		if w.Metric == domain.BestEffortMetricVAM {
@@ -30,49 +26,56 @@ func (uc *ComputeBestEffortsForSource) timedSensorEffort(
 			bestValue = value
 			bestStart = start.Add(time.Duration(offset * float64(time.Second)))
 		}
-		points = points[:0]
 	}
-	for _, sample := range samples {
-		value, ok := readMetric(sample, w.Metric)
-		if w.Metric == domain.BestEffortMetricVAM {
-			ok = sample.AltitudeM != nil && *sample.AltitudeM >= -450 && *sample.AltitudeM <= 9000
-			if ok {
-				value = *sample.AltitudeM
-			}
-		}
-		if !ok {
-			finish()
-			continue
-		}
-		if len(points) > 0 {
-			dt := sample.Timestamp.Sub(start).Seconds() - points[len(points)-1].seconds
-			if dt <= 0 || dt > 15 || (lastIndex > 0 && sample.RecordingIndex != lastIndex+1) {
-				finish()
-			}
-		}
-		lastIndex = sample.RecordingIndex
-		if len(points) == 0 {
-			start = sample.Timestamp
-			points = append(points, cyclingPoint{})
-			previous = value
-			continue
-		}
-		last := points[len(points)-1]
-		seconds := sample.Timestamp.Sub(start).Seconds()
-		amount := previous * (seconds - last.seconds)
-		if w.Metric == domain.BestEffortMetricVAM {
-			amount = value - previous
-		}
-		points = append(points, cyclingPoint{seconds, last.metres + amount})
-		previous = value
+	if w.Metric == domain.BestEffortMetricVAM {
+		climbingSections(samples, consider)
+	} else {
+		sensorSections(samples, w.Metric, consider)
 	}
-	finish()
 	if bestValue <= 0 {
 		return domain.BestEffort{}, false
 	}
+	origin := firstRecordingTime(samples)
 	return domain.BestEffort{
 		ID: domain.BestEffortID(uc.newID()), ActivityID: act.ID, ActivitySourceID: src.ID, UserID: act.UserID,
 		ActivityType: act.Type, Discipline: act.Discipline, Metric: w.Metric, WindowKind: w.Kind, WindowValue: w.Value,
-		AchievedValue: bestValue, StartOffset: int(bestStart.Sub(samples[0].Timestamp).Seconds()), DurationS: width, Timestamp: bestStart, CreatedAt: now,
+		AchievedValue: bestValue, StartOffset: int(bestStart.Sub(origin).Seconds()), DurationS: width, Timestamp: bestStart, CreatedAt: now,
 	}, true
+}
+
+func sensorSections(samples []domain.StreamSample, metric domain.BestEffortMetric, visit func(time.Time, []cyclingPoint)) {
+	var points []cyclingPoint
+	var start time.Time
+	var previous domain.StreamSample
+	var previousValue float64
+	for _, sample := range samples {
+		value, ok := readMetric(sample, metric)
+		if len(points) > 0 && (!ok || !domain.ContinuousRecordingLeg(previous, sample, 15)) {
+			visit(start, points)
+			points = points[:0]
+		}
+		if !ok || sample.Timestamp.IsZero() {
+			continue
+		}
+		if len(points) == 0 {
+			start = sample.Timestamp
+			points = append(points, cyclingPoint{})
+		} else {
+			last := points[len(points)-1]
+			seconds := sample.Timestamp.Sub(start).Seconds()
+			amount := previousValue * (seconds - last.seconds)
+			points = append(points, cyclingPoint{seconds, last.metres + amount})
+		}
+		previous, previousValue = sample, value
+	}
+	visit(start, points)
+}
+
+func firstRecordingTime(samples []domain.StreamSample) time.Time {
+	for _, sample := range samples {
+		if !sample.Timestamp.IsZero() {
+			return sample.Timestamp
+		}
+	}
+	return time.Time{}
 }

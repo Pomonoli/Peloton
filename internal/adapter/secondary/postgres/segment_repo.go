@@ -394,10 +394,7 @@ func (r *SegmentRepo) ListEffortSegmentsForSource(ctx context.Context, sourceID 
 const catalogEffortSQL = `
 	a.deleted_at IS NULL
 	AND ` + canonicalSegmentSourceSQL + `
-	AND (s.source <> 'strava_catalog' OR (
-		e.provider_effort_external_id IS NULL AND a.type = 'ride'
-		AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8
-	))
+	AND ` + catalogLocalEffortSQL + `
 	AND NOT EXISTS (
 		SELECT 1 FROM segment_efforts alt
 		JOIN activity_sources src ON src.id = alt.activity_source_id AND src.activity_id = a.id
@@ -410,6 +407,11 @@ const catalogEffortSQL = `
 		       e.activity_source_id IS DISTINCT FROM a.primary_stream_source_id
 		       AND alt.activity_source_id < e.activity_source_id))
 	)`
+
+const catalogLocalEffortSQL = `(s.source <> 'strava_catalog' OR (
+		e.provider_effort_external_id IS NULL AND a.type = 'ride'
+		AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8
+	))`
 
 const canonicalSegmentSourceSQL = `EXISTS (
 	SELECT 1 FROM activity_sources src

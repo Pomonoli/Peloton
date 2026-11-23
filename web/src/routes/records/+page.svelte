@@ -160,7 +160,7 @@
 					>
 						{#each list as r (r.metric + r.window_kind + r.window_value)}
 							<a
-								href={`/activities/${r.activity_id}`}
+								href={`/activities/${r.activity_id}${excludeDownhills ? '?exclude_downhills=true' : ''}`}
 								class="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-zinc-950 sm:gap-4 sm:px-4"
 							>
 								<div class="text-xs font-semibold text-zinc-300 sm:text-sm">

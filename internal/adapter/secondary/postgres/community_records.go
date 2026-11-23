@@ -15,7 +15,7 @@ import (
 const measuredPowerSQL = "COALESCE((src.parsed->>'power_recorded')::boolean, src.provider IN ('garmin', 'upload'))"
 
 // validRecordSQL keeps community comparisons on plausible, measured efforts.
-const validRecordSQL = `b.achieved_value > 0 AND b.achieved_value < 'Infinity'::float8
+var validRecordSQL = validCyclingMotionRecordSQL + ` AND b.achieved_value > 0 AND b.achieved_value < 'Infinity'::float8
 	AND CASE b.metric
 		WHEN 'power' THEN b.achieved_value <= 3000 AND ` + measuredPowerSQL + `
 		WHEN 'heart_rate' THEN b.achieved_value BETWEEN 25 AND 250

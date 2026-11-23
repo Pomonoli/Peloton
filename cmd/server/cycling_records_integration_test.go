@@ -63,8 +63,8 @@ func TestAPI_RecomputeHistoricalCyclingRecords(t *testing.T) {
 	if err := env.app.BestEfforts.SaveEfforts(ctx, []domain.BestEffort{{
 		ID: domain.BestEffortID(uuid.New()), ActivityID: a.ActivityID, ActivitySourceID: a.SourceID,
 		UserID: alice.userID, ActivityType: domain.ActivityTypeRide, Metric: domain.BestEffortMetricPace,
-		WindowKind: domain.BestEffortWindowDistance, WindowValue: 1000, AchievedValue: 25,
-		DurationS: 25, DistanceM: new(1000.0), Timestamp: start,
+		WindowKind: domain.BestEffortWindowDistance, WindowValue: 1000, AchievedValue: 30,
+		DurationS: 30, DistanceM: new(1000.0), Timestamp: start,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestAPI_RecomputeHistoricalCyclingRecords(t *testing.T) {
 			t.Fatalf("1 km community board: %+v", rows)
 		}
 	}
-	assertPersonal(25)
+	assertPersonal(30)
 	assertFirst(a.ActivityID)
 
 	for range 2 {

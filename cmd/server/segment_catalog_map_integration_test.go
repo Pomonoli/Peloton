@@ -16,6 +16,97 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
+func TestAPI_SegmentCatalogPagesAcrossRiders(t *testing.T) {
+	env := newITestEnv(t)
+	ctx := t.Context()
+	alice := env.user("alice", domain.UserRoleUser)
+	bob := env.user("bob", domain.UserRoleUser)
+	carol := env.user("carol", domain.UserRoleUser)
+	start := time.Date(2025, 6, 12, 12, 0, 0, 0, time.UTC)
+	const segmentCount = 240
+	if _, err := env.pool.Exec(ctx, `
+		INSERT INTO segments (source, external_id, catalog_provider, scope, activity_type, name, polyline, polyline_precision, geom, bbox, distance_m)
+		SELECT 'strava_catalog', i::text, 'test-map', 'instance', 'ride', 'Hill ' || lpad(i::text, 3, '0'),
+		       'os|}G_ruo@?_|B?_|B', 5, ST_GeogFromText('LINESTRING(7.98 47, 8.02 47)'),
+		       ST_MakeEnvelope(7.98, 46.999, 8.02, 47.001, 4326)::geography, 1200
+		FROM generate_series(1, $1::int) i`, segmentCount); err != nil {
+		t.Fatal(err)
+	}
+	for i, rider := range []*itestClient{alice, bob, carol} {
+		ride := rider.upload("ride.gpx", gpxRide(start))
+		activityID := str(ride, "activity_id")
+		limit, attempts, elapsed := segmentCount, 60, 100-i*20
+		if rider == alice {
+			limit, attempts = 60, 2
+		}
+		if _, err := env.pool.Exec(ctx, `
+			INSERT INTO segment_efforts (segment_id, activity_id, activity_source_id, user_id, start_time, elapsed_s, moving_s, start_offset, end_offset)
+			SELECT s.id, a.id, $2::uuid, a.user_id, a.start_time + i * interval '1 minute',
+			       $3::float8, $3::float8, i*60, i*60+1
+			FROM segments s CROSS JOIN activities a CROSS JOIN generate_series(1, $4::int) i
+			WHERE a.id = $1::uuid AND CAST(s.external_id AS int) <= $5::int`,
+			activityID, str(ride, "source_id"), elapsed, attempts, limit); err != nil {
+			t.Fatal(err)
+		}
+		if rider == carol {
+			if _, err := env.pool.Exec(ctx, "UPDATE activities SET provider_restricted = true WHERE id = $1::uuid", activityID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := env.pool.Exec(ctx, "ANALYZE segment_efforts"); err != nil {
+		t.Fatal(err)
+	}
+
+	alice.http.Timeout = 5 * time.Second
+	const pageSize = 50
+	for _, tc := range []struct {
+		query string
+		count int
+	}{
+		{"sort=name:asc", segmentCount},
+		{"mine=true&sort=my_attempts:desc", 60},
+		{"mine=true&member=bob&sort=my_attempts:desc", segmentCount},
+	} {
+		for offset := 0; offset < tc.count; offset += pageSize {
+			path := fmt.Sprintf("/api/segments/catalog?%s&limit=%d&offset=%d", tc.query, pageSize, offset)
+			begin := time.Now()
+			var page struct {
+				Segments []struct {
+					Name     string
+					Holder   string  `json:"local_kom_holder"`
+					Elapsed  float64 `json:"best_elapsed_s"`
+					Speed    float64 `json:"average_speed_kmh"`
+					Members  int     `json:"member_count"`
+					Attempts int     `json:"my_attempts"`
+				}
+				HasMore bool `json:"has_more"`
+			}
+			if err := json.Unmarshal(alice.do(http.MethodGet, path, nil, http.StatusOK), &page); err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%s took %s", path, time.Since(begin))
+			if len(page.Segments) != min(pageSize, tc.count-offset) || page.HasMore != (offset+pageSize < tc.count) {
+				t.Fatalf("%s returned %d rows (has_more %t)", path, len(page.Segments), page.HasMore)
+			}
+			for i, row := range page.Segments {
+				number := offset + i + 1
+				members, attempts := 1, 0
+				if number <= 60 {
+					members, attempts = 2, 2
+				}
+				if tc.query == "mine=true&member=bob&sort=my_attempts:desc" {
+					attempts = 60
+				}
+				if row.Name != fmt.Sprintf("Hill %03d", number) || row.Holder != "Bob" || row.Elapsed != 80 ||
+					row.Speed != 54 || row.Members != members || row.Attempts != attempts {
+					t.Fatalf("%s: wrong row for hill %03d: %+v", path, number, row)
+				}
+			}
+		}
+	}
+}
+
 func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 	env := newITestEnv(t)
 	alice := env.user("alice", domain.UserRoleUser)

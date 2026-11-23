@@ -20,7 +20,7 @@ type CyclingStream struct {
 }
 
 const (
-	maxCyclingSpeed    = 36.0 // m/s, just under 130 km/h
+	CyclingMaxSpeedMps = 36.0 // just under 130 km/h
 	cyclingDriftRadius = 12.0
 	cyclingMaxGap      = 15
 )
@@ -80,8 +80,7 @@ func cyclingGapLimit(samples []StreamSample) float64 {
 
 func cyclingLeg(a, b StreamSample, maxGap float64, withGPS, withMotion bool) CyclingLeg {
 	dt := b.Timestamp.Sub(a.Timestamp).Seconds()
-	if a.Timestamp.IsZero() || b.Timestamp.IsZero() || dt <= 0 || dt > maxGap ||
-		(a.RecordingIndex != 0 && b.RecordingIndex != a.RecordingIndex+1) {
+	if !ContinuousRecordingLeg(a, b, maxGap) {
 		return CyclingLeg{}
 	}
 
@@ -136,7 +135,7 @@ func cyclingLeg(a, b StreamSample, maxGap float64, withGPS, withMotion bool) Cyc
 }
 
 func validCyclingSpeed(speed float64) bool {
-	return speed >= 0 && speed <= maxCyclingSpeed
+	return speed >= 0 && speed <= CyclingMaxSpeedMps
 }
 
 func plausibleCyclingChange(before, after, seconds float64) bool {

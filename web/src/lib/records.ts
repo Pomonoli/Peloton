@@ -114,7 +114,12 @@ export function recordValue(bucket: RecordBucket, value: number): string {
 		case 'heart_rate':
 			return `${recordNumber(value)} bpm`;
 		case 'vam':
-			return `${recordNumber(value)} m/h`;
+			if (!Number.isFinite(window_value) || window_value <= 0) return m.placeholder_dash();
+			return new Intl.NumberFormat(intlLocale(), {
+				style: 'unit',
+				unit: 'meter',
+				maximumFractionDigits: 2
+			}).format(value * (window_value / 3600));
 		default:
 			return recordNumber(value);
 	}

@@ -46,15 +46,25 @@ it('links exact record windows and formats their units', () => {
 	expect(recordValue(initial, 285)).toBe('285 W');
 	expect(recordValue({ ...initial, metric: 'speed' }, 10)).toBe('36 km/h');
 	expect(recordValue({ ...initial, metric: 'heart_rate' }, 180)).toBe('180 bpm');
-	expect(recordValue({ ...initial, metric: 'vam' }, 2750)).toBe('2,750 m/h');
 	expect(recordValue({ ...initial, metric: 'other' }, 28.2)).toBe('28.2');
 	expect(recordMetric('power')).toBe('Best measured power');
 	expect(recordMetric('power', false)).toBe('Best power');
 	expect(['pace', 'speed', 'heart_rate', 'vam', 'other'].map((name) => recordMetric(name))).toEqual(
-		['Fastest pace', 'Best speed', 'Peak heart rate', 'Best climbing rate', 'other']
+		['Fastest pace', 'Best speed', 'Peak heart rate', 'Most elevation gained', 'other']
 	);
 	expect(recordSport('ride')).toBe('Cycling');
 	expect(recordSport('other_sport')).toBe('other sport');
+});
+
+it.each([
+	[300, '75 m'],
+	[1200, '300 m'],
+	[3600, '900 m'],
+	[450, '112.5 m']
+])('formats a %i second climbing record as elevation gained', (seconds, expected) => {
+	const bucket = { ...initial, metric: 'vam', window_value: seconds };
+	expect(recordValue(bucket, 900)).toBe(expected);
+	expect(bestEffortValue(bucket, 900)).toBe(expected);
 });
 
 it.each([

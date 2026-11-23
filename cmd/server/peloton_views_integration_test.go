@@ -206,19 +206,69 @@ func TestAPI_ElevationVerifiedRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	const endpoint = "/api/records/leaderboards/ride/speed/duration/60"
-	check := func(path string, wantMin, wantMax float64) {
+	check := func(path string, wantMin, wantMax float64) float64 {
 		t.Helper()
 		rows := readRecordBoard(t, rider, path)
 		if len(rows) != 1 || rows[0].Result.AchievedValue < wantMin || rows[0].Result.AchievedValue > wantMax {
 			t.Fatalf("bad speed record at %s: %+v", path, rows)
 		}
+		return rows[0].Result.AchievedValue
 	}
 	check(endpoint, 14.9, 15.1)
 	check(endpoint+"?exclude_downhills=true", 7.9, 9)
 	rider.do(http.MethodGet, "/api/records/leaderboards/ride/pace/distance/400", nil, http.StatusBadRequest)
-	filtered, err := env.app.BestEfforts.ListPersonalRecords(port.WithDownhillsExcluded(t.Context()), rider.userID)
-	if err != nil || len(filtered) == 0 {
-		t.Fatalf("personal records did not read the verified variant: %+v, %v", filtered, err)
+
+	// Rebuild a historical source that predates the filtered variant.
+	if _, err := env.pool.Exec(t.Context(), "DELETE FROM best_efforts WHERE activity_source_id = $1 AND downhill_excluded", ride.SourceID.UUID()); err != nil {
+		t.Fatal(err)
+	}
+	rebuild, err := recomputeHistoricalRecords(t.Context(), env.pool, nil, true)
+	if err != nil || rebuild.activities != 1 {
+		t.Fatalf("failed to rebuild historical variants: %+v, %v", rebuild, err)
+	}
+	filtered := check(endpoint+"?exclude_downhills=true", 7.9, 9)
+	var personal struct {
+		Records []struct {
+			Metric string
+			Window int     `json:"window_value"`
+			Value  float64 `json:"achieved_value"`
+		}
+	}
+	body := rider.do(http.MethodGet, "/api/records?exclude_downhills=true", nil, http.StatusOK)
+	if err := json.Unmarshal(body, &personal); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, record := range personal.Records {
+		if record.Metric == "speed" && record.Window == 60 && record.Value == filtered {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("personal records did not read the verified variant: %+v", personal.Records)
+	}
+	var history struct {
+		Best  float64
+		Count int
+	}
+	const historyPath = "/api/best-efforts/history?type=ride&metric=speed&window_kind=duration&window_value=60"
+	body = rider.do(http.MethodGet, historyPath+"&exclude_downhills=true", nil, http.StatusOK)
+	if err := json.Unmarshal(body, &history); err != nil || history.Count != 1 || history.Best != filtered {
+		t.Fatalf("history did not read the verified variant: %+v, %v", history, err)
+	}
+
+	// Even stale rows written before GPS validation must not win a record.
+	if _, err := env.pool.Exec(t.Context(), `UPDATE best_efforts SET achieved_value = 142.8 / 3.6
+		WHERE activity_source_id = $1 AND metric = 'speed' AND window_value = 60 AND NOT downhill_excluded`, ride.SourceID.UUID()); err != nil {
+		t.Fatal(err)
+	}
+	if got := readRecordBoard(t, rider, endpoint); len(got) != 0 {
+		t.Fatalf("invalid legacy record reached the leaderboard: %+v", got)
+	}
+	body = rider.do(http.MethodGet, historyPath, nil, http.StatusOK)
+	if err := json.Unmarshal(body, &history); err != nil || history.Count != 0 {
+		t.Fatalf("invalid legacy record reached history: %+v, %v", history, err)
 	}
 }
 

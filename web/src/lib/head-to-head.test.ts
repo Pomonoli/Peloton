@@ -101,4 +101,29 @@ describe('Head-to-Head rows', () => {
 		expect(filterComparison(rows, '', '', 'percentGap', false)[0]?.id).toBe('pace:distance:5000');
 		expect(filterComparison(rows, '20 km', '', 'name', false)[0]?.id).toBe('pace:distance:20000');
 	});
+
+	it('displays climbing efforts and their gap in meters while preserving comparison values', () => {
+		const [row] = recordRows(
+			[
+				{
+					activity_type: 'ride',
+					metric: 'vam',
+					window_kind: 'duration',
+					window_value: 1200,
+					you: { activity_id: 'ride', value: 900 },
+					opponent: { activity_id: 'other', value: 720 },
+					winner: 'you',
+					difference: 180,
+					difference_percent: 25
+				}
+			],
+			'Mira'
+		);
+		expect(row?.cells).toMatchObject({
+			you: { text: '300 m' },
+			opponent: { text: '240 m' },
+			difference: { text: '60 m', detail: '25%' }
+		});
+		expect(row?.values).toMatchObject({ you: 900, opponent: 720, difference: 180 });
+	});
 });

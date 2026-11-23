@@ -55,3 +55,67 @@ func TestFastestCyclingWindowConsidersEndingOnSample(t *testing.T) {
 		t.Fatalf("time window: %v, %v, %v", offset, elapsed, distance)
 	}
 }
+
+func TestFilteredCyclingRecordsChooseSlowerWindowsInSameRecording(t *testing.T) {
+	start := time.Unix(1700000000, 0)
+	var samples []domain.StreamSample
+	for i := range 13 {
+		seconds := i * 10
+		distance := 15*float64(min(seconds, 60)) + 8*float64(max(0, seconds-60))
+		altitude := 200 - .08*15*float64(min(seconds, 60))
+		samples = append(samples, domain.StreamSample{
+			Timestamp: start.Add(time.Duration(seconds) * time.Second),
+			Latitude:  new(51 + distance*180/(math.Pi*domain.EarthRadiusMeters)), Longitude: new(4.0),
+			DistanceM: &distance, AltitudeM: &altitude,
+		})
+	}
+	windows := []windowSpec{
+		{domain.BestEffortMetricSpeed, domain.BestEffortWindowDuration, 30},
+		{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 300},
+	}
+	uc := NewComputeBestEffortsForSource(nil, nil, nil, nil, nil, nil)
+	act := domain.Activity{Type: domain.ActivityTypeRide, StartTime: start}
+	got := uc.computeAll(act, domain.ActivitySource{}, samples, windows)
+	if len(got) != 4 {
+		t.Fatalf("expected both record variants per window: %+v", got)
+	}
+	if got[0].AchievedValue != 15 || got[1].DurationS != 20 {
+		t.Fatalf("expected the descent to win before filtering: %+v", got[:2])
+	}
+	if !got[2].DownhillExcluded || !got[3].DownhillExcluded ||
+		got[2].AchievedValue < 8 || got[2].AchievedValue >= 10 ||
+		got[3].DurationS <= 30 || got[3].DurationS > 37.5 {
+		t.Fatalf("expected a slower valid alternative for both categories: %+v", got[2:])
+	}
+}
+
+func TestDownhillWindowConsidersEligibilityBoundaries(t *testing.T) {
+	p := downhillProfile{
+		points:    []cyclingPoint{{0, 0}, {10, 100}, {20, 160}},
+		altitude:  []float64{20, 10, 10},
+		assistedM: []float64{0, 0, 0},
+	}
+	offset, elapsed, distance := p.fastestWindow(10, false)
+	if math.Abs(offset-7) > 1e-6 || elapsed != 10 || math.Abs(distance-72) > 1e-6 {
+		t.Fatalf("interpolated eligible optimum: %g, %g, %g", offset, elapsed, distance)
+	}
+}
+
+func TestShortFlatCyclingWindowCanBeVerified(t *testing.T) {
+	start := time.Unix(1700000000, 0)
+	samples := []domain.StreamSample{
+		{Timestamp: start, Latitude: new(51.0), Longitude: new(4.0), AltitudeM: new(100.0)},
+		{Timestamp: start.Add(5 * time.Second), Latitude: new(51.0002), Longitude: new(4.0), AltitudeM: new(100.0)},
+	}
+	uc := NewComputeBestEffortsForSource(nil, nil, nil, nil, nil, nil)
+	w := windowSpec{domain.BestEffortMetricSpeed, domain.BestEffortWindowDuration, 5}
+	got := uc.computeAll(domain.Activity{Type: domain.ActivityTypeRide}, domain.ActivitySource{}, samples, []windowSpec{w})
+	if len(got) != 2 || !got[1].DownhillExcluded || got[1].AchievedValue != got[0].AchievedValue {
+		t.Fatalf("expected a verified short flat effort: %+v", got)
+	}
+	*samples[1].AltitudeM = 95
+	got = uc.computeAll(domain.Activity{Type: domain.ActivityTypeRide}, domain.ActivitySource{}, samples, []windowSpec{w})
+	if len(got) != 1 || got[0].DownhillExcluded {
+		t.Fatalf("short descent passed the filter: %+v", got)
+	}
+}

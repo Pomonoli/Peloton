@@ -37,7 +37,7 @@ func (r *BestEffortRepo) ListPersonalRecords(ctx context.Context, userID domain.
 		       activity_type, metric, window_kind, window_value,
 		       achieved_value, activity_id, ts
 		  FROM best_efforts b
-		 WHERE user_id = $1 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+`
+		 WHERE user_id = $1 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+` AND `+validCyclingMotionRecordSQL+`
 		   AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL AND a.type = b.activity_type AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`)
 		 ORDER BY activity_type, metric, window_kind, window_value,
 		          (CASE WHEN metric = ANY($2) THEN achieved_value ELSE -achieved_value END) ASC,
@@ -266,9 +266,10 @@ func (r *BestEffortRepo) ListBestEffortHistory(
 		`SELECT DISTINCT ON (b.activity_id)
 		        b.activity_id, a.title, a.start_time, b.achieved_value
 		   FROM best_efforts b
-		   JOIN activities a ON a.id = b.activity_id AND a.deleted_at IS NULL
+		   JOIN activities a ON a.id = b.activity_id AND a.deleted_at IS NULL AND a.type = b.activity_type
 		  WHERE b.user_id = $1 AND b.activity_type = $2
-		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
+		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+`
+		    AND `+validCyclingMotionRecordSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
 		  ORDER BY b.activity_id, b.achieved_value `+betterDir,
 		userID.UUID(), activityType, metric, windowKind, windowValue,
 	)
@@ -318,6 +319,14 @@ func canonicalEffortSourceSQL(e string) string {
 }
 
 const recordDistanceSQL = "(b.window_kind <> 'distance' OR b.window_value NOT IN (400, 1609, 1610, 21097, 21100, 42195, 42200))"
+
+// Legacy efforts may predate GPS validation. Apply the cycling speed cap
+// before ranking either variant, allowing for floating-point interpolation.
+var validCyclingMotionRecordSQL = fmt.Sprintf(`(b.activity_type <> 'ride' OR b.metric NOT IN ('speed', 'pace') OR (
+	b.achieved_value > 0 AND b.achieved_value < 'Infinity'::float8 AND CASE b.metric
+		WHEN 'speed' THEN b.achieved_value <= %[1]f
+		WHEN 'pace' THEN b.achieved_value >= 1000 / %[1]f
+	END))`, domain.CyclingMaxSpeedMps+0.000001)
 
 func recordVariantSQL(ctx context.Context) string {
 	if port.DownhillsExcluded(ctx) {

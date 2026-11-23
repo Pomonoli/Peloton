@@ -29,7 +29,8 @@
 				type: data.type,
 				metric: data.metric,
 				window_kind: data.window,
-				window_value: String(data.value)
+				window_value: String(data.value),
+				...(data.excludeDownhills ? { exclude_downhills: 'true' } : {})
 			});
 			const res = await fetch(memberURL(`/api/best-efforts/history?${params}`, data.member), {
 				signal

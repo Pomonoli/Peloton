@@ -194,35 +194,61 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 		where += catalogViewportSQL(b, &args)
 	}
 
+	const visibleActivity = "NOT a.hidden_by_admin AND NOT a.provider_restricted"
+	order := catalogSegmentOrder(q.Order)
+	page, pageJoin := "", ""
+	pagination := " LIMIT $2 OFFSET $3"
+	if catalogCanPageDefinitions(q) {
+		// Eligibility and deduplication still cover the entire matching
+		// catalog. Only definitions on this page need traversal statistics.
+		page = `page_definitions AS MATERIALIZED (
+			SELECT s.id FROM definitions d JOIN segments s ON s.id = d.id
+			WHERE d.representative = s.id
+			ORDER BY ` + order + pagination + `
+		),`
+		pageJoin = "JOIN page_definitions page ON page.id = d.representative"
+		pagination = ""
+	}
+
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
-		WITH eligible AS (
-			SELECT e.id, e.segment_id, e.user_id, e.elapsed_s, e.start_time, e.activity_id,
-                e.activity_source_id, e.start_offset, a.primary_stream_source_id, src.provider AS source_provider
-			FROM segment_efforts e
-			JOIN activities a ON a.id = e.activity_id
-			JOIN segments s ON s.id = e.segment_id
-            JOIN activity_sources src ON src.id = e.activity_source_id AND src.activity_id = a.id AND src.status <> 'detached'
-			WHERE a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted
-             AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8 AND `+catalogEffortSQL+where+`
-		), definitions AS (
+		WITH definitions AS MATERIALIZED (
 			SELECT s.id,
 				first_value(s.id) OVER (PARTITION BY s.activity_type, lower(btrim(s.name)), s.distance_m, ST_AsBinary(s.geom::geometry),
 					CASE WHEN ST_IsEmpty(s.geom::geometry) THEN s.id END
 					ORDER BY (s.source = 'strava_catalog') DESC, s.id) AS representative
-			FROM segments s JOIN (SELECT DISTINCT segment_id FROM eligible) e ON e.segment_id = s.id
-		), traversals AS (
-			SELECT DISTINCT ON (d.representative, e.activity_id, e.start_time, e.start_offset)
-				d.representative AS segment_id, e.id, e.user_id, e.elapsed_s, e.start_time, e.activity_id,
+			FROM segments s
+			WHERE EXISTS (
+				SELECT 1 FROM segment_efforts e JOIN activities a ON a.id = e.activity_id
+				WHERE e.segment_id = s.id AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8
+				AND `+visibleActivity+` AND `+catalogEffortSQL+`
+			)`+where+`
+		), `+page+` recordings AS (
+			SELECT d.representative AS segment_id, e.id, e.user_id, e.elapsed_s, e.start_time, e.start_offset, e.activity_id,
+				e.activity_source_id, a.primary_stream_source_id, src.provider AS source_provider,
+				first_value(e.activity_source_id) OVER (
+					PARTITION BY e.segment_id, e.activity_id
+					ORDER BY (e.activity_source_id = a.primary_stream_source_id) DESC NULLS LAST, e.activity_source_id
+				) AS canonical_source
+			FROM definitions d
+			`+pageJoin+`
+			JOIN segment_efforts e ON e.segment_id = d.id
+			JOIN segments s ON s.id = d.id
+			JOIN activities a ON a.id = e.activity_id
+			JOIN activity_sources src ON src.id = e.activity_source_id AND src.activity_id = a.id
+			WHERE a.deleted_at IS NULL AND `+visibleActivity+` AND `+canonicalPerformanceSourceSQL+` AND `+catalogLocalEffortSQL+`
+		), traversals AS MATERIALIZED (
+			SELECT DISTINCT ON (e.segment_id, e.activity_id, e.start_time, e.start_offset)
+				e.segment_id, e.id, e.user_id, e.elapsed_s, e.start_time, e.activity_id,
 				e.activity_source_id, e.primary_stream_source_id, e.source_provider
-			FROM eligible e JOIN definitions d ON d.id = e.segment_id
-			ORDER BY d.representative, e.activity_id, e.start_time, e.start_offset,
+			FROM recordings e
+			WHERE e.activity_source_id = e.canonical_source AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8
+			ORDER BY e.segment_id, e.activity_id, e.start_time, e.start_offset,
 				(e.activity_source_id = e.primary_stream_source_id) DESC NULLS LAST,
 				e.elapsed_s, e.id
-		), summary AS (
-			SELECT segment_id, count(DISTINCT user_id) AS members
+		), rider_bests AS (
+			SELECT DISTINCT ON (segment_id, user_id) segment_id, user_id, id, elapsed_s, start_time
 			FROM traversals
-			GROUP BY segment_id
-			HAVING $1::uuid IS NULL OR bool_or(user_id = $1)
+			ORDER BY segment_id, user_id, elapsed_s, start_time, id
 		), personal_sources AS (
 			SELECT DISTINCT ON (segment_id, activity_id) segment_id, activity_id, count(*) AS attempts
 			FROM traversals WHERE user_id = $4 AND source_provider <> 'derived'
@@ -233,18 +259,20 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 			SELECT segment_id, sum(attempts)::bigint AS attempts
 			FROM personal_sources GROUP BY segment_id
 		), winner AS (
-			SELECT DISTINCT ON (e.segment_id) e.segment_id, e.elapsed_s, e.user_id
-			FROM traversals e JOIN summary ON summary.segment_id = e.segment_id
-			ORDER BY e.segment_id, e.elapsed_s, e.start_time, e.id
+			SELECT DISTINCT ON (segment_id) segment_id, elapsed_s, user_id,
+				count(*) OVER segment AS members, bool_or(user_id = $1::uuid) OVER segment AS has_member
+			FROM rider_bests
+			WINDOW segment AS (PARTITION BY segment_id)
+			ORDER BY segment_id, elapsed_s, start_time, id
 		)
-		SELECT s.id, s.name, CASE WHEN s.distance_m > 0 AND s.distance_m < 'Infinity'::float8 THEN s.distance_m ELSE 0 END, winner.elapsed_s, `+catalogHolderNameSQL+`, summary.members, COALESCE(personal.attempts, 0),
+		SELECT s.id, s.name, CASE WHEN s.distance_m > 0 AND s.distance_m < 'Infinity'::float8 THEN s.distance_m ELSE 0 END, winner.elapsed_s, `+catalogHolderNameSQL+`, winner.members, COALESCE(personal.attempts, 0),
 		       ST_X(ST_StartPoint(s.geom::geometry)), ST_Y(ST_StartPoint(s.geom::geometry))`+geometry+`
-		FROM summary
-		JOIN segments s ON s.id = summary.segment_id
-		JOIN winner ON winner.segment_id = s.id
-        LEFT JOIN personal ON personal.segment_id = s.id
+		FROM winner
+		JOIN segments s ON s.id = winner.segment_id
+		LEFT JOIN personal ON personal.segment_id = s.id
 		JOIN users u ON u.id = winner.user_id
-		ORDER BY `+catalogSegmentOrder(q.Order)+` LIMIT $2 OFFSET $3`, args...)
+		WHERE $1::uuid IS NULL OR winner.has_member
+		ORDER BY `+order+pagination, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list catalog segments: %w", err)
 	}
@@ -264,6 +292,18 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 		}
 		return item, err
 	}, "scan catalog segment", "iterate catalog segments")
+}
+
+func catalogCanPageDefinitions(q domain.CatalogSegmentQuery) bool {
+	if q.Member != nil {
+		return false
+	}
+	for _, sort := range q.Order {
+		if sort.Column != domain.CatalogSortName && sort.Column != domain.CatalogSortDistance {
+			return false
+		}
+	}
+	return true
 }
 
 // Use the existing GiST index on the route geography. Segmentize the
@@ -298,7 +338,7 @@ func catalogSegmentOrder(criteria []domain.CatalogSegmentOrder) string {
 		// Eligible times are positive and finite.
 		domain.CatalogSortAverageSpeed: "(" + validDistance + ") / winner.elapsed_s * 3.6",
 		domain.CatalogSortLocalKOM:     "lower(NULLIF(btrim(" + catalogHolderNameSQL + "), ''))",
-		domain.CatalogSortMembers:      "summary.members",
+		domain.CatalogSortMembers:      "winner.members",
 		domain.CatalogSortMyAttempts:   "COALESCE(personal.attempts, 0)",
 	}
 	order := make([]string, 0, len(criteria)+2)

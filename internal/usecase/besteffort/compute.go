@@ -121,9 +121,7 @@ var StandardWindows = []windowSpec{
 	{domain.BestEffortMetricSpeed, domain.BestEffortWindowDuration, 300},
 	{domain.BestEffortMetricSpeed, domain.BestEffortWindowDuration, 1200},
 
-	// VAM — vertical ascent velocity (m/h). Best sustained climbing rate over
-	// classic climb durations. Computed from the altitude channel as a rate
-	// (Δaltitude / window), not an instantaneous average.
+	// VAM — cumulative ascent over the best window, stored in metres per hour.
 	{domain.BestEffortMetricVAM, domain.BestEffortWindowDuration, 300},
 	{domain.BestEffortMetricVAM, domain.BestEffortWindowDuration, 1200},
 	{domain.BestEffortMetricVAM, domain.BestEffortWindowDuration, 3600},

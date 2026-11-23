@@ -9,6 +9,7 @@ export const load: PageLoad = async (event) => {
 		type: params.type,
 		metric: params.metric,
 		window: params.window,
-		value: Number(params.value)
+		value: Number(params.value),
+		excludeDownhills: event.url.searchParams.get('exclude_downhills') === 'true'
 	};
 };

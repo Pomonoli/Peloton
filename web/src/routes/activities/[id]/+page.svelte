@@ -31,6 +31,7 @@
 		recordWindow
 	} from '#lib/records.js';
 	import { goto, refreshAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { buildSeries } from './streamSeries';
 	import type { PageData } from './$types';
 	import type { SourceView } from './+layout';
@@ -41,6 +42,9 @@
 	let stream = $derived(data.stream);
 	let streamStatus = $derived(data.streamStatus);
 	let bestEfforts = $derived(data.bestEfforts);
+	const effortHistoryQuery = $derived(
+		page.url.searchParams.get('exclude_downhills') === 'true' ? '?exclude_downhills=true' : ''
+	);
 
 	type SegEffort = {
 		id: string;
@@ -624,7 +628,7 @@
 								onclick={() =>
 									goto(
 										memberURL(
-											`/best-efforts/${a.type}/${b.metric}/${b.windowKind}/${b.windowValue}`,
+											`/best-efforts/${a.type}/${b.metric}/${b.windowKind}/${b.windowValue}${effortHistoryQuery}`,
 											data.activityOwner
 										)
 									)}

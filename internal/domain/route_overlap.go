@@ -67,7 +67,7 @@ func NewRouteCoverage(samples []StreamSample, activityType ActivityType) RouteCo
 		start, end := routePosition(a), routePosition(b)
 		vector := end.sub(start)
 		length := math.Sqrt(vector.dot(vector))
-		if length < 1 || length/dt > maxCyclingSpeed {
+		if length < 1 || length/dt > CyclingMaxSpeedMps {
 			continue
 		}
 		n := int(math.Ceil(length / routeSampleM))

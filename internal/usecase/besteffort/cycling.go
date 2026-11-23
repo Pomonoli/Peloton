@@ -20,7 +20,7 @@ func (uc *ComputeBestEffortsForSource) computeCycling(
 	if !src.Parsed.StartTime.IsZero() {
 		origin = src.Parsed.StartTime
 	} else if origin.IsZero() {
-		origin = samples[0].Timestamp
+		origin = firstRecordingTime(samples)
 	}
 	validated := domain.ValidateCyclingStream(samples)
 	best := make([]domain.BestEffort, len(windows))
@@ -52,7 +52,7 @@ func (uc *ComputeBestEffortsForSource) computeCycling(
 				validated.Legs[validatedSectionStart+end].HasGPS {
 				end++
 			}
-			if end-start >= 5 {
+			if end-start >= 2 {
 				local := make([]cyclingPoint, end-start)
 				for i := range local {
 					local[i] = cyclingPoint{points[start+i].seconds - points[start].seconds, points[start+i].metres - points[start].metres}
@@ -62,7 +62,7 @@ func (uc *ComputeBestEffortsForSource) computeCycling(
 					if w.Metric != domain.BestEffortMetricSpeed && w.Metric != domain.BestEffortMetricPace {
 						continue
 					}
-					effort, ok := uc.cyclingMotionEffort(act, src, section[start].Timestamp, local, w, now, profile.allows)
+					effort, ok := uc.cyclingMotionEffort(act, src, section[start].Timestamp, local, w, now, &profile)
 					if ok && betterCyclingEffort(effort, verified[i]) {
 						effort.DownhillExcluded = true
 						effort.StartOffset = int(effort.Timestamp.Sub(origin).Seconds())
@@ -111,13 +111,18 @@ func betterCyclingEffort(candidate, current domain.BestEffort) bool {
 }
 
 func (uc *ComputeBestEffortsForSource) cyclingMotionEffort(
-	act domain.Activity, src domain.ActivitySource, start time.Time, points []cyclingPoint, w windowSpec, now time.Time, allows cyclingWindowFilter,
+	act domain.Activity, src domain.ActivitySource, start time.Time, points []cyclingPoint, w windowSpec, now time.Time, profile *downhillProfile,
 ) (domain.BestEffort, bool) {
 	byDistance := w.Kind == domain.BestEffortWindowDistance && w.Metric == domain.BestEffortMetricPace
 	if !byDistance && (w.Kind != domain.BestEffortWindowDuration || w.Metric != domain.BestEffortMetricSpeed) {
 		return domain.BestEffort{}, false
 	}
-	offset, elapsed, distance := scanCyclingWindow(points, float64(w.Value), byDistance, allows)
+	var offset, elapsed, distance float64
+	if profile == nil {
+		offset, elapsed, distance = fastestCyclingWindow(points, float64(w.Value), byDistance)
+	} else {
+		offset, elapsed, distance = profile.fastestWindow(float64(w.Value), byDistance)
+	}
 	if elapsed <= 0 || distance <= 0 {
 		return domain.BestEffort{}, false
 	}
@@ -133,15 +138,9 @@ func (uc *ComputeBestEffortsForSource) cyclingMotionEffort(
 	}, true
 }
 
-// With linear interpolation, an optimum has at least one endpoint on a sample.
+// Without eligibility constraints, an optimum has at least one endpoint on a sample.
 // Scan both ways to consider every such endpoint in O(n) per window.
-type cyclingWindowFilter func(fixed, crossing, previous int, fraction float64) bool
-
 func fastestCyclingWindow(points []cyclingPoint, width float64, byDistance bool) (offset, elapsed, distance float64) {
-	return scanCyclingWindow(points, width, byDistance, nil)
-}
-
-func scanCyclingWindow(points []cyclingPoint, width float64, byDistance bool, allows cyclingWindowFilter) (offset, elapsed, distance float64) {
 	if len(points) < 2 || width <= 0 {
 		return 0, 0, 0
 	}
@@ -173,9 +172,6 @@ func scanCyclingWindow(points []cyclingPoint, width float64, byDistance bool, al
 				if xEnd >= target {
 					xPrev, yPrev := coordinates(end - direction)
 					fraction := (target - xPrev) / (xEnd - xPrev)
-					if allows != nil && !allows(left, end, end-direction, fraction) {
-						break
-					}
 					yTarget := yPrev + (yEnd-yPrev)*fraction
 					span := yTarget - y
 					if byDistance && span > 0 && (elapsed == 0 || span < elapsed) {
