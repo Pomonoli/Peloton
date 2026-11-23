@@ -178,7 +178,7 @@
 
 {#snippet gearForm()}
 	<form
-		class="space-y-4 rounded-xl border border-zinc-800 bg-panel p-5"
+		class="space-y-4 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-5"
 		onsubmit={(e) => {
 			e.preventDefault();
 			submitForm();
@@ -233,7 +233,7 @@
 	</form>
 {/snippet}
 
-<section class="space-y-8">
+<section class="space-y-4 md:space-y-6">
 	<header class="flex items-start justify-between gap-4 max-md:flex-wrap">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{m.gear_title()}</h1>
@@ -403,7 +403,7 @@
 	</div>
 
 	{#if !data.member && data.gear.length > 0}
-		<div class="rounded-xl border border-zinc-800 bg-panel p-5">
+		<div class="rounded-xl border border-zinc-800 bg-panel p-3 sm:p-5">
 			<h2 class="text-lg font-semibold">{m.gear_section_defaults()}</h2>
 			<p class="mt-1 text-sm text-zinc-500">{m.gear_defaults_intro()}</p>
 			<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

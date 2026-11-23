@@ -2,6 +2,8 @@
 	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
+	import FilterSheet from '#lib/components/FilterSheet.svelte';
+	import SortControls from '#lib/components/SortControls.svelte';
 	import SortHeader from '#lib/components/SortHeader.svelte';
 	import { compareSortedValues, promoteSort, type SortCriterion } from '#lib/stacked-sort.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -55,7 +57,8 @@
 		{ key: 'moving_s', label: m.col_moving() },
 		{ key: 'speed_kmh', label: m.col_average_speed() }
 	] satisfies { key: SportColumn; label: string }[];
-	let sportOrder = $state<SortCriterion<SportColumn>[]>([{ column: 'count', direction: 'desc' }]);
+	const initialSportOrder: SortCriterion<SportColumn>[] = [{ column: 'count', direction: 'desc' }];
+	let sportOrder = $state<SortCriterion<SportColumn>[]>(initialSportOrder);
 	const sports = $derived(
 		[...(s?.sport_totals ?? [])].sort((left, right) => {
 			for (const { column, direction } of sportOrder) {
@@ -86,11 +89,11 @@
 	const maxYearDist = $derived(s ? Math.max(1, ...s.by_year.map((y) => y.distance_m)) : 1);
 </script>
 
-<div class="space-y-8">
+<div class="space-y-5 max-md:space-y-4">
 	<header>
 		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Stats</h1>
 		<p class="mt-1 text-sm text-zinc-400">
-			Lifetime totals, year-by-year trends, and activity records.
+			{m.stats_lifetime()}
 		</p>
 	</header>
 
@@ -104,21 +107,23 @@
 		</div>
 	{:else}
 		<!-- lifetime totals -->
-		<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+		<dl
+			class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800 lg:grid-cols-4"
+		>
 			{#each [{ label: 'Activities', value: s.totals.count.toLocaleString(intlLocale()) }, { label: 'Distance', value: formatDistance(s.totals.distance_m) }, { label: 'Moving time', value: formatDuration(s.totals.moving_s) }, { label: 'Elevation', value: formatElevation(s.totals.elevation_gain_m) }] as c (c.label)}
-				<div class="rounded-xl border border-zinc-800 bg-panel p-5">
-					<div class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</div>
-					<div class="mt-1 text-2xl font-semibold tabular-nums text-zinc-100">{c.value}</div>
+				<div class="bg-zinc-900 p-3 sm:p-4">
+					<dt class="text-xs font-medium text-quiet">{c.label}</dt>
+					<dd class="mt-0.5 text-lg font-bold tabular-nums sm:text-2xl">{c.value}</dd>
 				</div>
 			{/each}
-		</div>
+		</dl>
 
 		<!-- records -->
 		<section>
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Records</h2>
-			<div class="grid gap-4 sm:grid-cols-2">
+			<div class="grid gap-2 sm:grid-cols-2">
 				{#each [{ label: 'Longest distance', r: s.records.longest_distance, distanceRecord: true }, { label: 'Longest duration', r: s.records.longest_duration, distanceRecord: false }] as card (card.label)}
-					<div class="rounded-xl border border-zinc-800 bg-panel p-5">
+					<div class="rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4">
 						<div class="text-xs uppercase tracking-wide text-zinc-500">{card.label}</div>
 						{#if card.r}
 							<a
@@ -162,7 +167,7 @@
 				<h2 class="mb-3 text-sm font-medium text-zinc-300">By year</h2>
 				<div class="overflow-hidden rounded-xl border border-zinc-800">
 					<div class="overflow-x-auto">
-						<table class="w-full text-sm">
+						<table class="stats-table w-full text-sm">
 							<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 								<tr>
 									<th class="px-4 py-2 text-left font-medium">Year</th>
@@ -170,7 +175,7 @@
 									<th class="px-4 py-2 text-right font-medium">Distance</th>
 									<th class="px-4 py-2 text-right font-medium">Moving</th>
 									<th class="px-4 py-2 text-right font-medium">Elevation</th>
-									<th class="w-1/4 px-4 py-2"></th>
+									<th class="w-1/4 px-4 py-2 max-md:hidden"></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -187,7 +192,7 @@
 										<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
 											>{formatElevation(y.elevation_gain_m)}</td
 										>
-										<td class="px-4 py-2">
+										<td class="px-4 py-2 max-md:hidden">
 											<div class="h-2 rounded-full bg-zinc-800">
 												<div
 													class="h-2 rounded-full bg-accent-500"
@@ -206,9 +211,23 @@
 
 		{#if s.sport_totals.length > 0}
 			<section>
-				<h2 class="mb-3 text-sm font-medium">{m.stats_by_sport()}</h2>
-				<div class="overflow-x-auto rounded-xl border border-zinc-800">
-					<table class="w-full bg-panel text-sm">
+				<FilterSheet
+					active={sportOrder.length !== 1 ||
+						sportOrder[0]?.column !== 'count' ||
+						sportOrder[0]?.direction !== 'desc'}
+					reset={() => (sportOrder = initialSportOrder)}
+				>
+					{#snippet toolbar()}
+						<h2 class="text-sm font-semibold">{m.stats_by_sport()}</h2>
+					{/snippet}
+					<SortControls
+						columns={sportColumns}
+						order={sportOrder}
+						onchange={(next) => (sportOrder = next)}
+					/>
+				</FilterSheet>
+				<div class="mt-2 overflow-x-auto rounded-xl border border-zinc-800">
+					<table class="stats-table w-full bg-panel text-sm">
 						<thead class="text-xs text-quiet">
 							<tr>
 								{#each sportColumns as column (column.key)}
@@ -249,3 +268,30 @@
 		{/if}
 	{/if}
 </div>
+
+<style>
+	@media (width < 48rem) {
+		.stats-table {
+			table-layout: fixed;
+		}
+		.stats-table :global(:is(th, td)) {
+			padding-inline: 0.25rem;
+			font-size: 0.75rem;
+			overflow-wrap: anywhere;
+		}
+		.stats-table :global(th) {
+			font-size: 0.6875rem;
+			text-transform: none;
+		}
+		.stats-table :global(thead button) {
+			position: relative;
+			padding-inline: 0;
+			white-space: normal;
+			text-transform: none;
+		}
+		.stats-table :global(th:first-child),
+		.stats-table :global(td:first-child) {
+			padding-left: 0.5rem;
+		}
+	}
+</style>

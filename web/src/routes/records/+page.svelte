@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { memberURL } from '#lib/member.js';
 	import { APP_NAME } from '$app/env/public';
@@ -84,33 +85,10 @@
 
 <svelte:head><title>Records · {APP_NAME}</title></svelte:head>
 
-<div class="mx-auto max-w-4xl px-4 py-6">
-	<h1 class="mb-3 text-2xl font-semibold text-zinc-100">{m.member_records()}</h1>
-	<nav
-		class="mb-5 inline-flex gap-1 rounded-lg border border-zinc-800 bg-panel p-1"
-		aria-label={m.member_records()}
-	>
-		<a
-			href={tabURL(false)}
-			aria-current={!boards ? 'page' : undefined}
-			class="rounded px-3 py-2 text-sm"
-			class:bg-accent-500={!boards}
-			class:text-on-accent={!boards}
-		>
-			{data.member ? m.record_member_records() : m.record_my_records()}
-		</a>
-		<a
-			href={tabURL(true)}
-			aria-current={boards ? 'page' : undefined}
-			class="rounded px-3 py-2 text-sm"
-			class:bg-accent-500={boards}
-			class:text-on-accent={boards}
-		>
-			{m.record_leaderboards()}
-		</a>
-	</nav>
-	<div class="mb-5">
-		<label class="inline-flex min-h-10 items-center gap-2 text-sm font-medium">
+<div class="mx-auto max-w-4xl space-y-3">
+	<h1 class="text-2xl font-semibold tracking-tight">{m.member_records()}</h1>
+	{#snippet downhillFilter()}
+		<label class="inline-flex min-h-11 items-center gap-2 text-sm font-medium">
 			<input
 				type="checkbox"
 				checked={excludeDownhills}
@@ -119,9 +97,46 @@
 			{m.records_exclude_downhills()}
 		</label>
 		{#if excludeDownhills}<p class="text-xs text-quiet">{m.records_downhill_help()}</p>{/if}
-	</div>
+	{/snippet}
+	{#snippet recordTabs()}
+		<nav
+			class="inline-flex gap-1 rounded-lg border border-zinc-800 bg-panel p-1"
+			aria-label={m.member_records()}
+		>
+			<a
+				href={tabURL(false)}
+				aria-current={!boards ? 'page' : undefined}
+				class="flex min-h-10 items-center rounded-md px-3 text-sm font-semibold"
+				class:bg-accent-500={!boards}
+				class:text-on-accent={!boards}
+			>
+				{data.member ? m.record_member_records() : m.record_my_records()}
+			</a>
+			<a
+				href={tabURL(true)}
+				aria-current={boards ? 'page' : undefined}
+				class="flex min-h-10 items-center rounded-md px-3 text-sm font-semibold"
+				class:bg-accent-500={boards}
+				class:text-on-accent={boards}
+			>
+				{m.record_leaderboards()}
+			</a>
+		</nav>
+	{/snippet}
+	{#if !boards}
+		<FilterSheet toolbar={recordTabs} active={excludeDownhills} reset={() => setDownhill(false)}>
+			{@render downhillFilter()}
+		</FilterSheet>
+	{/if}
+
 	{#if boards}
-		<RecordLeaderboards member={data.member} {excludeDownhills} />
+		<RecordLeaderboards
+			member={data.member}
+			{excludeDownhills}
+			toolbar={recordTabs}
+			extraFilters={downhillFilter}
+			resetExtra={() => setDownhill(false)}
+		/>
 	{:else if !loaded}
 		<p class="text-sm text-quiet">Loading…</p>
 	{:else if error}
@@ -133,28 +148,30 @@
 				: 'No records yet. Records appear after importing activities with enough recorded data.'}
 		</p>
 	{:else}
-		<div class="space-y-8">
+		<div class="space-y-4">
 			{#each byType as [type, list] (type)}
 				<section>
-					<h2
-						class="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-zinc-400"
-					>
+					<h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-300">
 						<SportIcon {type} size={16} />
 						{recordSport(type)}
 					</h2>
-					<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+					<div
+						class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-panel"
+					>
 						{#each list as r (r.metric + r.window_kind + r.window_value)}
 							<a
 								href={`/activities/${r.activity_id}`}
-								class="rounded-lg border border-zinc-800 bg-panel p-3 hover:border-accent-600"
+								class="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-zinc-950 sm:gap-4 sm:px-4"
 							>
-								<div class="text-xs text-zinc-500">
+								<div class="text-xs font-semibold text-zinc-300 sm:text-sm">
 									{recordLabel(r, false)}
 								</div>
-								<div class="mt-0.5 text-lg font-semibold text-zinc-100">
+								<div class="text-sm font-bold tabular-nums sm:text-base">
 									{recordValue(r, r.achieved_value)}
 								</div>
-								<div class="mt-0.5 text-xs text-quiet">{formatDateOnly(r.timestamp)}</div>
+								<div class="w-[5rem] text-right text-[11px] text-quiet sm:w-28 sm:text-xs">
+									{formatDateOnly(r.timestamp)}
+								</div>
 							</a>
 						{/each}
 					</div>

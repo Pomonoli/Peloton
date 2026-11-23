@@ -1,4 +1,6 @@
 <script lang="ts">
+	import FilterSheet from '#lib/components/FilterSheet.svelte';
+	import SortControls from '#lib/components/SortControls.svelte';
 	import SortHeader from '#lib/components/SortHeader.svelte';
 	import { promoteSort } from '#lib/stacked-sort.js';
 	import { untrack, onMount } from 'svelte';
@@ -135,30 +137,45 @@
 	});
 </script>
 
-<div class="space-y-6">
-	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{m.nav_segments()}</h1>
-		<p class="mt-1 text-sm text-zinc-400">{m.segment_catalog_coverage()}</p>
-	</header>
+<div class="space-y-4 max-md:space-y-3">
+	<FilterSheet
+		active={mine !== !!data.member || selectedOrder !== null}
+		reset={() => {
+			mine = !!data.member;
+			selectedOrder = null;
+			sorting = false;
+			if (view === 'list') reload();
+		}}
+	>
+		{#snippet toolbar()}
+			<header>
+				<h1 class="text-2xl font-semibold tracking-tight">{m.nav_segments()}</h1>
+				<p class="mt-1 text-sm text-zinc-400">{m.segment_catalog_coverage()}</p>
+			</header>
+		{/snippet}
+		<div class="flex gap-2" role="group" aria-label={m.segment_filter_label()}>
+			{#each [{ mine: false, label: m.segment_filter_all() }, { mine: true, label: data.member ? m.member_segments() : m.segment_filter_mine() }] as filter (filter.label)}
+				<button
+					type="button"
+					aria-pressed={mine === filter.mine}
+					onclick={() => setFilter(filter.mine)}
+					class="rounded border px-3 py-1.5 text-sm {mine === filter.mine
+						? 'border-accent-500 bg-accent-500/15 text-accent-200'
+						: 'border-zinc-700 text-zinc-400 hover:border-zinc-600'}"
+				>
+					{filter.label}
+				</button>
+			{/each}
+		</div>
 
-	<div class="flex gap-2" role="group" aria-label={m.segment_filter_label()}>
-		{#each [{ mine: false, label: m.segment_filter_all() }, { mine: true, label: data.member ? m.member_segments() : m.segment_filter_mine() }] as filter (filter.label)}
-			<button
-				type="button"
-				aria-pressed={mine === filter.mine}
-				onclick={() => setFilter(filter.mine)}
-				class="rounded border px-3 py-1.5 text-sm {mine === filter.mine
-					? 'border-accent-500 bg-accent-500/15 text-accent-200'
-					: 'border-zinc-700 text-zinc-400 hover:border-zinc-600'}"
-			>
-				{filter.label}
-			</button>
-		{/each}
-	</div>
+		<div class="mt-3 md:hidden">
+			<SortControls {columns} {order} onchange={setOrder} />
+		</div>
+	</FilterSheet>
 
-	<div class="flex flex-wrap items-center justify-between gap-3">
+	<div class="flex flex-wrap items-center justify-between gap-2">
 		<div
-			class="flex min-w-0 flex-1 items-stretch rounded-md border border-zinc-700 bg-panel focus-within:border-accent-500 max-sm:basis-full"
+			class="flex min-w-0 flex-1 items-stretch rounded-md border border-zinc-700 bg-panel focus-within:border-accent-500"
 		>
 			<label class="sr-only" for="segment-search">{m.segment_search_placeholder()}</label>
 			<input
@@ -192,7 +209,8 @@
 					type="button"
 					aria-pressed={view === option.id}
 					onclick={() => setView(option.id as typeof view)}
-					class="min-h-10 rounded px-4 text-sm {view === option.id
+					class="min-h-10 rounded px-2.5 text-xs font-semibold sm:px-4 sm:text-sm {view ===
+					option.id
 						? 'bg-accent-500/15 text-accent-200'
 						: 'text-zinc-400 hover:text-zinc-200'}"
 				>
@@ -221,8 +239,8 @@
 	{:else}
 		{#if segments.length > 0 || sorting}
 			<div class="overflow-x-auto rounded-lg border border-zinc-800">
-				<table class="w-full text-sm" aria-busy={loading}>
-					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
+				<table class="catalog-table w-full bg-panel text-sm" aria-busy={loading}>
+					<thead class="bg-zinc-950/65 text-xs text-zinc-500">
 						<tr>
 							{#each columns as column (column.key)}
 								{@const index = order.findIndex((item) => item.column === column.key)}
@@ -247,6 +265,13 @@
 									>
 										{segment.name}
 									</a>
+									<div class="mt-0.5 text-[11px] leading-4 text-quiet md:hidden">
+										{m.segment_mobile_summary({
+											holder: segment.local_kom_holder || m.placeholder_dash(),
+											riders: segment.member_count.toLocaleString(intlLocale()),
+											attempts: segment.my_attempts.toLocaleString(intlLocale())
+										})}
+									</div>
 								</th>
 								<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
 									{formatMetricDistance(segment.distance_m)}
@@ -302,6 +327,32 @@
 </div>
 
 <style>
+	@media (width < 48rem) {
+		.catalog-table {
+			table-layout: fixed;
+		}
+		.catalog-table :global(:is(td, th)) {
+			padding: 0.375rem;
+			white-space: normal;
+			overflow-wrap: anywhere;
+			font-size: 0.75rem;
+		}
+		.catalog-table :global(thead button) {
+			position: relative;
+			min-height: 2.375rem;
+			padding: 0.125rem 0;
+			white-space: normal;
+			text-transform: none;
+			font-weight: 600;
+		}
+		.catalog-table :global(th:first-child) {
+			width: 38%;
+		}
+		.catalog-table :global(:is(td, th):nth-child(n + 5)) {
+			display: none;
+		}
+	}
+
 	input[type='search']::-webkit-search-cancel-button {
 		display: none;
 	}

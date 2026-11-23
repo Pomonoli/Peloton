@@ -128,13 +128,14 @@
 
 <svelte:head><title>Health · {APP_NAME}</title></svelte:head>
 
-<div class="mx-auto max-w-4xl px-4 py-6">
+<div class="mx-auto max-w-4xl">
 	<div class="mb-4 flex items-center justify-between">
-		<h1 class="text-xl font-semibold text-zinc-100">Health</h1>
+		<h1 class="text-2xl font-semibold tracking-tight">Health</h1>
 		<select
+			aria-label="Health data period"
 			bind:value={days}
 			onchange={load}
-			class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-300"
+			class="min-h-11 rounded-lg border border-zinc-800 bg-panel px-2 text-sm text-zinc-300"
 		>
 			<option value={30}>30 days</option>
 			<option value={90}>90 days</option>
@@ -151,17 +152,17 @@
 		</p>
 	{:else}
 		{#if anyHealth}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+			<div class="grid grid-cols-2 gap-2 lg:grid-cols-3">
 				{#each metrics as m (m.type)}
 					{#if m.series.length}
 						<div class="rounded-lg border border-zinc-800 bg-panel p-3">
-							<div class="flex items-baseline justify-between">
+							<div class="flex flex-wrap items-baseline justify-between gap-x-2">
 								<span class="text-xs uppercase tracking-wide text-zinc-500">{m.label}</span>
 								{#if m.latest}<span class="text-lg font-semibold text-zinc-100"
 										>{m.format(m.latest.value)}</span
 									>{/if}
 							</div>
-							<svg viewBox="0 0 100 30" preserveAspectRatio="none" class="mt-2 h-10 w-full">
+							<svg viewBox="0 0 100 30" preserveAspectRatio="none" class="mt-2 h-8 w-full">
 								<path
 									d={sparkPath(m.series.map((p) => p.value))}
 									fill="none"
@@ -181,7 +182,7 @@
 		{/if}
 
 		{#if groups.length}
-			<h2 class="mb-1 mt-8 text-sm font-semibold text-zinc-200">All metrics</h2>
+			<h2 class="mb-1 mt-5 text-sm font-semibold text-zinc-200">All metrics</h2>
 			<p class="mb-4 text-xs text-zinc-500">
 				Everything else your providers report, newest value per metric. Select one for its history
 				and source.
@@ -218,7 +219,7 @@
 									{/each}
 								</dl>
 							{:else if trend.length > 1}
-								<svg viewBox="0 0 100 30" preserveAspectRatio="none" class="mt-2 h-10 w-full">
+								<svg viewBox="0 0 100 30" preserveAspectRatio="none" class="mt-2 h-8 w-full">
 									<path
 										d={sparkPath(trend)}
 										fill="none"

@@ -172,11 +172,11 @@
 
 <svelte:head><title>{m.comparison_title()}</title></svelte:head>
 
-<section class="mx-auto min-w-0 max-w-6xl space-y-4">
+<section class="mx-auto min-w-0 max-w-6xl space-y-3 md:space-y-4">
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<h1 class="text-2xl font-semibold tracking-tight">{m.comparison_title()}</h1>
-		<div class="grid w-full min-w-0 grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-			<div>
+		<div class="grid w-full min-w-0 grid-cols-2 gap-2 sm:w-auto">
+			<div class="min-w-0">
 				<label for="comparison-first" class="mb-1 block text-xs text-quiet"
 					>{m.comparison_first_rider()}</label
 				>
@@ -185,7 +185,7 @@
 					value={firstListed?.username ?? ''}
 					onchange={(event) => selectPair(event.currentTarget.value, data.member)}
 					disabled={directoryLoading || directoryError}
-					class="min-h-11 w-full rounded-lg border border-zinc-700 bg-panel px-3 text-sm"
+					class="min-h-11 w-full rounded-lg border border-zinc-800 bg-panel px-2 text-sm"
 				>
 					{#each members as rider (rider.id)}
 						<option value={rider.username} disabled={rider.id === listed?.id}
@@ -194,7 +194,7 @@
 					{/each}
 				</select>
 			</div>
-			<div>
+			<div class="min-w-0">
 				<label for="comparison-member" class="mb-1 block text-xs text-quiet"
 					>{m.comparison_second_rider()}</label
 				>
@@ -203,7 +203,7 @@
 					value={listed?.username ?? ''}
 					onchange={(event) => selectPair(firstListed?.username ?? '', event.currentTarget.value)}
 					disabled={directoryLoading || directoryError}
-					class="min-h-11 w-full rounded-lg border border-zinc-700 bg-panel px-3 text-sm"
+					class="min-h-11 w-full rounded-lg border border-zinc-800 bg-panel px-2 text-sm"
 				>
 					<option value="">{m.comparison_choose_member()}</option>
 					{#each opponents as rider (rider.id)}
@@ -224,7 +224,7 @@
 	{/if}
 
 	{#if opponent}
-		<div class="grid grid-cols-2 gap-3 rounded-lg border border-zinc-800 bg-panel p-3 sm:p-4">
+		<div class="grid grid-cols-2 gap-2 rounded-xl border border-zinc-800 bg-panel p-2.5 sm:p-4">
 			<ComparisonRider rider={you} label={m.comparison_first_rider()} />
 			<ComparisonRider rider={opponent} label={m.comparison_second_rider()} />
 		</div>
@@ -275,13 +275,13 @@
 		</div>
 
 		<dl
-			class="grid grid-cols-2 gap-y-3 rounded-lg border border-zinc-800 bg-panel p-3 sm:grid-cols-4 sm:p-4"
+			class="grid grid-cols-4 divide-x divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-panel"
 			aria-live="polite"
 		>
 			{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses }, { label: m.comparison_ties(), value: score.ties }, { label: m.comparison_comparable(), value: score.comparable }] as stat (stat.label)}
-				<div>
-					<dt class="text-xs text-quiet">{stat.label}</dt>
-					<dd class="text-xl font-semibold tabular-nums">{number.format(stat.value)}</dd>
+				<div class="min-w-0 px-2 py-2.5 text-center sm:px-4">
+					<dt class="break-words text-[11px] leading-4 text-quiet sm:text-xs">{stat.label}</dt>
+					<dd class="text-lg font-bold tabular-nums">{number.format(stat.value)}</dd>
 				</div>
 			{/each}
 		</dl>

@@ -200,7 +200,7 @@
 
 <svelte:head><title>{m.waas_title()}</title></svelte:head>
 
-<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+<div class="mb-3 flex flex-wrap items-start justify-between gap-2 md:mb-5">
 	<div>
 		<h1 class="text-2xl font-semibold text-zinc-100">{m.waas_title()}</h1>
 		<p class="mt-1 max-w-2xl text-sm text-zinc-400">{m.waas_intro()}</p>
@@ -221,9 +221,9 @@
 </div>
 {#if shared}<p role="status" class="mb-4 text-sm text-accent-300">{shared}</p>{/if}
 
-<div class="grid items-start gap-5 lg:grid-cols-[310px_minmax(0,1fr)]">
+<div class="grid items-start gap-3 lg:grid-cols-[310px_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr]">
 	<form
-		class="space-y-4 rounded-lg border border-zinc-800 bg-panel p-4"
+		class="order-2 space-y-3 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4 lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-3"
 		onchange={dirty}
 		onsubmit={(event) => {
 			event.preventDefault();
@@ -414,59 +414,68 @@
 			>
 				{m.waas_dirty()}
 			</p>{/if}
+		{#if ride && !busy && !changed}<a
+				href="#planner-map"
+				class="flex min-h-11 items-center justify-center rounded-lg border border-zinc-800 text-sm font-semibold text-accent-300 lg:hidden"
+				>{m.waas_view_route()}</a
+			>{/if}
 		{#if error}<p role="alert" class="rounded bg-red-950 p-3 text-sm text-red-300">{error}</p>{/if}
 	</form>
-	<div class="min-w-0 space-y-4">
-		<section class="rounded-lg border border-zinc-800 bg-panel p-4">
-			<h2 class="text-lg font-semibold text-zinc-100">
-				{ride?.chunks[0]?.scheldeRound
-					? m.waas_schelde_round()
-					: profiles.find((profile) => profile.id === options.profile)?.label}
-			</h2>
-			<div class="mt-3 grid grid-cols-3 gap-3">
-				<div>
-					<p class="text-xs text-zinc-400">{m.waas_distance()}</p>
-					<strong class="text-xl text-zinc-100">{ride ? formatDistance(ride.meters) : '—'}</strong>
-				</div>
-				<div>
-					<p class="text-xs text-zinc-400">{m.waas_estimated_gain()}</p>
-					<strong class="text-xl text-zinc-100">{ride ? formatElevation(ride.gain) : '—'}</strong>
-				</div>
-				<div>
-					<p class="text-xs text-zinc-400">
-						{options.profile === 'climb'
-							? m.waas_climb_density()
-							: options.profile === 'flow'
-								? m.waas_cycle_distance()
-								: m.waas_surface_distance()}
-					</p>
-					<strong class="text-xl text-zinc-100"
-						>{ride
-							? options.profile === 'climb'
-								? `${number((1000 * ride.gain) / ride.meters, 1)} m/km`
-								: formatDistance(
-										options.profile === 'flow'
-											? Object.values(ride.spine).reduce((sum, value) => sum + value, 0)
-											: ride.matchedSurface
-									)
-							: '—'}</strong
-					>
-				</div>
+	<section
+		class="order-3 min-w-0 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4 lg:order-none lg:col-start-2 lg:row-start-1"
+	>
+		<h2 class="text-lg font-semibold text-zinc-100">
+			{ride?.chunks[0]?.scheldeRound
+				? m.waas_schelde_round()
+				: profiles.find((profile) => profile.id === options.profile)?.label}
+		</h2>
+		<div class="mt-3 grid grid-cols-3 gap-3">
+			<div>
+				<p class="text-xs text-zinc-400">{m.waas_distance()}</p>
+				<strong class="text-xl text-zinc-100">{ride ? formatDistance(ride.meters) : '—'}</strong>
 			</div>
-			{#if ride && rides.length > 1}<div
-					class="mt-4 flex items-center justify-between border-t border-zinc-800 pt-3 text-sm"
+			<div>
+				<p class="text-xs text-zinc-400">{m.waas_estimated_gain()}</p>
+				<strong class="text-xl text-zinc-100">{ride ? formatElevation(ride.gain) : '—'}</strong>
+			</div>
+			<div>
+				<p class="text-xs text-zinc-400">
+					{options.profile === 'climb'
+						? m.waas_climb_density()
+						: options.profile === 'flow'
+							? m.waas_cycle_distance()
+							: m.waas_surface_distance()}
+				</p>
+				<strong class="text-xl text-zinc-100"
+					>{ride
+						? options.profile === 'climb'
+							? `${number((1000 * ride.gain) / ride.meters, 1)} m/km`
+							: formatDistance(
+									options.profile === 'flow'
+										? Object.values(ride.spine).reduce((sum, value) => sum + value, 0)
+										: ride.matchedSurface
+								)
+						: '—'}</strong
 				>
-					<span class="text-zinc-400"
-						>{m.waas_route_number({ current: variant + 1, total: rides.length })}</span
-					><button
-						type="button"
-						class="rounded border border-zinc-700 px-3 py-1.5 text-accent-300 disabled:opacity-40"
-						disabled={changed || busy}
-						onclick={() => (variant = (variant + 1) % rides.length)}>{m.waas_next()}</button
-					>
-				</div>{/if}
-		</section>
+			</div>
+		</div>
+		{#if ride && rides.length > 1}<div
+				class="mt-4 flex items-center justify-between border-t border-zinc-800 pt-3 text-sm"
+			>
+				<span class="text-zinc-400"
+					>{m.waas_route_number({ current: variant + 1, total: rides.length })}</span
+				><button
+					type="button"
+					class="rounded border border-zinc-700 px-3 py-1.5 text-accent-300 disabled:opacity-40"
+					disabled={changed || busy}
+					onclick={() => (variant = (variant + 1) % rides.length)}>{m.waas_next()}</button
+				>
+			</div>{/if}
+	</section>
+	<div id="planner-map" class="order-1 min-w-0 lg:order-none lg:col-start-2 lg:row-start-2">
 		<WaasRouteMap {ride} {bounds} />
+	</div>
+	<div class="order-4 min-w-0 space-y-3 lg:order-none lg:col-start-2 lg:row-start-3">
 		{#if ride}
 			{#each notices as notice (notice)}<p
 					role="status"
@@ -486,12 +495,12 @@
 				>
 					{m.waas_gain_warning()}
 				</p>{/if}
-			<section class="rounded-lg border border-zinc-800 bg-panel p-4">
+			<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-4">
 				<h2 class="mb-4 text-sm font-semibold text-zinc-200">{m.waas_elevation_profile()}</h2>
 				<ElevationProfile track={elevationTrack} />
 				<p class="mt-3 text-xs leading-relaxed text-zinc-400">{m.waas_estimate_help()}</p>
 			</section>
-			<section class="rounded-lg border border-zinc-800 bg-panel p-4">
+			<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-4">
 				<h2 class="text-sm font-semibold text-zinc-200">{m.waas_sections()}</h2>
 				<p class="mt-2 text-sm text-zinc-400">
 					{m.waas_reuse({

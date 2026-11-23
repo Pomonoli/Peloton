@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import { memberURL } from '#lib/member.js';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -126,7 +127,6 @@
 	let currentStyle: ReturnType<typeof basemapStyle>;
 	let mapLoaded = false;
 	let mapFrame: HTMLDivElement;
-	let filtersOpen = $state(false);
 	let fullscreenButton: HTMLButtonElement;
 	let fullscreen = $state(false);
 	let nativeFullscreen = false;
@@ -349,7 +349,6 @@
 	}
 
 	onMount(() => {
-		filtersOpen = matchMedia('(min-width: 768px)').matches;
 		if (!container) return;
 		currentStyle = basemapStyle(basemap);
 		map = new MapLibreMap({
@@ -424,23 +423,7 @@
 <svelte:document onfullscreenchange={fullscreenChanged} />
 <svelte:window onkeydown={exitOnEscape} />
 
-<section class="space-y-4">
-	<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
-		<div>
-			<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">{m.member_heatmap()}</h1>
-			{#if !filter.from && !filter.to}<p class="mt-1 text-sm text-quiet">
-					{m.heatmap_all_time()}
-				</p>{/if}
-			{#if data}
-				<p class="mt-1 text-sm text-zinc-400">
-					<span class="font-medium text-zinc-200">{data.with_track}</span> tracks from {data.matched}
-					{#if filter.active}matching{/if} activities{#if data.truncated}
-						<span class="text-amber-400">(newest {data.with_track} shown)</span>{/if}
-				</p>
-			{/if}
-		</div>
-	</header>
-
+<section class="space-y-4 max-md:space-y-2.5">
 	{#snippet mapControls()}
 		<div class="flex flex-wrap items-center gap-2">
 			<label class="flex items-center gap-2 text-sm">
@@ -542,10 +525,31 @@
 			</button>
 		</div>
 	{/snippet}
-	<details bind:open={filtersOpen}>
-		<summary class="mb-2 w-fit cursor-pointer text-sm font-medium text-accent-300">
-			{m.heatmap_filters()}
-		</summary>
+	<FilterSheet
+		collapsible
+		label={m.heatmap_filters()}
+		active={filter.active}
+		reset={() => filter.clear()}
+	>
+		{#snippet toolbar()}
+			<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
+				<div>
+					<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">
+						{m.member_heatmap()}
+					</h1>
+					{#if !filter.from && !filter.to}<p class="mt-1 text-sm text-quiet">
+							{m.heatmap_all_time()}
+						</p>{/if}
+					{#if data}
+						<p class="mt-1 text-sm text-zinc-400">
+							<span class="font-medium text-zinc-200">{data.with_track}</span> tracks from {data.matched}
+							{#if filter.active}matching{/if} activities{#if data.truncated}
+								<span class="text-amber-400">(newest {data.with_track} shown)</span>{/if}
+						</p>
+					{/if}
+				</div>
+			</header>
+		{/snippet}
 		<ActivityFilterBar
 			{filter}
 			{facets}
@@ -553,7 +557,7 @@
 			showSort={false}
 			member={pageData.member?.username}
 		/>
-	</details>
+	</FilterSheet>
 
 	{#if error}
 		<div
@@ -598,7 +602,7 @@
 			bind:this={container}
 			class={fullscreen
 				? 'h-full w-full'
-				: 'h-[70dvh] min-h-72 w-full overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900'}
+				: 'h-[70dvh] min-h-72 w-full overflow-hidden max-md:h-[60dvh] rounded-lg border border-zinc-800 bg-zinc-900'}
 		></div>
 		<button
 			type="button"

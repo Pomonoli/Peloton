@@ -202,7 +202,7 @@
 <div class="relative overflow-hidden rounded-lg border border-zinc-800 bg-panel">
 	<div
 		bind:this={container}
-		class="h-[440px] w-full max-md:h-[380px]"
+		class="h-[440px] w-full max-md:h-[42dvh] max-md:min-h-60"
 		aria-label={m.waas_map_label()}
 	></div>
 	{#if unavailable && coordinates.length}

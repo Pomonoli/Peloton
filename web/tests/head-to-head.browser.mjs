@@ -57,7 +57,8 @@ const records = [
 ];
 
 try {
-	for (const width of [320, 1440]) {
+	for (const width of [320, 360, 390, 430, 1440]) {
+		const mobile = width < 768;
 		const page = await browser.newPage({ viewport: { width, height: 940 } });
 		page.setDefaultTimeout(7500);
 		const errors = [];
@@ -127,19 +128,21 @@ try {
 			'/activities/mira-ride'
 		);
 		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-		assert.equal(
-			await canal.evaluate((row) => getComputedStyle(row).display),
-			width === 320 ? 'grid' : 'table-row'
+		assert.equal(await canal.evaluate((row) => getComputedStyle(row).display), 'table-row');
+		assert(
+			await canal.evaluate((row) => {
+				const visibleCells = [...row.cells].filter((cell) => cell.offsetWidth > 0);
+				return visibleCells.every((cell) => cell.getBoundingClientRect().right <= innerWidth);
+			})
 		);
 
-		if (width === 320) {
-			await panel.getByLabel('Sort by', { exact: true }).selectOption('difference');
-			await panel.getByRole('button', { name: 'Ascending' }).click();
-		} else {
-			await panel.getByRole('button', { name: 'Difference' }).click();
-		}
-		assert.match(await panel.locator('tbody tr').first().innerText(), /Forest Climb/);
+		await panel.getByRole('button', { name: 'Difference' }).click();
+		await panel.locator('tbody tr').first().getByRole('link', { name: 'Forest Climb' }).waitFor();
+		const showFilters = () => panel.getByRole('button', { name: /^Filters/ }).click();
+		const done = () => page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
+		if (mobile) await showFilters();
 		await panel.getByLabel('Filter by winner').selectOption('tie');
+		if (mobile) await done();
 		await panel.getByRole('link', { name: 'Village Road' }).waitFor();
 		assert.equal(await panel.locator('tbody tr').count(), 1);
 
@@ -153,8 +156,10 @@ try {
 		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
 		await page.getByRole('tab', { name: 'Segments' }).click();
+		if (mobile) await showFilters();
 		assert.equal(await panel.getByLabel('Filter by winner').inputValue(), 'tie');
 		await panel.getByLabel('Filter by winner').selectOption('');
+		if (mobile) await done();
 		improved = true;
 		await page.getByLabel('First rider', { exact: true }).selectOption('sam');
 		await page.waitForURL(
@@ -166,7 +171,7 @@ try {
 		assert.deepEqual(errors, []);
 		await page.close();
 	}
-	console.log('Head-to-Head passed at 320px and 1440px.');
+	console.log('Head-to-Head passed at 320px, 360px, 390px, 430px, and 1440px.');
 } finally {
 	await browser.close();
 }

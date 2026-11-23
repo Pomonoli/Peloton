@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import { memberURL } from '#lib/member.js';
 	import { onDestroy } from 'svelte';
 	import { refreshAll } from '$app/navigation';
@@ -179,40 +180,58 @@
 	}
 </script>
 
-<section class="space-y-6">
-	<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
-		<div>
-			<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">{m.activities_title()}</h1>
-			{#if feed}
-				<p class="mt-1 text-sm text-zinc-400">
-					{#if filter.active}
-						<span class="font-medium text-zinc-200">{feed.matched}</span> of {feed.total} activities
-					{:else}
-						<span class="font-medium text-zinc-200">{feed.total}</span> activities
+<section class="space-y-4 max-md:space-y-3">
+	<FilterSheet
+		active={filter.active || filter.sort !== 'date_desc'}
+		reset={() => {
+			filter.clear();
+			filter.sort = 'date_desc';
+		}}
+	>
+		{#snippet toolbar()}
+			<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
+				<div>
+					<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">
+						{m.activities_title()}
+					</h1>
+					{#if feed}
+						<p class="mt-1 text-sm text-zinc-400">
+							{#if filter.active}
+								<span class="font-medium text-zinc-200">{feed.matched}</span> of {feed.total} activities
+							{:else}
+								<span class="font-medium text-zinc-200">{feed.total}</span> activities
+							{/if}
+						</p>
 					{/if}
-				</p>
-			{/if}
-		</div>
-		{#if !data.member}
-			<div class="flex items-center gap-2">
-				<a
-					href="/activities/new"
-					class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
-				>
-					+ New activity
-				</a>
-				<button
-					type="button"
-					disabled={uploading}
-					onclick={() => fileInput?.click()}
-					class="rounded border border-accent-500 bg-accent-500/20 px-3 py-1.5 text-xs text-accent-300 hover:bg-accent-500/30 disabled:opacity-50"
-				>
-					{uploading ? 'Uploading…' : 'Upload files'}
-				</button>
-			</div>
-		{/if}
-	</header>
+				</div>
+			</header>
+		{/snippet}
+		<ActivityFilterBar {filter} facets={feed?.facets ?? null} member={data.member?.username} />
+	</FilterSheet>
 
+	{#if !data.member}
+		<div class="flex flex-wrap items-center gap-2">
+			<a
+				href="/activities/new"
+				class="inline-flex min-h-10 items-center rounded-lg border border-zinc-800 bg-panel px-3 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
+			>
+				New activity
+			</a>
+			<button
+				type="button"
+				disabled={uploading}
+				onclick={() => fileInput?.click()}
+				class="min-h-10 rounded-lg bg-accent-500 px-3 text-xs font-semibold text-on-accent hover:bg-accent-600 disabled:opacity-50"
+			>
+				{uploading ? 'Uploading…' : 'Upload files'}
+			</button>
+			<a
+				href="/review"
+				class="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-accent-300 hover:underline"
+				>Review queue</a
+			>
+		</div>
+	{/if}
 	{#if !data.member}
 		<div
 			role="button"
@@ -225,7 +244,7 @@
 			ondrop={onDrop}
 			onclick={() => fileInput?.click()}
 			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInput?.click()}
-			class="cursor-pointer rounded-lg border-2 border-dashed px-5 py-6 text-center text-sm transition-colors {dragOver
+			class="cursor-pointer rounded-lg max-md:hidden border-2 border-dashed px-5 py-6 text-center text-sm transition-colors {dragOver
 				? 'border-accent-500 bg-accent-500/10 text-accent-200'
 				: 'border-zinc-700 bg-zinc-900/30 text-zinc-400 hover:border-zinc-600'}"
 		>
@@ -254,22 +273,26 @@
 			</div>
 		{/if}
 	{/if}
-	<ActivityFilterBar {filter} facets={feed?.facets ?? null} member={data.member?.username} />
 
 	{#if items.length === 0 && !loading}
-		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
+		<div
+			class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400 max-md:p-4"
+		>
 			{filter.active ? 'No activities match this filter.' : m.activities_empty()}
 		</div>
 	{:else}
-		<ul class="space-y-3 transition-opacity duration-200" class:opacity-50={loading}>
+		<ul
+			class="space-y-3 transition-opacity duration-200 max-md:divide-y max-md:divide-zinc-800 max-md:space-y-0 max-md:rounded-2xl max-md:border max-md:border-zinc-800 max-md:bg-panel"
+			class:opacity-50={loading}
+		>
 			{#each items as activity (activity.id)}
 				<li>
 					<a
 						href={`/activities/${activity.id}`}
-						class="flex flex-wrap items-center gap-5 rounded-lg border border-zinc-800 bg-panel px-5 py-4 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
+						class="flex flex-wrap items-center gap-5 rounded-lg border border-zinc-800 bg-panel px-5 py-4 max-md:gap-x-2.5 max-md:gap-y-1.5 max-md:rounded-none max-md:border-0 max-md:px-2.5 max-md:py-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
 					>
 						<div
-							class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300"
+							class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 max-md:size-9 max-md:rounded-xl max-md:bg-accent-500/10 max-md:text-accent-300"
 							title={activity.discipline || activity.type}
 						>
 							<SportIcon type={activity.discipline || activity.type} size={24} />
@@ -300,17 +323,17 @@
 							onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 						/>
 						<dl
-							class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-zinc-400 max-md:w-full md:grid-cols-4 md:text-right"
+							class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-zinc-400 max-md:ml-[2.875rem] max-md:w-full max-md:grid-cols-4 max-md:gap-x-1.5 md:grid-cols-4 md:text-right"
 						>
 							<div>
 								<dt class="text-zinc-500">{m.col_distance()}</dt>
-								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100">
+								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
 									{formatDistance(activity.distance_m)}
 								</dd>
 							</div>
 							<div>
 								<dt class="text-zinc-500">{m.col_moving()}</dt>
-								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100">
+								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
 									{activity.moving_duration_s > 0
 										? formatDuration(activity.moving_duration_s)
 										: '—'}
@@ -318,7 +341,7 @@
 							</div>
 							<div>
 								<dt class="text-zinc-500">{m.col_elevation()}</dt>
-								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100">
+								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
 									{formatElevation(activity.elevation_gain_m)}
 								</dd>
 							</div>

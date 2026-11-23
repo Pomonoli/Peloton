@@ -50,15 +50,17 @@
 		if (facets && facets.disciplines.length > 0) showDisciplines = true;
 	});
 
-	const chip = 'rounded-full px-3 py-1 text-xs';
+	const chip = 'rounded-full px-3 py-1 text-xs max-md:min-h-10';
 	const chipOn = 'bg-accent-500 text-on-accent';
 	const chipOff = 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700';
 	const field =
-		'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 focus:border-accent-400 focus:outline-none';
+		'min-w-0 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 focus:border-accent-400 focus:outline-none max-md:min-h-10 max-md:text-base';
 </script>
 
 {#if facets || controls}
-	<div class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
+	<div
+		class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4 max-md:rounded-none max-md:border-0 max-md:p-0"
+	>
 		{#if controls}
 			{@render controls()}
 		{/if}
@@ -181,7 +183,7 @@
 			<button
 				type="button"
 				onclick={() => (filter.moreFilters = !filter.moreFilters)}
-				class="ml-auto text-xs {filter.rangesActive
+				class="ml-auto min-h-10 text-xs {filter.rangesActive
 					? 'text-accent-300'
 					: 'text-zinc-500 hover:text-zinc-300'}"
 			>
@@ -194,14 +196,14 @@
 			<div class="grid gap-x-6 gap-y-2 border-t border-zinc-800 pt-3 sm:grid-cols-2 lg:grid-cols-3">
 				{#each filter.rangeSpecs as r (r.key)}
 					<div class="flex items-center gap-2">
-						<span class="w-28 shrink-0 text-xs text-zinc-500">{r.label}</span>
+						<span class="w-28 shrink-0 text-xs text-zinc-500 max-md:w-21">{r.label}</span>
 						<input
 							type="number"
 							min="0"
 							placeholder="min"
 							bind:value={filter.ranges[r.key].min}
 							aria-label={`${r.label} minimum (${r.unit})`}
-							class="w-20 {field}"
+							class="w-20 max-md:flex-1 {field}"
 						/>
 						<span class="text-xs text-quiet">–</span>
 						<input
@@ -210,7 +212,7 @@
 							placeholder="max"
 							bind:value={filter.ranges[r.key].max}
 							aria-label={`${r.label} maximum (${r.unit})`}
-							class="w-20 {field}"
+							class="w-20 max-md:flex-1 {field}"
 						/>
 						<span class="text-xs text-quiet">{r.unit}</span>
 					</div>
@@ -219,7 +221,10 @@
 		{/if}
 
 		{#if showSort || filter.active}
-			<div class="flex items-center gap-2 border-t border-zinc-800 pt-3">
+			<div
+				class="flex items-center gap-2 border-t border-zinc-800 pt-3"
+				class:max-md:hidden={!showSort}
+			>
 				{#if showSort}
 					<label for="sort" class="text-xs font-medium uppercase tracking-wide text-zinc-500"
 						>Sort</label
@@ -234,7 +239,7 @@
 					<button
 						type="button"
 						onclick={() => filter.clear()}
-						class="text-xs text-zinc-500 hover:text-zinc-300"
+						class="text-xs text-zinc-500 hover:text-zinc-300 max-md:hidden"
 					>
 						Clear filters
 					</button>

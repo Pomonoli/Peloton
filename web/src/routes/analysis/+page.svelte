@@ -43,11 +43,12 @@
 	});
 
 	// ---- inline SVG chart geometry --------------------------------------
-	const W = 880;
-	const H = 280;
+	let chartWidth = $state(880);
+	const W = $derived(Math.max(240, chartWidth));
+	const H = $derived(W < 500 ? 200 : 280);
 	const PAD = { t: 16, r: 16, b: 28, l: 40 };
-	const plotW = W - PAD.l - PAD.r;
-	const plotH = H - PAD.t - PAD.b;
+	const plotW = $derived(W - PAD.l - PAD.r);
+	const plotH = $derived(H - PAD.t - PAD.b);
 
 	type Series = { key: 'ctl' | 'atl' | 'tsb'; label: string; description: string; color: string };
 	const series: Series[] = [
@@ -127,7 +128,7 @@
 	];
 </script>
 
-<div class="space-y-6">
+<div class="space-y-4 max-md:space-y-3">
 	<header>
 		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Analysis</h1>
 	</header>
@@ -140,16 +141,41 @@
 			Sign in
 		</a>
 	{:else}
+		<!-- range picker -->
+		<div
+			role="group"
+			aria-label="Training load period"
+			class="grid max-w-sm grid-cols-4 gap-0.5 rounded-xl bg-zinc-800/65 p-0.5"
+		>
+			{#each ranges as r (r.d)}
+				<button
+					type="button"
+					aria-pressed={days === r.d}
+					onclick={() => (days = r.d)}
+					class="min-h-10 rounded-[10px] px-2 text-xs font-semibold transition-colors"
+					class:bg-panel={days === r.d}
+					class:text-accent-300={days === r.d}
+					class:text-zinc-400={days !== r.d}
+					class:hover:text-zinc-100={days !== r.d}
+				>
+					{r.label}
+				</button>
+			{/each}
+		</div>
+
 		<!-- current snapshot -->
 		{#if a}
-			<div class="grid grid-cols-3 gap-4 max-md:grid-cols-1">
+			<div
+				class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800"
+			>
 				{#each series as s (s.key)}
-					<div class="rounded-xl border border-zinc-800 bg-panel p-5">
-						<div class="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
-							<span class="inline-block h-2.5 w-2.5 rounded-full" style:background={s.color}></span>
+					<div class="min-w-0 bg-zinc-900 p-2 sm:p-4">
+						<div class="flex items-center gap-1 text-xs font-semibold text-quiet sm:gap-2">
+							<span class="inline-block size-2 shrink-0 rounded-full" style:background={s.color}
+							></span>
 							{s.label}
 						</div>
-						<div class="mt-1 text-2xl font-semibold tabular-nums text-zinc-100">
+						<div class="mt-1 text-lg font-bold tabular-nums sm:text-2xl text-zinc-100">
 							{a.dates.length
 								? s.key === 'tsb'
 									? fmt(a.current[s.key])
@@ -175,97 +201,91 @@
 			<p class="text-xs text-quiet">{m.analysis_training_estimated()}</p>
 		{/if}
 
-		<!-- range picker -->
-		<div class="flex gap-1">
-			{#each ranges as r (r.d)}
-				<button
-					type="button"
-					onclick={() => (days = r.d)}
-					class="rounded px-3 py-1 text-xs transition-colors"
-					class:bg-zinc-800={days === r.d}
-					class:text-zinc-100={days === r.d}
-					class:text-zinc-400={days !== r.d}
-					class:hover:text-zinc-100={days !== r.d}
-				>
-					{r.label}
-				</button>
-			{/each}
-		</div>
-
 		<!-- chart -->
-		<div class="rounded-xl border border-zinc-800 bg-panel p-4">
+		<div class="min-w-0 rounded-xl border border-zinc-800 bg-panel p-2 sm:p-4">
 			{#if loading}
-				<div class="flex h-[280px] items-center justify-center text-sm text-zinc-500">Loading…</div>
+				<div
+					class="flex min-h-32 items-center justify-center text-center sm:min-h-56 text-sm text-zinc-500"
+				>
+					Loading…
+				</div>
 			{:else if !a}
 				<p role="alert" class="text-sm text-red-300">{m.analysis_failed()}</p>
 			{:else if a.dates.length === 0}
-				<div class="flex h-[280px] items-center justify-center text-sm text-zinc-500">
+				<div
+					class="flex min-h-32 items-center justify-center text-center sm:min-h-56 text-sm text-zinc-500"
+				>
 					No training-load data yet. Import some activities first.
 				</div>
 			{:else}
 				{@const n = a.dates.length}
-				<svg
-					viewBox={`0 0 ${W} ${H}`}
-					class="w-full"
-					role="img"
-					aria-label="Training load trend"
-					onmousemove={(e) => onMove(e, n)}
-					onmouseleave={() => (hover = null)}
-				>
-					<!-- y axis gridlines -->
-					{#each [0, 0.25, 0.5, 0.75, 1] as t (t)}
-						{@const gy = PAD.t + plotH * t}
-						{@const val = bounds.max - (bounds.max - bounds.min) * t}
-						<line
-							x1={PAD.l}
-							y1={gy}
-							x2={W - PAD.r}
-							y2={gy}
-							stroke="var(--plot-grid)"
-							stroke-width="1"
-						/>
-						<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-quiet text-[10px]">
-							{val.toFixed(0)}
-						</text>
-					{/each}
-
-					<!-- zero line for TSB -->
-					{#if zeroY !== null}
-						<line
-							x1={PAD.l}
-							y1={zeroY}
-							x2={W - PAD.r}
-							y2={zeroY}
-							stroke="var(--plot-grid)"
-							stroke-width="1"
-							stroke-dasharray="3 3"
-						/>
-					{/if}
-
-					<!-- series -->
-					{#each series as s (s.key)}
-						<path d={path(a[s.key])} fill="none" stroke={s.color} stroke-width="1.8" />
-					{/each}
-
-					<!-- hover crosshair -->
-					{#if hover !== null}
-						{@const hx = x(hover, n)}
-						<line
-							x1={hx}
-							y1={PAD.t}
-							x2={hx}
-							y2={PAD.t + plotH}
-							stroke="var(--plot-cursor)"
-							stroke-width="1"
-						/>
-						{#each series as s (s.key)}
-							{@const v = a[s.key][hover]}
-							{#if v !== undefined}
-								<circle cx={hx} cy={y(v)} r="3" fill={s.color} />
-							{/if}
+				<div bind:clientWidth={chartWidth} class="min-w-0">
+					<svg
+						viewBox={`0 0 ${W} ${H}`}
+						class="w-full"
+						role="img"
+						aria-label="Training load trend"
+						onpointermove={(e) => onMove(e, n)}
+						onpointerdown={(e) => onMove(e, n)}
+						onpointerleave={(e) => {
+							if (e.pointerType === 'mouse') hover = null;
+						}}
+					>
+						<!-- y axis gridlines -->
+						{#each [0, 0.25, 0.5, 0.75, 1] as t (t)}
+							{@const gy = PAD.t + plotH * t}
+							{@const val = bounds.max - (bounds.max - bounds.min) * t}
+							<line
+								x1={PAD.l}
+								y1={gy}
+								x2={W - PAD.r}
+								y2={gy}
+								stroke="var(--plot-grid)"
+								stroke-width="1"
+							/>
+							<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-quiet text-[10px]">
+								{val.toFixed(0)}
+							</text>
 						{/each}
-					{/if}
-				</svg>
+
+						<!-- zero line for TSB -->
+						{#if zeroY !== null}
+							<line
+								x1={PAD.l}
+								y1={zeroY}
+								x2={W - PAD.r}
+								y2={zeroY}
+								stroke="var(--plot-grid)"
+								stroke-width="1"
+								stroke-dasharray="3 3"
+							/>
+						{/if}
+
+						<!-- series -->
+						{#each series as s (s.key)}
+							<path d={path(a[s.key])} fill="none" stroke={s.color} stroke-width="1.8" />
+						{/each}
+
+						<!-- hover crosshair -->
+						{#if hover !== null}
+							{@const hx = x(hover, n)}
+							<line
+								x1={hx}
+								y1={PAD.t}
+								x2={hx}
+								y2={PAD.t + plotH}
+								stroke="var(--plot-cursor)"
+								stroke-width="1"
+							/>
+							{#each series as s (s.key)}
+								{@const v = a[s.key][hover]}
+								{#if v !== undefined}
+									<circle cx={hx} cy={y(v)} r="3" fill={s.color} />
+								{/if}
+							{/each}
+						{/if}
+					</svg>
+				</div>
 
 				<!-- legend / hover readout -->
 				<div class="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs">

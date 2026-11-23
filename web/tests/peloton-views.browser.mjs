@@ -81,27 +81,43 @@ const asCatalog = (row) => ({
 });
 
 try {
-	for (const width of [390, 1440]) {
+	for (const width of [360, 390, 430, 1440]) {
+		const mobile = width < 768;
 		const page = await browser.newPage({
 			viewport: { width, height: 900 },
 			locale: 'en-US',
-			hasTouch: width < 500
+			hasTouch: mobile,
+			colorScheme: width === 360 || width === 430 ? 'dark' : 'light'
 		});
 		page.setDefaultTimeout(6000);
 		const errors = [];
+		let activityQuery;
 		page.on('pageerror', (error) => errors.push(error.message));
 		let catalogSort = [];
 		await page.route('**/*', async (route) => {
 			const url = new URL(route.request().url());
 			if (url.origin !== origin) return route.abort();
 			const path = url.pathname;
+			if (path === '/api/activities/feed') {
+				activityQuery = url.searchParams;
+				return route.fulfill({
+					json: {
+						total: 1,
+						matched: 1,
+						facets: { types: [], disciplines: [], years: [] },
+						activities: [{ ...recent, discipline: 'road', timezone: 'UTC' }],
+						has_more: false
+					}
+				});
+			}
 			if (path === '/api/segments/catalog') {
 				catalogSort = url.searchParams.getAll('sort');
 				return route.fulfill({ json: { segments: rides.map(asCatalog), has_more: false } });
 			}
 			const fixtures = {
 				'/cairn.v1.AuthService/GetCurrentUser': {
-					user: { id: 'ada', username: 'ada', displayName: 'Ada' }
+					user: { id: 'ada', username: 'ada', displayName: 'Ada', emailVerified: true },
+					permissions: width === 390 ? ['admin'] : []
 				},
 				'/cairn.v1.ActivityService/GetActivity': {
 					activity: {
@@ -128,7 +144,9 @@ try {
 				'/api/riders': { members: [mira] },
 				'/api/overview': {
 					totals,
-					recent: url.searchParams.has('member') ? [recent] : [],
+					recent: [recent],
+					this_week: totals,
+					last_week: totals,
 					cycling_weeks: weeks
 				},
 				'/api/activities/mira-ride/segment-efforts': { efforts: rides, can_rescan: false },
@@ -176,6 +194,108 @@ try {
 			});
 		});
 		const open = (path) => page.goto(origin + path);
+		const noPageOverflow = (path) =>
+			page.evaluate((url) => {
+				if (document.documentElement.scrollWidth > innerWidth)
+					throw new Error('Horizontal overflow at ' + url);
+				return true;
+			}, path);
+		const main = page.getByRole('main');
+		const sheet = page.getByRole('dialog');
+		const done = () => sheet.getByRole('button', { name: 'Done' }).click();
+		await open('/');
+		await main.getByRole('heading', { name: /Ada/ }).waitFor();
+		assert.equal(
+			await page.locator('html').getAttribute('data-theme'),
+			width === 360 || width === 430 ? 'dark' : 'light'
+		);
+		await main.getByRole('button', { name: 'Last week' }).click();
+		assert.match(
+			await main.getByRole('link', { name: '1 activity', exact: true }).getAttribute('href'),
+			/from=.*to=/
+		);
+		if (mobile) {
+			const tabbar = page.getByRole('navigation', { name: 'Main navigation' });
+			assert.deepEqual(
+				(await tabbar.getByRole('link').allTextContents()).map((label) => label.trim()),
+				['Home', 'Activities', 'Explore', 'Insights', 'Social']
+			);
+			const profile = page.getByRole('button', { name: 'Profile menu' });
+			await profile.click();
+			const menu = page.getByRole('navigation', { name: 'Profile menu' });
+			assert.deepEqual(
+				(await menu.getByRole('link').allTextContents()).map((label) => label.trim()),
+				width === 390
+					? ['Health', 'Gear', 'Connections', 'Settings', 'Admin']
+					: ['Health', 'Gear', 'Connections', 'Settings']
+			);
+			await page.keyboard.press('Escape');
+			await menu.waitFor({ state: 'hidden' });
+			await tabbar.getByRole('link', { name: 'Insights' }).click();
+			await page
+				.getByRole('navigation', { name: 'Insights' })
+				.getByRole('link', { name: 'Analysis' })
+				.click();
+			await page.waitForURL(origin + '/analysis');
+			await tabbar.getByRole('link', { name: 'Social' }).click();
+			await main.getByRole('button', { name: 'Cycling data for Mira' }).click();
+			await main.getByRole('link', { name: 'Activity history' }).waitFor();
+			await noPageOverflow('/riders');
+			await tabbar.getByRole('link', { name: 'Insights' }).click();
+			await page.waitForURL(origin + '/analysis');
+			await page.goBack();
+			await page.waitForURL(origin + '/riders');
+			await page.goForward();
+			await page.waitForURL(origin + '/analysis');
+			await tabbar.getByRole('link', { name: 'Activities' }).click();
+			await main.getByRole('link', { name: /Canal ride/ }).waitFor();
+			const filters = main.getByRole('button', { name: /^Filters/ });
+			await filters.click();
+			const filteredRequest = page.waitForRequest((request) => {
+				const url = new URL(request.url());
+				return (
+					url.pathname === '/api/activities/feed' && url.searchParams.get('from') === '2026-01-01'
+				);
+			});
+			await sheet.getByLabel('From date').fill('2026-01-01');
+			await done();
+			await filteredRequest;
+			await sheet.waitFor({ state: 'hidden' });
+			assert.equal(await filters.evaluate((button) => document.activeElement === button), true);
+			await filters.click();
+			assert.equal(await sheet.getByLabel('From date').inputValue(), '2026-01-01');
+			await sheet.getByRole('button', { name: 'Reset' }).click();
+			assert.equal(await sheet.getByLabel('From date').inputValue(), '');
+			await page.keyboard.press('Escape');
+			await sheet.waitFor({ state: 'hidden' });
+			const [fileChooser] = await Promise.all([
+				page.waitForEvent('filechooser'),
+				main.getByRole('button', { name: 'Upload files' }).click()
+			]);
+			assert.equal(fileChooser.isMultiple(), true);
+			assert.equal(activityQuery?.get('sort'), 'date_desc');
+			await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+			assert(await tabbar.evaluate((bar) => bar.getBoundingClientRect().bottom <= innerHeight));
+			assert(
+				await tabbar.evaluate(
+					(bar) =>
+						document.querySelector('footer').getBoundingClientRect().bottom <=
+						bar.getBoundingClientRect().top
+				)
+			);
+			await noPageOverflow('/activities');
+		} else {
+			assert.equal(await page.getByRole('navigation', { name: 'Main navigation' }).count(), 0);
+			await open('/riders');
+			await main.getByRole('button', { name: 'Cycling distance' }).click();
+			assert.equal(
+				await main
+					.getByRole('columnheader', { name: /Cycling distance/ })
+					.getAttribute('aria-sort'),
+				'descending'
+			);
+			await noPageOverflow('/riders');
+		}
 		await open('/u/mira');
 		await page.waitForURL(origin + '/?member=mira');
 		await page.getByRole('heading', { name: 'Mira' }).waitFor();
@@ -216,33 +336,63 @@ try {
 		await page.locator('.uplot').waitFor();
 
 		await open('/segments');
-		await page.getByRole('button', { name: /Avg speed/ }).click();
-		await page.getByRole('button', { name: /Local KOM/ }).click();
-		await page.waitForFunction(() =>
-			document.querySelector('th[aria-sort="ascending"]')?.textContent.includes('Local KOM')
-		);
+		if (mobile) {
+			await main.getByRole('button', { name: /^Filters/ }).click();
+			await sheet.getByLabel('Sort priority').selectOption('average_speed_kmh');
+			await sheet.getByLabel('Sort priority').selectOption('local_kom_holder');
+			await done();
+			await main.getByRole('link', { name: 'Hill Climb' }).waitFor();
+		} else {
+			await main.getByRole('button', { name: /Avg speed/ }).click();
+			await main.getByRole('button', { name: /Local KOM/ }).click();
+			await page.waitForFunction(() =>
+				document.querySelector('th[aria-sort="ascending"]')?.textContent.includes('Local KOM')
+			);
+		}
+		await noPageOverflow('/segments');
 		assert.deepEqual(catalogSort.slice(0, 2), ['local_kom_holder:asc', 'average_speed_kmh:asc']);
 		await open('/stats?member=mira');
 		await page.getByRole('heading', { name: 'By sport' }).waitFor();
 		await page.getByRole('cell', { name: '36.0 km/h' }).waitFor();
+		await noPageOverflow('/stats');
 		await open('/analysis?member=mira');
 		await page.getByText('Your long-term training load', { exact: false }).waitFor();
 		await page.getByText('Duration-only estimates', { exact: true }).waitFor();
+		await noPageOverflow('/analysis');
 		await open('/records');
 		await page.getByText('54 km/h', { exact: true }).waitFor();
+		if (mobile) await main.getByRole('button', { name: /^Filters/ }).click();
 		await page.getByLabel('Exclude downhills').check();
+		if (mobile) await done();
 		await page.getByText('28.8 km/h', { exact: true }).waitFor();
 		await page.reload();
 		await page.getByText('28.8 km/h', { exact: true }).waitFor();
+		await noPageOverflow('/records');
 		await open('/athlete');
 		await page.waitForURL(origin + '/health');
 		await page.getByRole('heading', { name: 'Athlete settings' }).waitFor();
-		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+		await noPageOverflow('/health');
+		for (const [path, heading] of [
+			['/gear', 'Gear'],
+			['/connections', 'Connections'],
+			['/settings', 'Settings'],
+			['/routes/waasland', 'Waasland route planner']
+		]) {
+			await open(path);
+			await main.getByRole('heading', { name: heading, exact: true }).waitFor();
+			await noPageOverflow(path);
+			if (path === '/settings' && width === 390) {
+				await main.getByText('Dark', { exact: true }).click();
+				assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+				await page.reload();
+				assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+			}
+		}
 		assert.deepEqual(errors, []);
 		await page.close();
 	}
 	console.log(
-		'Overview, activity segments and streams, catalog sorting, Stats, Analysis, Records, and Health passed at 390px and 1440px.'
+		'Peloton views, navigation, filters, and responsive layouts passed at 360px, 390px, 430px, and 1440px.'
 	);
 } finally {
 	await browser.close();

@@ -204,12 +204,13 @@ try {
 	);
 	await page.goto(origin + '/heatmap?member=sam');
 	await tracks(2).waitFor();
-	assert.equal(
-		await page.locator('details').filter({ hasText: 'Map filters' }).getAttribute('open'),
-		null
-	);
-	await page.getByText('Map filters', { exact: true }).click();
+	const filterButton = page.getByRole('button', { name: 'Map filters', exact: true });
+	assert.equal(await filterButton.getAttribute('aria-expanded'), 'false');
+	await filterButton.click();
+	const filterSheet = page.getByRole('dialog', { name: 'Map filters' });
 	await fit.waitFor();
+	await filterSheet.getByRole('button', { name: 'Done' }).click();
+	await filterSheet.waitFor({ state: 'hidden' });
 	await fullscreen.click();
 	const exit = page.getByRole('button', { name: 'Exit fullscreen' });
 	await exit.waitFor();

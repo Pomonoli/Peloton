@@ -36,13 +36,16 @@
 	const detail = $derived(points.find((point) => point.start === active)?.detail ?? '');
 </script>
 
-<section class="rounded-xl border border-zinc-800 bg-panel p-4" aria-labelledby="weekly-distance">
-	<div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
-		<h2 id="weekly-distance" class="text-sm font-medium">{m.overview_weekly_distance()}</h2>
+<section
+	class="min-w-0 rounded-2xl border border-zinc-800 bg-panel p-3 sm:p-4"
+	aria-labelledby="weekly-distance"
+>
+	<div class="flex flex-wrap items-baseline justify-between gap-x-3">
+		<h2 id="weekly-distance" class="text-sm font-bold">{m.overview_weekly_distance()}</h2>
 		<p class="text-xs text-quiet">{m.overview_weekly_calendar()}</p>
 	</div>
-	<p class="mb-2 min-h-5 text-right text-xs text-accent-300" aria-live="polite">{detail}</p>
-	<div class="flex h-36 gap-2">
+	<p class="mb-0.5 min-h-5 text-right text-xs text-accent-300" aria-live="polite">{detail}</p>
+	<div class="flex h-27 gap-2 sm:h-32">
 		<div
 			class="flex shrink-0 flex-col justify-between text-right text-xs tabular-nums text-quiet"
 			aria-hidden="true"
@@ -71,7 +74,7 @@
 					class="group z-10 flex min-w-0 items-end justify-center rounded-sm pt-2 pb-2 focus-visible:outline-2 focus-visible:outline-accent-400"
 				>
 					<span
-						class="w-full max-w-12 rounded-t-sm bg-accent-500/75 group-hover:bg-accent-400 group-focus:bg-accent-400"
+						class="w-full max-w-12 rounded-t-[4px] bg-linear-to-t from-accent-500 to-indigo-400 group-hover:to-accent-400 group-focus:to-accent-400"
 						style:height={point.distance_m > 0
 							? `${(point.distance_m / (4000 * tick)) * 100}%`
 							: '2px'}

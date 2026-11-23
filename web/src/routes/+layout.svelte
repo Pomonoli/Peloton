@@ -2,18 +2,20 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { afterNavigate } from '$app/navigation';
 	import { APP_NAME } from '$app/env/public';
 	import { m } from '#lib/paraglide/messages.js';
 	import { setPrefs } from '#lib/prefs.svelte.js';
 	import { formatDate } from '#lib/format.js';
 	import LoadingBar from '#lib/components/LoadingBar.svelte';
 	import MemberNav from '#lib/components/MemberNav.svelte';
-	import { memberProfile } from '#lib/member.js';
+	import { memberProfile, memberURL } from '#lib/member.js';
 	import BrandMark from '#lib/components/BrandMark.svelte';
 
 	let { children, data } = $props();
 
-	const member = $derived(page.data.member ?? page.data.activityOwner);
+	const viewedMember = $derived(typeof page.data.member === 'object' ? page.data.member : null);
+	const member = $derived(viewedMember ?? page.data.activityOwner);
 
 	// Email-verification banner (logged-in users with an unverified email).
 	let resendState = $state<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -37,13 +39,6 @@
 				timeFormat: data.user.timeFormat
 			});
 		}
-	});
-
-	// Mobile off-canvas sidebar drawer. Closed on every navigation.
-	let mobileNavOpen = $state(false);
-	$effect(() => {
-		void page.url.pathname;
-		mobileNavOpen = false;
 	});
 
 	let build = $state<{ version: string; commit: string; build_time: string } | null>(null);
@@ -74,6 +69,7 @@
 		planner: 'M4 4h6l4 16h6 M4 20h6l4-16h6 M4 4v16 M20 4v16',
 		heatmap:
 			'M12 22c4.4 0 7-2.9 7-6.5 0-3-1.7-5-3.5-7-.5 2-1.5 3-2.5 3.5.5-3-1-6.5-4-9 .3 3-1 4.5-2.5 6.5C5 11.5 5 13.7 5 15.5 5 19.1 7.6 22 12 22z',
+		compass: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z M15.8 8.2l-2.3 5.3-5.3 2.3 2.3-5.3z',
 		analysis: 'M3 3v18h18 M7 14l4-4 3 3 5-6',
 		stats: 'M6 20v-8 M12 20V6 M18 20v-5',
 		records:
@@ -95,10 +91,16 @@
 		logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9'
 	};
 
-	type NavItem = { href: string; label: string; icon: string; badge?: number };
+	type NavItem = { href: string; label: string; icon: string };
 	type NavGroup = { title: string; items: NavItem[] };
 
 	const isAdmin = $derived(data.permissions?.includes('admin') ?? false);
+	const accountItems = $derived<NavItem[]>([
+		{ href: '/health', label: 'Health', icon: icons.health },
+		{ href: '/gear', label: m.nav_gear(), icon: icons.gear },
+		{ href: '/connections', label: m.nav_connections(), icon: icons.connections },
+		{ href: '/settings', label: m.nav_settings(), icon: icons.settings }
+	]);
 	const canModerate = $derived(data.permissions?.includes('moderate') ?? false);
 
 	const groups = $derived<NavGroup[]>([
@@ -120,11 +122,9 @@
 		{
 			title: 'Account',
 			items: [
-				{ href: '/health', label: 'Health', icon: icons.health },
-				{ href: '/gear', label: m.nav_gear(), icon: icons.gear },
-				{ href: '/connections', label: m.nav_connections(), icon: icons.connections },
+				...accountItems.slice(0, -1),
 				{ href: '/review', label: 'Review queue', icon: icons.review },
-				{ href: '/settings', label: m.nav_settings(), icon: icons.settings }
+				...accountItems.slice(-1)
 			]
 		},
 		...(isAdmin
@@ -139,12 +139,63 @@
 				: [])
 	]);
 
+	type Destination = { label: string; icon: string; pages: [string, ...string[]] };
+	const destinations = $derived<Destination[]>([
+		{ label: m.nav_home(), icon: icons.overview, pages: ['/'] },
+		{ label: m.nav_activities(), icon: icons.activities, pages: ['/activities', '/review'] },
+		{
+			label: m.nav_explore(),
+			icon: icons.compass,
+			pages: ['/heatmap', '/segments', '/routes/waasland']
+		},
+		{ label: m.nav_insights(), icon: icons.stats, pages: ['/stats', '/analysis', '/records'] },
+		{ label: m.nav_social(), icon: icons.friends, pages: ['/riders', '/head-to-head'] }
+	]);
+	const subsectionLabels = $derived<Record<string, string>>({
+		'/heatmap': m.member_heatmap(),
+		'/segments': m.nav_segments(),
+		'/routes/waasland': m.nav_route_planner(),
+		'/stats': m.nav_stats(),
+		'/analysis': m.nav_analysis(),
+		'/records': m.member_records(),
+		'/riders': m.friends_title(),
+		'/head-to-head': m.comparison_title()
+	});
+	const profileItems = $derived([...accountItems, ...(groups[2]?.items ?? [])]);
+
 	function isActive(href: string): boolean {
-		return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
+		const current = page.url.pathname;
+		return current === href || (href !== '/' && current.startsWith(href + '/'));
+	}
+
+	const destination = $derived(
+		destinations.find((item) => item.pages.some(isActive)) ??
+			(isActive('/segment')
+				? destinations[2]
+				: isActive('/best-efforts')
+					? destinations[3]
+					: undefined)
+	);
+
+	let lastSubsection = $state<Record<string, string>>({});
+	let profileMenu = $state<HTMLElement>();
+	let brokenAvatar = $state('');
+	afterNavigate(() => {
+		profileMenu?.hidePopover?.();
+		const section = destination;
+		const path = section?.pages.find(isActive);
+		if (section && path && path in subsectionLabels) {
+			lastSubsection[section.pages[0]] = path;
+		}
+	});
+
+	function subsectionURL(href: string) {
+		if (href === '/routes/waasland' || href === '/riders') return href;
+		return memberURL(href, viewedMember);
 	}
 
 	const initials = $derived(
-		(data.user?.displayName ?? '')
+		(data.user?.displayName?.trim() || data.user?.username || '')
 			.split(/\s+/)
 			.map((w: string) => w[0])
 			.slice(0, 2)
@@ -190,13 +241,6 @@
 					<path d={item.icon} />
 				</svg>
 				<span class="truncate">{item.label}</span>
-				{#if item.badge}
-					<span
-						class="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-semibold text-on-accent"
-					>
-						{item.badge > 9 ? '9+' : item.badge}
-					</span>
-				{/if}
 			</a>
 		{/each}
 	{/each}
@@ -240,9 +284,22 @@
 	</div>
 {/snippet}
 
+{#snippet navIcon(icon: string, className: string)}
+	<svg
+		class={className}
+		aria-hidden="true"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="1.8"
+		stroke-linecap="round"
+		stroke-linejoin="round"><path d={icon} /></svg
+	>
+{/snippet}
+
 <LoadingBar />
 
-<div class="flex min-h-screen">
+<div class="flex min-h-dvh" class:mobile-shell={!!data.user}>
 	{#if data.user}
 		<!-- Desktop sidebar -->
 		<aside
@@ -256,74 +313,92 @@
 			</nav>
 			{@render userCard()}
 		</aside>
-
-		<!-- Mobile drawer -->
-		{#if mobileNavOpen}
-			<div class="fixed inset-0 z-40 md:hidden">
-				<button
-					type="button"
-					class="absolute inset-0 cursor-default bg-scrim/60"
-					aria-label="Close menu"
-					onclick={() => (mobileNavOpen = false)}
-				></button>
-				<aside
-					class="absolute left-0 top-0 flex h-full w-64 flex-col border-r border-zinc-800 bg-zinc-900"
-				>
-					<div class="flex items-center justify-between px-4 py-4">
-						{@render brand()}
-						<button
-							type="button"
-							class="rounded p-2 text-zinc-400 hover:text-zinc-100"
-							aria-label="Close menu"
-							onclick={() => (mobileNavOpen = false)}
-						>
-							<svg
-								class="h-5 w-5"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-							>
-								<path d="M6 6l12 12M18 6L6 18" />
-							</svg>
-						</button>
-					</div>
-					<nav class="flex-1 overflow-y-auto px-2 pb-4">
-						{@render navList()}
-					</nav>
-					{@render userCard()}
-				</aside>
-			</div>
-		{/if}
 	{/if}
 
 	<div class="flex min-w-0 flex-1 flex-col">
 		{#if data.user}
-			<!-- Mobile top bar — menu and brand. Never rendered ≥md. -->
 			<header
-				class="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/80 px-4 py-3 backdrop-blur md:hidden"
+				class="mobile-topbar flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 md:hidden"
 			>
+				{@render brand()}
 				<button
 					type="button"
-					class="rounded p-2 text-zinc-400 hover:text-zinc-100"
-					aria-label="Menu"
-					aria-expanded={mobileNavOpen}
-					onclick={() => (mobileNavOpen = !mobileNavOpen)}
+					class="grid size-11 place-items-center rounded-full"
+					popovertarget="mobile-profile"
+					aria-label={m.nav_profile()}
 				>
-					<svg
-						class="h-5 w-5"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
+					<span
+						class="grid size-8 place-items-center overflow-hidden rounded-full bg-accent-500/12 text-xs font-bold text-accent-300 ring-1 ring-accent-500/20"
+						aria-hidden="true"
 					>
-						<path d="M4 7h16M4 12h16M4 17h16" />
-					</svg>
+						{#if data.user.avatarUrl && brokenAvatar !== data.user.avatarUrl}
+							<img
+								src={data.user.avatarUrl}
+								alt=""
+								class="size-full object-cover"
+								referrerpolicy="no-referrer"
+								onerror={() => (brokenAvatar = data.user?.avatarUrl ?? '')}
+							/>
+						{:else}
+							{initials}
+						{/if}
+					</span>
 				</button>
-				{@render brand()}
+				<div
+					id="mobile-profile"
+					popover="auto"
+					bind:this={profileMenu}
+					class="mobile-profile rounded-2xl border border-zinc-800 bg-zinc-900 p-1.5 shadow-xl md:hidden"
+				>
+					<div class="border-b border-zinc-800 px-3 py-2.5">
+						<p class="truncate text-sm font-semibold">
+							{data.user.displayName || data.user.username}
+						</p>
+						<p class="truncate text-xs text-quiet">@{data.user.username}</p>
+					</div>
+					<nav aria-label={m.nav_profile()} class="mt-1">
+						{#each profileItems as item (item.href)}
+							<a
+								href={item.href}
+								aria-current={isActive(item.href) ? 'page' : undefined}
+								class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-zinc-300 hover:bg-zinc-800/60 aria-[current=page]:bg-accent-500/10 aria-[current=page]:text-accent-300"
+							>
+								{@render navIcon(item.icon, 'size-[18px]')}
+								{item.label}
+							</a>
+						{/each}
+					</nav>
+					<form method="POST" action="/auth/logout" class="mt-1 border-t border-zinc-800 pt-1">
+						<button
+							type="submit"
+							class="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm text-zinc-300 hover:bg-zinc-800/60"
+						>
+							{@render navIcon(icons.logout, 'size-[18px]')}
+							{m.menu_logout()}
+						</button>
+					</form>
+				</div>
 			</header>
+			{#if destination && destination.pages[0] in subsectionLabels}
+				<nav
+					aria-label={destination.label}
+					class="mobile-subnav flex gap-1 border-b border-zinc-800 bg-zinc-900 px-3 md:hidden"
+				>
+					{#each destination.pages as href (href)}
+						{@const current =
+							isActive(href) ||
+							(href === '/segments' && isActive('/segment')) ||
+							(href === '/records' && isActive('/best-efforts'))}
+						<a
+							href={subsectionURL(href)}
+							aria-current={current ? 'page' : undefined}
+							class="flex min-h-11 items-center justify-center border-b-2 border-transparent px-3 text-sm font-semibold text-quiet aria-[current=page]:border-accent-500 aria-[current=page]:text-accent-300"
+						>
+							{subsectionLabels[href]}
+						</a>
+					{/each}
+				</nav>
+			{/if}
 		{:else}
 			<!-- Logged-out header (login, signup, shared/public pages) -->
 			<header class="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur">
@@ -365,9 +440,9 @@
 			</div>
 		{/if}
 
-		<main class="mx-auto w-full max-w-6xl flex-1 px-6 py-8 max-md:px-4 max-md:py-5">
+		<main class="mx-auto w-full min-w-0 max-w-6xl flex-1 px-6 py-8 max-md:px-3.5 max-md:py-3">
 			{#if member}
-				<div class="mb-5 rounded-lg border border-zinc-800 bg-panel px-4 py-3">
+				<div class="mb-4 rounded-xl border border-zinc-800 bg-panel px-3 py-2">
 					<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
 						<div>
 							<span class="text-quiet">{m.member_viewing()}</span>
@@ -380,7 +455,7 @@
 						</div>
 						<a href="/riders" class="text-accent-400 hover:underline">{m.member_switch()}</a>
 					</div>
-					{#if page.data.member}<MemberNav {member} />{/if}
+					{#if viewedMember}<MemberNav {member} />{/if}
 				</div>
 			{/if}
 			{#key member?.id}
@@ -388,7 +463,7 @@
 			{/key}
 		</main>
 		<footer
-			class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 px-6 py-4 text-xs text-zinc-500"
+			class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 px-6 py-4 text-xs text-zinc-500 max-md:px-3.5 max-md:py-2.5"
 		>
 			<span>
 				{APP_NAME} — {m.footer_tagline()} ·
@@ -404,3 +479,24 @@
 		</footer>
 	</div>
 </div>
+
+{#if data.user}
+	<nav
+		aria-label={m.nav_primary()}
+		class="mobile-tabbar fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-zinc-800 bg-zinc-900/95 backdrop-blur-xl md:hidden"
+	>
+		{#each destinations as item (item.pages[0])}
+			{@const root = item.pages[0]}
+			<a
+				href={subsectionURL(lastSubsection[root] ?? root)}
+				aria-current={destination?.pages[0] === root ? 'page' : undefined}
+				class="mobile-tab flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg font-semibold text-quiet aria-[current=page]:text-accent-300"
+			>
+				<span class="mobile-tab-icon grid h-7 w-12 place-items-center rounded-full">
+					{@render navIcon(item.icon, 'size-[21px]')}
+				</span>
+				<span class="text-[11px] leading-4">{item.label}</span>
+			</a>
+		{/each}
+	</nav>
+{/if}

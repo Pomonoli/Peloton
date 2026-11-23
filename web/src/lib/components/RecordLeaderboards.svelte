@@ -12,10 +12,23 @@
 		type CommunityRecord,
 		type RecordOrder
 	} from '#lib/records.js';
+	import type { Snippet } from 'svelte';
+	import FilterSheet from './FilterSheet.svelte';
 	import SportIcon from './SportIcon.svelte';
 
-	let { member, excludeDownhills }: { member: MemberView | null; excludeDownhills: boolean } =
-		$props();
+	let {
+		member,
+		excludeDownhills,
+		toolbar,
+		extraFilters,
+		resetExtra
+	}: {
+		member: MemberView | null;
+		excludeDownhills: boolean;
+		toolbar: Snippet;
+		extraFilters: Snippet;
+		resetExtra: () => void;
+	} = $props();
 	let rows = $state<CommunityRecord[]>([]);
 	let loading = $state(true);
 	let failed = $state(false);
@@ -57,13 +70,20 @@
 	const control = 'min-h-10 rounded border border-zinc-700 bg-panel px-2';
 </script>
 
-{#if loading}
-	<p class="text-sm text-quiet" role="status">{m.community_loading()}</p>
-{:else if failed}
-	<p class="text-sm text-red-400" role="status">{m.record_board_failed()}</p>
-{:else}
-	<div class="mb-5 flex flex-wrap items-end gap-3 text-sm">
-		<label class="flex flex-col gap-1">
+<FilterSheet
+	{toolbar}
+	active={excludeDownhills || !!sport || !!metric || showEmpty || order !== 'category'}
+	reset={() => {
+		sport = '';
+		metric = '';
+		showEmpty = false;
+		order = 'category';
+		resetExtra();
+	}}
+>
+	{@render extraFilters()}
+	<div class="mt-1 flex flex-wrap items-end gap-3 text-sm">
+		<label class="flex min-w-0 flex-col gap-1 max-md:w-full">
 			{m.record_sport()}
 			<select bind:value={sport} class={control}>
 				<option value="">{m.record_all_sports()}</option>
@@ -72,7 +92,7 @@
 				{/each}
 			</select>
 		</label>
-		<label class="flex flex-col gap-1">
+		<label class="flex min-w-0 flex-col gap-1 max-md:w-full">
 			{m.record_metric()}
 			<select bind:value={metric} class={control}>
 				<option value="">{m.record_all_metrics()}</option>
@@ -81,7 +101,7 @@
 				{/each}
 			</select>
 		</label>
-		<label class="flex flex-col gap-1">
+		<label class="flex min-w-0 flex-col gap-1 max-md:w-full">
 			{m.record_sort()}
 			<select bind:value={order} class={control}>
 				<option value="category">{m.record_sort_category()}</option>
@@ -94,36 +114,44 @@
 			{m.record_show_empty()}
 		</label>
 	</div>
+</FilterSheet>
 
+{#if loading}
+	<p class="text-sm text-quiet" role="status">{m.community_loading()}</p>
+{:else if failed}
+	<p class="text-sm text-red-400" role="status">{m.record_board_failed()}</p>
+{:else}
 	{#if grouped.length === 0}
 		<p class="text-sm text-quiet">{m.record_no_results()}</p>
 	{:else}
 		{#each grouped as [type, records] (type)}
-			<section class="mb-6">
+			<section class="mb-4">
 				<h2 class="mb-2 flex items-center gap-2 text-sm font-semibold">
 					<SportIcon {type} size={16} />{recordSport(type)}
 				</h2>
-				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+				<div
+					class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-panel"
+				>
 					{#each records as row (recordPath(row))}
 						<a
 							href={memberURL(
 								recordPath(row) + (excludeDownhills ? '?exclude_downhills=true' : ''),
 								member
 							)}
-							class="rounded-lg border border-zinc-800 bg-panel p-3 hover:border-accent-500"
+							class="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2 hover:bg-zinc-950 sm:px-4"
 						>
 							<div class="text-sm font-medium">
 								{recordLabel(row)}
 							</div>
 							{#if row.result}
-								<div class="mt-1 text-lg font-semibold tabular-nums">
+								<div class="text-right text-sm font-bold tabular-nums sm:text-base">
 									{recordValue(row, row.result.achieved_value)}
 								</div>
-								<div class="text-sm text-quiet">{row.result.display_name}</div>
+								<div class="truncate text-xs text-quiet">{row.result.display_name}</div>
 							{:else}
 								<div class="mt-1 text-sm text-quiet">{m.record_no_result()}</div>
 							{/if}
-							<div class="mt-1 text-xs text-quiet">
+							<div class="text-right text-xs text-quiet">
 								{m.record_member_count({
 									formatted: row.member_count.toLocaleString(intlLocale())
 								})}

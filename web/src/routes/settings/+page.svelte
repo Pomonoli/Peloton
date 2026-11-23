@@ -84,7 +84,7 @@
 	] as const;
 </script>
 
-<div class="space-y-8">
+<div class="space-y-4 md:space-y-6">
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">{m.settings_title()}</h1>
 		<p class="mt-1 text-sm text-zinc-400">{m.settings_intro()}</p>
@@ -92,7 +92,7 @@
 
 	<ComparisonSharing />
 
-	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
 		<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_account_section()}</h2>
 		<dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-[160px_1fr]">
 			<dt class="text-zinc-500">{m.settings_field_display_name()}</dt>
@@ -113,11 +113,11 @@
 
 	<a
 		href="/connections"
-		class="block rounded-lg border border-zinc-800 bg-panel p-5 text-sm font-medium text-accent-300 hover:border-accent-400"
+		class="block rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5 text-sm font-medium text-accent-300 hover:border-accent-400"
 		>{m.nav_connections()}</a
 	>
 
-	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">{m.settings_appearance()}</h2>
 		<p id="appearance-description" class="mb-3 text-xs text-zinc-500">
 			{m.settings_appearance_description()}
@@ -145,7 +145,7 @@
 		</fieldset>
 	</section>
 
-	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+	<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
 		<div class="mb-4 flex items-center gap-3">
 			<h2 class="text-sm font-medium text-zinc-300">Format &amp; units</h2>
 			{#if saved}<span class="text-xs text-emerald-400">saved</span>{/if}
@@ -203,7 +203,7 @@
 	</section>
 
 	{#if locales.length > 1}
-		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+		<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
 			<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_language_section()}</h2>
 			<LocaleSwitcher />
 		</section>

@@ -209,8 +209,8 @@
 	onMount(load);
 </script>
 
-<div class="space-y-6">
-	<header class="flex items-start justify-between gap-4 max-md:flex-col">
+<div class="space-y-4 md:space-y-6">
+	<header class="flex items-start justify-between gap-2 max-md:flex-wrap">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{m.connections_title()}</h1>
 			<p class="mt-1 max-w-2xl text-sm text-zinc-400">
@@ -223,7 +223,7 @@
 		<button
 			type="button"
 			onclick={() => (showAdd = !showAdd)}
-			class="shrink-0 rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600"
+			class="min-h-10 shrink-0 rounded-lg bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600"
 		>
 			{showAdd ? 'Cancel' : '+ Add connection'}
 		</button>
@@ -362,7 +362,7 @@
 	{/if}
 
 	{#each connections as c (c.id)}
-		<div class="rounded-lg border border-zinc-800 bg-panel p-5">
+		<div class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
 			<div class="flex items-center justify-between gap-4 max-md:flex-col max-md:items-start">
 				<div>
 					<div class="text-base font-medium">
