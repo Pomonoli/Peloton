@@ -5,20 +5,22 @@ import "sort"
 // SimilarRow is one activity of a same-route group.
 type SimilarRow struct {
 	SimilarActivity
-	IsCurrent  bool
-	PaceSPerKm *float64 // moving seconds per km when distance and time are known
-	OverlapPct float64  // shared / target segments, 0..1
+	IsCurrent       bool
+	PaceSPerKm      *float64 // moving seconds per km when distance and time are known
+	OverlapPct      float64  // geographical overlap, 0..1
+	AverageSpeedKmh *float64
 }
 
 // SimilarGroup is the reference activity with its same-route matches,
-// chronological, ranked by moving time (faster = better).
+// chronological, ranked by average moving speed or equivalent pace.
 type SimilarGroup struct {
-	TargetSegments int
-	Rows           []SimilarRow
-	BestMovingS    int64
-	CurrentMovingS int64
-	CurrentRank    int // 1-based
-	IsBest         bool
+	TargetSegments                int
+	Rows                          []SimilarRow
+	BestMovingS                   int64
+	CurrentMovingS                int64
+	CurrentRank                   int // 1-based
+	IsBest                        bool
+	BestSpeedKmh, CurrentSpeedKmh *float64
 }
 
 // BuildSimilarGroup assembles the group of act and its matches.
@@ -34,21 +36,22 @@ func BuildSimilarGroup(act Activity, matches []SimilarActivity) SimilarGroup {
 	}
 	sort.SliceStable(g.Rows, func(i, j int) bool { return g.Rows[i].StartTime.Before(g.Rows[j].StartTime) })
 	for _, r := range g.Rows {
-		if r.MovingS > 0 && (g.BestMovingS == 0 || r.MovingS < g.BestMovingS) {
-			g.BestMovingS = r.MovingS
+		if r.AverageSpeedKmh != nil && (g.BestSpeedKmh == nil || *r.AverageSpeedKmh > *g.BestSpeedKmh) {
+			g.BestSpeedKmh, g.BestMovingS = r.AverageSpeedKmh, r.MovingS
 		}
 		if r.IsCurrent {
-			g.CurrentMovingS = r.MovingS
+			g.CurrentSpeedKmh, g.CurrentMovingS = r.AverageSpeedKmh, r.MovingS
 		}
 	}
-	// rank = 1 + activities strictly faster than the current one
-	g.CurrentRank = 1
-	for _, r := range g.Rows {
-		if r.MovingS > 0 && g.CurrentMovingS > 0 && r.MovingS < g.CurrentMovingS {
-			g.CurrentRank++
+	if g.CurrentSpeedKmh != nil {
+		g.CurrentRank = 1
+		for _, r := range g.Rows {
+			if r.AverageSpeedKmh != nil && *r.AverageSpeedKmh > *g.CurrentSpeedKmh {
+				g.CurrentRank++
+			}
 		}
+		g.IsBest = g.CurrentRank == 1
 	}
-	g.IsBest = g.CurrentMovingS > 0 && g.CurrentMovingS == g.BestMovingS
 	return g
 }
 
@@ -82,8 +85,13 @@ func similarRow(sa SimilarActivity, current bool, target int) SimilarRow {
 	if sa.DistanceM != nil && *sa.DistanceM > 0 && sa.MovingS > 0 {
 		p := float64(sa.MovingS) / (*sa.DistanceM / 1000.0)
 		r.PaceSPerKm = &p
+		r.AverageSpeedKmh = new(3600 / p)
 	}
-	if target > 0 {
+	if current {
+		r.OverlapPct = 1
+	} else if sa.RouteOverlap > 0 {
+		r.OverlapPct = sa.RouteOverlap
+	} else if target > 0 {
 		r.OverlapPct = float64(sa.SharedSegments) / float64(target)
 	}
 	return r

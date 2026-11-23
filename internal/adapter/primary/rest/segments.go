@@ -127,7 +127,7 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	limit, offset := segListPaging(r)
 	q := domain.CatalogSegmentQuery{
-		Viewer: me, Name: query.Get("q"), Limit: limit, Offset: offset,
+		AttemptsFor: me, Name: query.Get("q"), Limit: limit, Offset: offset,
 	}
 	for _, value := range query["sort"] {
 		column, direction, hasDirection := strings.Cut(value, ":")
@@ -151,13 +151,16 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 	if len(q.Order) == 0 && query.Get("direction") == "desc" {
 		q.Order = []domain.CatalogSegmentOrder{{Column: domain.CatalogSortName, Descending: true}}
 	}
-	if query.Get("mine") == "true" {
-		_, member, err := h.Auth.Members.Read(r.Context(), me, query.Get("member"))
+	if key := query.Get("member"); key != "" {
+		_, member, err := h.Auth.Members.Read(r.Context(), me, key)
 		if err != nil {
 			writeActionError(w, err, "Unable to load the member")
 			return
 		}
-		q.Member = &member
+		q.AttemptsFor = member
+	}
+	if query.Get("mine") == "true" {
+		q.Member = &q.AttemptsFor
 	}
 	if query.Has("min_lon") || query.Has("min_lat") || query.Has("max_lon") || query.Has("max_lat") {
 		bounds := domain.CatalogSegmentBounds{}
@@ -190,7 +193,10 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 			"best_elapsed_s": item.BestElapsedS, "local_kom_holder": item.LocalKOMHolder, "member_count": item.MemberCount,
 			"my_attempts":       item.MyAttempts,
 			"average_speed_kmh": domain.SegmentAverageSpeedKmh(item.DistanceM, item.BestElapsedS),
-			"start":             [2]float64{item.Start.Lon, item.Start.Lat},
+			"start":             nil,
+		}
+		if item.Start != nil {
+			row["start"] = [2]float64{item.Start.Lon, item.Start.Lat}
 		}
 		if q.Bounds != nil {
 			row["polyline"], row["polyline_precision"] = item.Polyline, item.PolylinePrecision
@@ -630,6 +636,7 @@ func segEffortsJSON(efforts []domain.SegmentEffort) []map[string]any {
 func segEffortRowJSON(row view.EffortRow) map[string]any {
 	e, seg := row.Effort, row.Segment
 	out := map[string]any{
+		"id":                 e.ID.String(),
 		"segment_id":         e.SegmentID.String(),
 		"segment_name":       seg.Name,
 		"segment_distance_m": seg.DistanceM,

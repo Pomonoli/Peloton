@@ -3,7 +3,8 @@
 		formatDistance,
 		formatDistanceEffort,
 		formatDuration,
-		formatDateOnly
+		formatDateOnly,
+		formatSpeedKmh
 	} from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
@@ -24,7 +25,7 @@
 		avg_heart_rate: number | null;
 		avg_power: number | null;
 		pace_s_per_km: number | null;
-		shared_segments: number;
+		average_speed_kmh: number | null;
 		overlap_pct: number;
 	};
 	type Payload = {
@@ -32,8 +33,8 @@
 		activities: Row[];
 		summary: {
 			count: number;
-			best_moving_s: number;
-			current_moving_s: number;
+			best_speed_kmh: number | null;
+			current_speed_kmh: number | null;
 			current_rank: number;
 			is_best: boolean;
 		};
@@ -61,22 +62,20 @@
 		return () => request.abort();
 	});
 
-	function pace(sPerKm: number | null): string {
-		if (!sPerKm) return '—';
-		const m = Math.floor(sPerKm / 60);
-		const s = Math.round(sPerKm % 60);
-		return `${m}:${String(s).padStart(2, '0')}/km`;
+	function performance(speed: number | null): string {
+		if (!speed || speed <= 0) return '—';
+		return isRide ? formatSpeedKmh(speed) : `${formatDuration(3600 / speed)} /km`;
 	}
 
-	// Chart geometry over the chronological group: bar per repeat, height ∝
-	// moving time, current highlighted, best (fastest) green.
 	const chart = $derived.by(() => {
 		if (!payload || payload.activities.length < 2) return null;
 		const rows = payload.activities;
-		const times = rows.map((r) => r.moving_s).filter((t) => t > 0);
+		const times = rows
+			.map((r) => r.average_speed_kmh)
+			.filter((v): v is number => v != null && v > 0);
 		if (times.length < 2) return null;
-		const max = Math.max(...times);
-		const min = Math.min(...times);
+		const highest = Math.max(...times);
+		const max = isRide ? highest : 3600 / Math.min(...times);
 		const W = 760;
 		const H = 160;
 		const pad = 8;
@@ -87,10 +86,11 @@
 			H,
 			pad,
 			bw,
-			min,
 			max,
 			bars: rows.map((r, i) => {
-				const frac = max > 0 ? r.moving_s / max : 0;
+				const speed = r.average_speed_kmh;
+				const value = speed && (isRide ? speed : 3600 / speed);
+				const frac = value ? value / max : 0;
 				const h = Math.max(2, frac * (H - pad * 2));
 				return {
 					x: pad + i * bw,
@@ -98,7 +98,7 @@
 					h,
 					w: Math.max(1, bw - 2),
 					row: r,
-					isBest: r.moving_s === min && r.moving_s > 0
+					isBest: speed === highest
 				};
 			})
 		};
@@ -112,7 +112,7 @@
 		</a>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Similar routes</h1>
 		<p class="mt-1 text-sm text-zinc-400">
-			Other activities on roughly the same route, matched by start location, distance and sport.
+			Activities of the same sport that share at least 80% of both GPS routes in the same direction.
 		</p>
 	</header>
 
@@ -122,7 +122,7 @@
 		</div>
 	{:else if payload && payload.summary.count > 1}
 		<dl class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-			{#each [{ label: 'Times on this route', value: String(payload.summary.count) }, { label: 'This effort ranks', value: `#${payload.summary.current_rank} of ${payload.summary.count}` }, { label: 'Your best', value: formatDuration(payload.summary.best_moving_s) }, { label: 'This effort', value: formatDuration(payload.summary.current_moving_s) }] as c (c.label)}
+			{#each [{ label: 'Times on this route', value: String(payload.summary.count) }, { label: 'This effort ranks', value: payload.summary.current_rank ? `#${payload.summary.current_rank}` : '—' }, { label: 'Your best', value: performance(payload.summary.best_speed_kmh) }, { label: 'This effort', value: performance(payload.summary.current_speed_kmh) }] as c (c.label)}
 				<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 					<dt class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</dt>
 					<dd class="mt-1 text-xl font-semibold tabular-nums">{c.value}</dd>
@@ -134,20 +134,20 @@
 			<div
 				class="rounded-lg border border-emerald-800/50 bg-emerald-950/30 p-3 text-sm text-emerald-300"
 			>
-				🏆 This is your fastest time on this route.
+				🏆 This is the fastest effort on this route.
 			</div>
 		{/if}
 
 		{#if chart}
 			<section>
 				<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">
-					Moving time per effort (oldest → newest)
+					{isRide ? 'Average moving speed' : 'Average moving pace'} (oldest → newest)
 				</h2>
 				<svg
 					viewBox={`0 0 ${chart.W} ${chart.H}`}
 					class="w-full"
 					role="img"
-					aria-label="Moving time trend"
+					aria-label={isRide ? 'Average moving speed trend' : 'Average moving pace trend'}
 				>
 					{#each chart.bars as b (b.row.id)}
 						<rect
@@ -163,7 +163,7 @@
 									: 'fill-zinc-600'}
 						>
 							<title>
-								{formatDateOnly(b.row.start_time)} · {formatDuration(b.row.moving_s)}
+								{formatDateOnly(b.row.start_time)} · {performance(b.row.average_speed_kmh)}
 								{#if isRide}
 									· {m.ride_elapsed()} {formatDistanceEffort(b.row.distance_m, b.row.elapsed_s)}
 								{/if}
@@ -192,10 +192,10 @@
 							{#if isRide}
 								<th class="px-3 py-2 text-right font-medium">{m.ride_elapsed()}</th>
 							{/if}
-							<th class="px-3 py-2 text-right font-medium">Pace</th>
+							<th class="px-3 py-2 text-right font-medium">{isRide ? 'Average speed' : 'Pace'}</th>
 							<th class="px-3 py-2 text-right font-medium">HR</th>
 							<th class="px-3 py-2 text-right font-medium">Power</th>
-							<th class="px-3 py-2 text-right font-medium">Δ best</th>
+							<th class="px-3 py-2 text-right font-medium">Overlap</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-zinc-800">
@@ -211,22 +211,28 @@
 								<td class="px-3 py-2 text-right tabular-nums">{formatDistance(r.distance_m)}</td>
 								<td class="px-3 py-2 text-right font-medium tabular-nums">
 									{formatDuration(r.moving_s)}
-									{#if r.moving_s === payload.summary.best_moving_s}<span
-											class="ml-1 text-emerald-400">★</span
-										>{/if}
 								</td>
 								{#if isRide}
 									<td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
 										{formatDistanceEffort(r.distance_m, r.elapsed_s)}
 									</td>
 								{/if}
-								<td class="px-3 py-2 text-right tabular-nums">{pace(r.pace_s_per_km)}</td>
+								<td class="px-3 py-2 text-right tabular-nums"
+									>{performance(
+										r.average_speed_kmh
+									)}{#if r.average_speed_kmh != null && r.average_speed_kmh === payload.summary.best_speed_kmh}<span
+											class="ml-1 text-emerald-400">★</span
+										>{/if}</td
+								>
 								<td class="px-3 py-2 text-right tabular-nums">{r.avg_heart_rate ?? '—'}</td>
 								<td class="px-3 py-2 text-right tabular-nums">{r.avg_power ?? '—'}</td>
 								<td class="px-3 py-2 text-right tabular-nums text-zinc-400">
-									{r.moving_s > payload.summary.best_moving_s
-										? `+${formatDuration(r.moving_s - payload.summary.best_moving_s)}`
-										: '—'}
+									{r.is_current
+										? '—'
+										: new Intl.NumberFormat(undefined, {
+												style: 'percent',
+												maximumFractionDigits: 1
+											}).format(r.overlap_pct)}
 								</td>
 							</tr>
 						{/each}
@@ -238,8 +244,7 @@
 		<div
 			class="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/30 p-8 text-center text-sm text-zinc-400"
 		>
-			No similar routes found. Matches need a GPS start location and distance, and at least one
-			other activity from the same start with a similar length.
+			No other activity shares 80% of this GPS route in the same direction.
 		</div>
 	{:else}
 		<p class="text-sm text-zinc-500">Loading…</p>

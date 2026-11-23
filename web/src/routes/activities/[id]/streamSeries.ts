@@ -52,5 +52,7 @@ export function buildSeries(stream: ActivityStreamView | null): ChartSeries[] {
 			fill: true
 		});
 	}
-	return xs;
+	return xs.filter((series) =>
+		series.values.some((value) => value != null && Number.isFinite(value))
+	);
 }

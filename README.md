@@ -73,9 +73,9 @@ Repeat the `docker run` command above with the same environment file. Peloton ap
 
 ### Rebuild cycling records
 
-After updating Peloton and applying its migrations, run `cairn records recompute-cycling` with the instance's database configuration. The command rebuilds personal and community cycling records, including custom windows, and refreshes ride distance and speed statistics from stored recordings. It covers every user and historical Garmin rides with recorded streams. It can be rerun and preserves the uploaded files and raw samples.
+Apply the database migrations, then run `docker exec peloton /usr/local/bin/cairn records recompute` with the existing deployment configuration. The command rebuilds historical records for every rider, validates cycling distance and speed, and rematches cycling segments with stored GPS. It can be rerun and preserves original files, activities, and existing raw streams. When stored samples are missing, it can recover them from archived FIT, GPX, or TCX files that are still accessible to the instance. Activities without the necessary measurements may have fewer record categories.
 
-With the container setup above, run `docker exec peloton /usr/local/bin/cairn records recompute-cycling`. Existing performance heatmaps rebuild as they are opened. To refresh historical segment efforts, use **Rematch all segments** in admin maintenance.
+**Exclude downhills** reads a separate set of verified cycling speed and distance efforts. Peloton smooths altitude over 50 metres and requires continuous GPS and elevation through each eligible effort. An effort is excluded if it drops at least 3 metres at an average grade of at least 1.5%, or if 20% or more of the effort is on a sustained descent of at least 3%. The standard records remain available. Route comparisons use versioned GPS streams and refresh when an import or recovery changes the underlying recording.
 
 ## Attribution and license
 

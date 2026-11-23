@@ -36,6 +36,7 @@ type dashFeedActivity struct {
 	Discipline       string   `json:"discipline"`
 	StartTime        string   `json:"start_time"`
 	Timezone         string   `json:"timezone"`
+	MovingDurationS  float64  `json:"moving_duration_s"`
 	ElapsedDurationS int64    `json:"elapsed_duration_s"`
 	DistanceM        *float64 `json:"distance_m"`
 	ElevationGainM   *float64 `json:"elevation_gain_m"`
@@ -184,6 +185,7 @@ func dashFeedActivityOf(a domain.Activity, gearPrompt bool) dashFeedActivity {
 		Discipline:       string(a.Discipline),
 		StartTime:        a.StartTime.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		Timezone:         a.Timezone,
+		MovingDurationS:  a.MovingDuration.Seconds(),
 		ElapsedDurationS: int64(a.ElapsedDuration.Seconds()),
 		DistanceM:        a.Summary.DistanceM,
 		ElevationGainM:   a.Summary.ElevationGainM,

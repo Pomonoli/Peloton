@@ -2,12 +2,11 @@
 	import {
 		ActivityFilter,
 		DATE_PRESETS,
-		FLAGS,
 		SORTS,
 		humanize,
 		type ActivityFacets
 	} from '#lib/activity-filter.svelte.js';
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import { clients } from '#lib/connect.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { gearToView, type GearView } from '#lib/gear.js';
@@ -19,11 +18,13 @@
 		filter,
 		facets,
 		showSort = true,
+		controls,
 		member
 	}: {
 		filter: ActivityFilter;
 		facets: ActivityFacets | null;
 		showSort?: boolean;
+		controls?: Snippet;
 		member?: string | undefined;
 	} = $props();
 
@@ -56,9 +57,12 @@
 		'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 focus:border-accent-400 focus:outline-none';
 </script>
 
-{#if facets}
+{#if facets || controls}
 	<div class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
-		{#if showSports}
+		{#if controls}
+			{@render controls()}
+		{/if}
+		{#if facets && showSports}
 			<div class="flex flex-wrap items-center gap-2">
 				<span class="mr-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Sport</span>
 				<button
@@ -83,7 +87,7 @@
 			</div>
 		{/if}
 
-		{#if showDisciplines}
+		{#if facets && showDisciplines}
 			<div class="flex flex-wrap items-center gap-2">
 				<span class="mr-1 text-xs font-medium uppercase tracking-wide text-zinc-500"
 					>Discipline</span
@@ -110,7 +114,7 @@
 		<!-- Date range: year selector + quick presets + custom bounds. -->
 		<div class="flex flex-wrap items-center gap-2">
 			<span class="mr-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Date</span>
-			{#if (facets.years ?? []).length > 0}
+			{#if (facets?.years ?? []).length > 0}
 				<select
 					bind:value={filter.year}
 					onchange={() => filter.applyYear()}
@@ -118,7 +122,7 @@
 					class="{field} {filter.year ? 'border-accent-500 text-accent-300' : ''}"
 				>
 					<option value="">All years</option>
-					{#each facets.years ?? [] as y (y.value)}
+					{#each facets?.years ?? [] as y (y.value)}
 						<option value={y.value}>{y.value} ({y.count})</option>
 					{/each}
 				</select>
@@ -173,27 +177,7 @@
 			</div>
 		{/if}
 
-		<!-- Classification flags — tri-state chips: any → only → exclude. -->
-		<div class="flex flex-wrap items-center gap-2">
-			<span class="mr-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Flags</span>
-			{#each FLAGS as f (f.key)}
-				<button
-					type="button"
-					onclick={() => filter.cycleFlag(f.key)}
-					title={filter.flags[f.key] === ''
-						? `${f.label}: any`
-						: filter.flags[f.key] === 'true'
-							? `Only ${f.label.toLowerCase()}`
-							: `No ${f.label.toLowerCase()}`}
-					class="{chip} {filter.flags[f.key] === 'true'
-						? chipOn
-						: filter.flags[f.key] === 'false'
-							? 'bg-red-900/60 text-red-200 line-through'
-							: chipOff}"
-				>
-					{f.label}
-				</button>
-			{/each}
+		<div class="flex">
 			<button
 				type="button"
 				onclick={() => (filter.moreFilters = !filter.moreFilters)}

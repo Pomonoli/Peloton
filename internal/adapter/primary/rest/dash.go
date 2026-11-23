@@ -53,12 +53,17 @@ func (h *DashboardHandlers) overview(w http.ResponseWriter, r *http.Request) {
 	for _, a := range ov.Recent {
 		rec = append(rec, dashFeedActivityOf(a, false))
 	}
+	weeks := make([]map[string]any, 0, len(ov.CyclingWeeks))
+	for _, week := range ov.CyclingWeeks {
+		weeks = append(weeks, map[string]any{"start": week.Start.Format("2006-01-02"), "distance_m": week.DistanceM})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"totals":    dashTotalsJSON(ov.Totals),
-		"by_sport":  dashFacets(ov.BySport),
-		"recent":    rec,
-		"this_week": dashTotalsJSON(ov.ThisWeek),
-		"last_week": dashTotalsJSON(ov.LastWeek),
+		"cycling_weeks": weeks,
+		"totals":        dashTotalsJSON(ov.Totals),
+		"by_sport":      dashFacets(ov.BySport),
+		"recent":        rec,
+		"this_week":     dashTotalsJSON(ov.ThisWeek),
+		"last_week":     dashTotalsJSON(ov.LastWeek),
 	})
 }
 
@@ -87,7 +92,14 @@ func (h *DashboardHandlers) stats(w http.ResponseWriter, r *http.Request) {
 			"moving_s": y.MovingS, "elevation_gain_m": y.ElevationGainM,
 		})
 	}
+	sports := make([]map[string]any, 0, len(st.SportTotals))
+	for _, totals := range st.SportTotals {
+		row := dashTotalsJSON(totals.ActivityTotalsResult)
+		row["value"], row["speed_kmh"] = totals.Type, totals.SpeedKmh
+		sports = append(sports, row)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"sport_totals":  sports,
 		"totals":        dashTotalsJSON(st.Totals),
 		"by_sport":      dashFacets(st.BySport),
 		"by_discipline": dashFacets(st.ByDiscipline),
@@ -128,7 +140,17 @@ func (h *DashboardHandlers) analysis(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err, "analysis failed")
 		return
 	}
-	writeJSON(w, http.StatusOK, dashAnalysisJSON(series))
+	out := dashAnalysisJSON(series)
+	coverage, err := h.Stats.TrainingStressCoverage(ctx, userID, days)
+	if err != nil {
+		h.Log.Warn("load training stress coverage", "error", err)
+	} else {
+		out["coverage"] = map[string]int{
+			"imported": coverage.Imported, "sensor_estimate": coverage.SensorEstimate,
+			"duration_estimate": coverage.DurationEstimate, "missing": coverage.Missing,
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // dashAnalysisJSON renders the per-day series as parallel arrays.

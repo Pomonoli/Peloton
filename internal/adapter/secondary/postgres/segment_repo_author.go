@@ -182,7 +182,7 @@ const catalogHolderNameSQL = "COALESCE(NULLIF(u.display_name, ''), u.username::t
 var catalogNameEscape = strings.NewReplacer("~", "~~", "%", "~%", "_", "~_")
 
 func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogSegmentQuery) ([]domain.CatalogSegment, error) {
-	args := []any{userIDParam(q.Member), q.Limit, q.Offset, q.Viewer.UUID()}
+	args := []any{userIDParam(q.Member), q.Limit, q.Offset, q.AttemptsFor.UUID()}
 	where := ""
 	if q.Name != "" {
 		args = append(args, "%"+catalogNameEscape.Replace(q.Name)+"%")
@@ -197,21 +197,35 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		WITH eligible AS (
 			SELECT e.id, e.segment_id, e.user_id, e.elapsed_s, e.start_time, e.activity_id,
-                e.activity_source_id, a.primary_stream_source_id, src.provider AS source_provider
+                e.activity_source_id, e.start_offset, a.primary_stream_source_id, src.provider AS source_provider
 			FROM segment_efforts e
 			JOIN activities a ON a.id = e.activity_id
 			JOIN segments s ON s.id = e.segment_id
             JOIN activity_sources src ON src.id = e.activity_source_id AND src.activity_id = a.id AND src.status <> 'detached'
-			WHERE a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted AND a.type = 'ride'
+			WHERE a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted
              AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8 AND `+catalogEffortSQL+where+`
+		), definitions AS (
+			SELECT s.id,
+				first_value(s.id) OVER (PARTITION BY s.activity_type, lower(btrim(s.name)), s.distance_m, ST_AsBinary(s.geom::geometry),
+					CASE WHEN ST_IsEmpty(s.geom::geometry) THEN s.id END
+					ORDER BY (s.source = 'strava_catalog') DESC, s.id) AS representative
+			FROM segments s JOIN (SELECT DISTINCT segment_id FROM eligible) e ON e.segment_id = s.id
+		), traversals AS (
+			SELECT DISTINCT ON (d.representative, e.activity_id, e.start_time, e.start_offset)
+				d.representative AS segment_id, e.id, e.user_id, e.elapsed_s, e.start_time, e.activity_id,
+				e.activity_source_id, e.primary_stream_source_id, e.source_provider
+			FROM eligible e JOIN definitions d ON d.id = e.segment_id
+			ORDER BY d.representative, e.activity_id, e.start_time, e.start_offset,
+				(e.activity_source_id = e.primary_stream_source_id) DESC NULLS LAST,
+				e.elapsed_s, e.id
 		), summary AS (
 			SELECT segment_id, count(DISTINCT user_id) AS members
-			FROM eligible
+			FROM traversals
 			GROUP BY segment_id
 			HAVING $1::uuid IS NULL OR bool_or(user_id = $1)
 		), personal_sources AS (
 			SELECT DISTINCT ON (segment_id, activity_id) segment_id, activity_id, count(*) AS attempts
-			FROM eligible WHERE user_id = $4 AND source_provider <> 'derived'
+			FROM traversals WHERE user_id = $4 AND source_provider <> 'derived'
 			GROUP BY segment_id, activity_id, activity_source_id, primary_stream_source_id
 			ORDER BY segment_id, activity_id, count(*) DESC,
 			         (activity_source_id = primary_stream_source_id) DESC NULLS LAST, activity_source_id
@@ -220,10 +234,10 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 			FROM personal_sources GROUP BY segment_id
 		), winner AS (
 			SELECT DISTINCT ON (e.segment_id) e.segment_id, e.elapsed_s, e.user_id
-			FROM eligible e JOIN summary ON summary.segment_id = e.segment_id
+			FROM traversals e JOIN summary ON summary.segment_id = e.segment_id
 			ORDER BY e.segment_id, e.elapsed_s, e.start_time, e.id
 		)
-		SELECT s.id, s.name, s.distance_m, winner.elapsed_s, `+catalogHolderNameSQL+`, summary.members, COALESCE(personal.attempts, 0),
+		SELECT s.id, s.name, CASE WHEN s.distance_m > 0 AND s.distance_m < 'Infinity'::float8 THEN s.distance_m ELSE 0 END, winner.elapsed_s, `+catalogHolderNameSQL+`, summary.members, COALESCE(personal.attempts, 0),
 		       ST_X(ST_StartPoint(s.geom::geometry)), ST_Y(ST_StartPoint(s.geom::geometry))`+geometry+`
 		FROM summary
 		JOIN segments s ON s.id = summary.segment_id
@@ -237,13 +251,17 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 	return pgCollectRows(rows, func(row rowScanner) (domain.CatalogSegment, error) {
 		var item domain.CatalogSegment
 		var id uuid.UUID
+		var lon, lat *float64
 		dest := []any{&id, &item.Name, &item.DistanceM, &item.BestElapsedS, &item.LocalKOMHolder, &item.MemberCount, &item.MyAttempts,
-			&item.Start.Lon, &item.Start.Lat}
+			&lon, &lat}
 		if q.Bounds != nil {
 			dest = append(dest, &item.Polyline, &item.PolylinePrecision)
 		}
 		err := row.Scan(dest...)
 		item.ID = domain.SegmentID(id)
+		if lon != nil && lat != nil {
+			item.Start = &domain.GeoPoint{Lon: *lon, Lat: *lat}
+		}
 		return item, err
 	}, "scan catalog segment", "iterate catalog segments")
 }

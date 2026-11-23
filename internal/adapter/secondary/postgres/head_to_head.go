@@ -13,14 +13,14 @@ const comparisonRidesSQL = `
 	WITH rides AS (
 		SELECT a.id, a.user_id, a.primary_stream_source_id, a.provider_restricted
 		FROM activities a
-		WHERE a.user_id IN ($1, $2) AND a.type = 'ride' AND ` + communityActivitySQL + `
+		WHERE a.user_id IN ($1, $2) AND a.type = 'ride' AND a.deleted_at IS NULL AND ((NOT a.hidden_by_admin AND NOT a.provider_restricted) OR a.user_id = $3)
 	)`
 
 // Head-to-Head uses recorded local efforts. Derived sources may copy data
 // from another ride whose permissions cannot be inferred from this one.
 const comparisonSourceSQL = canonicalPerformanceSourceSQL + ` AND src.provider <> 'derived'`
 
-func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent domain.UserID) ([]domain.SharedSegment, error) {
+func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, first, opponent domain.UserID) ([]domain.SharedSegment, error) {
 	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL+`,
 		recordings AS (
 			SELECT e.id, e.segment_id, e.user_id, e.activity_id, e.elapsed_s, e.start_time,
@@ -38,9 +38,9 @@ func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent d
 				))
 				AND `+comparisonSourceSQL+`
 				AND (s.source = 'strava_catalog'
-					OR (s.source = 'native' AND (s.scope = 'instance' OR s.owner_user_id = $1))
+					OR (s.source = 'native' AND (s.scope = 'instance' OR s.owner_user_id = $3))
 					OR (s.source = 'external' AND EXISTS (
-						SELECT 1 FROM external_accounts WHERE id = s.external_account_id AND user_id = $1
+						SELECT 1 FROM external_accounts WHERE id = s.external_account_id AND user_id = $3
 					)))
 		), best AS (
 			SELECT DISTINCT ON (segment_id, user_id) segment_id, user_id, activity_id, elapsed_s
@@ -54,7 +54,7 @@ func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent d
 		JOIN segments s ON s.id = you.segment_id
 		WHERE you.user_id = $1
 		ORDER BY lower(s.name), s.id`,
-		viewer.UUID(), opponent.UUID())
+		first.UUID(), opponent.UUID(), viewer.UUID())
 	if err != nil {
 		return nil, fmt.Errorf("list shared segments: %w", err)
 	}
@@ -67,7 +67,7 @@ func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, opponent d
 	}, "scan shared segment", "iterate shared segments")
 }
 
-func (r *BestEffortRepo) ListComparisonRecords(ctx context.Context, viewer, opponent domain.UserID) ([]domain.MemberRecord, error) {
+func (r *BestEffortRepo) ListComparisonRecords(ctx context.Context, viewer, first, opponent domain.UserID) ([]domain.MemberRecord, error) {
 	// Use the stored window bucket. Historical sample-count windows can span
 	// a different duration when the recording was not sampled at 1 Hz.
 	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL+`
@@ -78,12 +78,12 @@ func (r *BestEffortRepo) ListComparisonRecords(ctx context.Context, viewer, oppo
 		JOIN activity_sources src ON src.id = b.activity_source_id AND src.activity_id = a.id
 		WHERE b.user_id IN ($1, $2) AND b.activity_type = 'ride'
 			AND `+comparisonSourceSQL+`
-			AND `+validRecordSQL+`
+			AND NOT b.downhill_excluded AND `+recordDistanceSQL+` AND `+validRecordSQL+`
 			AND ((b.metric = 'pace' AND b.window_kind = 'distance')
 				OR (b.metric <> 'pace' AND b.window_kind = 'duration'))
 		ORDER BY b.user_id, b.metric, b.window_kind, b.window_value,
-			CASE WHEN b.metric = ANY($3) THEN b.achieved_value ELSE -b.achieved_value END, b.ts, b.id`,
-		viewer.UUID(), opponent.UUID(), smallerIsBetterMetrics())
+			CASE WHEN b.metric = ANY($4) THEN b.achieved_value ELSE -b.achieved_value END, b.ts, b.id`,
+		first.UUID(), opponent.UUID(), viewer.UUID(), smallerIsBetterMetrics())
 	if err != nil {
 		return nil, fmt.Errorf("list comparison records: %w", err)
 	}

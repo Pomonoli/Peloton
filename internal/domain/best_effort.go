@@ -22,9 +22,10 @@ type BestEffort struct {
 	ActivityType ActivityType
 	Discipline   Discipline // "" if the activity has no discipline set
 
-	Metric      BestEffortMetric
-	WindowKind  BestEffortWindowKind
-	WindowValue int // meters for WindowDistance, seconds for WindowDuration
+	Metric           BestEffortMetric
+	WindowKind       BestEffortWindowKind
+	DownhillExcluded bool
+	WindowValue      int // meters for WindowDistance, seconds for WindowDuration
 
 	// AchievedValue uses metric-specific units (see BestEffortMetric).
 	AchievedValue float64
@@ -108,6 +109,19 @@ const (
 )
 
 // RecordBucket identifies a comparable personal-best category.
+// RemovedRecordDistance reports the retired distance windows in metres.
+func RemovedRecordDistance(kind BestEffortWindowKind, value int) bool {
+	if kind != BestEffortWindowDistance {
+		return false
+	}
+	switch value {
+	case 400, 1609, 1610, 21097, 21100, 42195, 42200:
+		return true
+	default:
+		return false
+	}
+}
+
 type RecordBucket struct {
 	ActivityType ActivityType
 	Metric       BestEffortMetric

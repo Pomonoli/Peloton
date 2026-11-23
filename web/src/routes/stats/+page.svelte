@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { memberURL } from '#lib/member.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
+	import SortHeader from '#lib/components/SortHeader.svelte';
+	import { compareSortedValues, promoteSort, type SortCriterion } from '#lib/stacked-sort.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import {
 		intlLocale,
 		formatDistance,
 		formatDistanceEffort,
 		formatDuration,
-		formatElevation
+		formatElevation,
+		formatSpeedKmh
 	} from '#lib/format.js';
 
 	let { data } = $props();
@@ -30,13 +34,38 @@
 	} | null;
 	type Stats = {
 		totals: { count: number; distance_m: number; moving_s: number; elevation_gain_m: number };
-		by_sport: Facet[];
+		sport_totals: {
+			value: string;
+			count: number;
+			distance_m: number;
+			moving_s: number;
+			speed_kmh: number | null;
+		}[];
 		by_discipline: Facet[];
 		by_year: Year[];
 		records: { longest_distance: Record; longest_duration: Record };
 	};
 
 	let s = $state<Stats | null>(null);
+	type SportColumn = keyof Stats['sport_totals'][number];
+	const sportColumns = [
+		{ key: 'value', label: m.col_sport() },
+		{ key: 'count', label: m.nav_activities() },
+		{ key: 'distance_m', label: m.col_distance() },
+		{ key: 'moving_s', label: m.col_moving() },
+		{ key: 'speed_kmh', label: m.col_average_speed() }
+	] satisfies { key: SportColumn; label: string }[];
+	let sportOrder = $state<SortCriterion<SportColumn>[]>([{ column: 'count', direction: 'desc' }]);
+	const sports = $derived(
+		[...(s?.sport_totals ?? [])].sort((left, right) => {
+			for (const { column, direction } of sportOrder) {
+				const result = compareSortedValues(left[column], right[column], direction);
+				if (result !== 0) return result;
+			}
+			return left.value.localeCompare(right.value);
+		})
+	);
+
 	let loading = $state(true);
 
 	onMount(async () => {
@@ -55,7 +84,6 @@
 
 	// max year distance for the bar widths
 	const maxYearDist = $derived(s ? Math.max(1, ...s.by_year.map((y) => y.distance_m)) : 1);
-	const maxSport = $derived(s ? Math.max(1, ...s.by_sport.map((f) => f.count)) : 1);
 </script>
 
 <div class="space-y-8">
@@ -68,7 +96,9 @@
 
 	{#if loading}
 		<div class="text-sm text-zinc-500">Loading…</div>
-	{:else if !s || s.totals.count === 0}
+	{:else if !s}
+		<p role="alert" class="text-sm text-red-300">{m.stats_failed()}</p>
+	{:else if s.totals.count === 0}
 		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
 			No activities yet.
 		</div>
@@ -174,31 +204,46 @@
 			</section>
 		{/if}
 
-		<!-- by sport -->
-		{#if s.by_sport.length > 0}
+		{#if s.sport_totals.length > 0}
 			<section>
-				<h2 class="mb-3 text-sm font-medium text-zinc-300">By sport</h2>
-				<div class="space-y-2">
-					{#each s.by_sport as f (f.value)}
-						<a
-							href={memberURL(`/activities?type=${f.value}`, data.member)}
-							class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-panel px-4 py-2.5 hover:border-zinc-700 hover:bg-zinc-900/80"
-						>
-							<span class="text-accent-400"><SportIcon type={f.value} size={20} /></span>
-							<span class="w-32 shrink-0 text-sm text-zinc-200 max-md:w-24"
-								>{humanize(f.value)}</span
-							>
-							<div class="h-2 flex-1 rounded-full bg-zinc-800">
-								<div
-									class="h-2 rounded-full bg-accent-500"
-									style:width={`${(f.count / maxSport) * 100}%`}
-								></div>
-							</div>
-							<span class="w-12 shrink-0 text-right text-sm tabular-nums text-zinc-400"
-								>{f.count}</span
-							>
-						</a>
-					{/each}
+				<h2 class="mb-3 text-sm font-medium">{m.stats_by_sport()}</h2>
+				<div class="overflow-x-auto rounded-xl border border-zinc-800">
+					<table class="w-full bg-panel text-sm">
+						<thead class="text-xs text-quiet">
+							<tr>
+								{#each sportColumns as column (column.key)}
+									{@const index = sportOrder.findIndex(
+										(criterion) => criterion.column === column.key
+									)}
+									<SortHeader
+										label={column.label}
+										{index}
+										direction={sportOrder[index]?.direction}
+										align={column.key === 'value' ? 'text-left' : 'text-right'}
+										onclick={() => (sportOrder = promoteSort(sportOrder, column.key))}
+									/>
+								{/each}
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-zinc-800 tabular-nums">
+							{#each sports as sport (sport.value)}
+								<tr>
+									<th scope="row" class="p-2 text-left font-medium sm:px-4">
+										<a
+											href={memberURL(`/activities?type=${sport.value}`, data.member)}
+											class="hover:text-accent-300">{humanize(sport.value)}</a
+										>
+									</th>
+									<td class="p-2 text-right sm:px-4">{sport.count.toLocaleString(intlLocale())}</td>
+									<td class="p-2 text-right sm:px-4">{formatDistance(sport.distance_m || null)}</td>
+									<td class="p-2 text-right sm:px-4"
+										>{sport.moving_s > 0 ? formatDuration(sport.moving_s) : '—'}</td
+									>
+									<td class="p-2 text-right sm:px-4">{formatSpeedKmh(sport.speed_kmh)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				</div>
 			</section>
 		{/if}

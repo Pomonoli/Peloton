@@ -3,6 +3,7 @@ import { m } from '#lib/paraglide/messages.js';
 import {
 	bestEffortValue,
 	isCyclingDistanceRecord,
+	recordSpeed,
 	recordLabel,
 	type RecordBucket
 } from '#lib/records.js';
@@ -31,6 +32,7 @@ type RecordResult = RecordBucket & {
 };
 export type Score = { wins: number; losses: number; ties: number; comparable: number };
 export type Comparison = {
+	first?: Rider;
 	opponent: Rider;
 	segments: Segment[];
 	records: RecordResult[];
@@ -55,10 +57,10 @@ export function riderName(rider: Rider) {
 	return rider.display_name.trim() || rider.username;
 }
 
-export function winnerLabel(winner: Winner, opponent: string) {
+export function winnerLabel(winner: Winner, opponent: string, first: string = m.comparison_you()) {
 	switch (winner) {
 		case 'you':
-			return m.comparison_you();
+			return first;
 		case 'opponent':
 			return opponent;
 		case 'tie':
@@ -105,7 +107,11 @@ function effortCell(effort: Effort | null, text: string, detail?: string): Cell 
 		: { text: m.comparison_unavailable() };
 }
 
-export function segmentRows(segments: Segment[], opponent: string): ComparisonRow[] {
+export function segmentRows(
+	segments: Segment[],
+	opponent: string,
+	first: string = m.comparison_you()
+): ComparisonRow[] {
 	return segments.map((s) => ({
 		id: s.id,
 		name: s.name,
@@ -123,7 +129,7 @@ export function segmentRows(segments: Segment[], opponent: string): ComparisonRo
 				text: gapSeconds(s.time_difference_s),
 				detail: speedGap(s.speed_difference_kmh)
 			},
-			winner: { text: winnerLabel(s.winner, opponent) }
+			winner: { text: winnerLabel(s.winner, opponent, first) }
 		},
 		values: {
 			name: s.name,
@@ -134,12 +140,16 @@ export function segmentRows(segments: Segment[], opponent: string): ComparisonRo
 			opponentSpeed: s.opponent_speed_kmh,
 			difference: s.time_difference_s,
 			speedGap: s.speed_difference_kmh,
-			winner: winnerLabel(s.winner, opponent)
+			winner: winnerLabel(s.winner, opponent, first)
 		}
 	}));
 }
 
-export function recordRows(records: RecordResult[], opponent: string): ComparisonRow[] {
+export function recordRows(
+	records: RecordResult[],
+	opponent: string,
+	first: string = m.comparison_you()
+): ComparisonRow[] {
 	const percent = new Intl.NumberFormat(intlLocale(), {
 		style: 'percent',
 		maximumFractionDigits: 2
@@ -155,11 +165,11 @@ export function recordRows(records: RecordResult[], opponent: string): Compariso
 				? effortCell(
 						effort,
 						effortTime((effort.value * r.window_value) / 1000),
-						formatSpeedKmh(3600 / effort.value)
+						recordSpeed(3600 / effort.value)
 					)
 				: effortCell(effort, bestEffortValue(r, effort.value));
 		};
-		const winner = r.winner ? winnerLabel(r.winner, opponent) : null;
+		const winner = r.winner ? winnerLabel(r.winner, opponent, first) : null;
 		return {
 			id: `${r.metric}:${r.window_kind}:${r.window_value}`,
 			name,

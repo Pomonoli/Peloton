@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	ActivityFilter,
-	FLAGS,
-	humanize,
-	rangeSpecs,
-	RANGE_KEYS,
-	SORTS
-} from './activity-filter.svelte';
+import { ActivityFilter, humanize, rangeSpecs, RANGE_KEYS, SORTS } from './activity-filter.svelte';
 import { setPrefs } from './prefs.svelte';
 
 process.env.TZ = 'UTC';
@@ -116,29 +109,15 @@ describe('ActivityFilter', () => {
 		expect([f.preset, f.year]).toEqual([null, '']);
 	});
 
-	it('cycleFlag goes any → true → false → any', () => {
-		const f = new ActivityFilter();
-		const seen: string[] = [];
-		for (let i = 0; i < 3; i++) {
-			f.cycleFlag('race');
-			seen.push(f.flags.race ?? '');
-		}
-		expect(seen).toEqual(['true', 'false', '']);
-	});
-
 	it('builds query params in SI units', () => {
 		const f = new ActivityFilter();
 		f.type = 'ride';
 		f.discipline = 'ride_road';
 		f.from = '2024-01-01';
 		f.to = '2024-02-01';
-		f.cycleFlag('ebike');
-		f.cycleFlag('commute');
-		f.cycleFlag('commute');
 		f.ranges.distance = { min: '10', max: '' };
 		f.ranges.speed = { min: 'abc', max: '36' };
 		f.ranges.hr = { min: '-5', max: '0' };
-		expect(f.flagsActive).toBe(true);
 		expect(f.rangesActive).toBe(true);
 		expect(Object.fromEntries(f.params())).toEqual({
 			sort: 'date_desc',
@@ -146,8 +125,6 @@ describe('ActivityFilter', () => {
 			discipline: 'ride_road',
 			from: '2024-01-01',
 			to: '2024-02-01',
-			ebike: 'true',
-			commute: 'false',
 			distance_min_m: '10000',
 			speed_max_mps: '10',
 			hr_max_bpm: '0'
@@ -176,7 +153,6 @@ describe('ActivityFilter', () => {
 		const f = new ActivityFilter(new URLSearchParams('type=run&sort=date_asc'));
 		f.year = '2024';
 		f.preset = 7;
-		for (const fl of FLAGS) f.cycleFlag(fl.key);
 		f.ranges.power = { min: '100', max: '' };
 		f.clear();
 		expect(f.active).toBe(false);

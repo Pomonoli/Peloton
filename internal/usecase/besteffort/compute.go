@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"time"
 
@@ -27,8 +26,8 @@ import (
 //
 // Assumptions (v1):
 //
-// Cycling speed and pace use validated intervals and elapsed time. Other
-// duration metrics assume ~1 Hz.
+// Cycling speed and pace use validated intervals. Duration records use
+// elapsed time even when sampling intervals are irregular.
 type ComputeBestEffortsForSource struct {
 	activities  port.ActivityAggregateReader
 	streams     port.StreamRepo
@@ -131,13 +130,9 @@ var StandardWindows = []windowSpec{
 
 	// --- Distance windows (pace) ---
 	// Shared PR distances for activities with cumulative distance.
-	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 400},
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 1000},
-	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 1609}, // 1 mile
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 5000},
 	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 10000},
-	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 21097}, // half marathon
-	{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 42195}, // marathon
 }
 
 var longCyclingWindows = []windowSpec{
@@ -280,6 +275,9 @@ func (uc *ComputeBestEffortsForSource) windowsFor(ctx context.Context, act domai
 func mergeWindows(std []windowSpec, customs []domain.CustomBestEffort) []windowSpec {
 	out := append([]windowSpec(nil), std...)
 	for _, c := range customs {
+		if domain.RemovedRecordDistance(c.WindowKind, c.WindowValue) {
+			continue
+		}
 		w := windowSpec{Metric: c.Metric, Kind: c.WindowKind, Value: c.WindowValue}
 		dup := false
 		for _, s := range std {
@@ -306,139 +304,51 @@ func (uc *ComputeBestEffortsForSource) computeAll(
 		return uc.computeCycling(act, src, samples, windows, now)
 	}
 	var out []domain.BestEffort
+	hasDistance := slices.ContainsFunc(samples, func(s domain.StreamSample) bool { return s.DistanceM != nil && *s.DistanceM > 0 })
+	hasSpeed := slices.ContainsFunc(samples, func(s domain.StreamSample) bool {
+		_, ok := readMetric(s, domain.BestEffortMetricSpeed)
+		return ok
+	})
+	var motion *domain.CyclingStream
 	for _, w := range windows {
-		switch w.Kind {
-		case domain.BestEffortWindowDuration:
-			if be, ok := uc.computeDurationEffort(act, src, samples, w, now); ok {
-				out = append(out, be)
+		var effort domain.BestEffort
+		var ok bool
+		switch {
+		case w.Metric == domain.BestEffortMetricPace && !hasDistance,
+			w.Metric == domain.BestEffortMetricSpeed && !hasSpeed:
+			if motion == nil {
+				motion = new(domain.ValidateCyclingStream(samples))
 			}
-		case domain.BestEffortWindowDistance:
-			if be, ok := uc.computeDistanceEffort(act, src, samples, w, now); ok {
-				out = append(out, be)
-			}
+			effort, ok = uc.motionFallback(act, src, samples, *motion, w, now)
+		case w.Kind == domain.BestEffortWindowDuration:
+			effort, ok = uc.timedSensorEffort(act, src, samples, w, now)
+		case w.Kind == domain.BestEffortWindowDistance:
+			effort, ok = uc.computeDistanceEffort(act, src, samples, w, now)
+		}
+		if ok {
+			out = append(out, effort)
 		}
 	}
 	return out
 }
 
-// computeDurationEffort handles the sample-count sliding-window case.
-func (uc *ComputeBestEffortsForSource) computeDurationEffort(
-	act domain.Activity,
-	src domain.ActivitySource,
-	samples []domain.StreamSample,
-	w windowSpec,
-	now time.Time,
+// Older outdoor streams can contain positions and timestamps without the
+// derived speed or distance channel. The same validated intervals used for
+// cycling supply a fallback without bridging gaps or changing the recording.
+func (uc *ComputeBestEffortsForSource) motionFallback(
+	act domain.Activity, src domain.ActivitySource, samples []domain.StreamSample,
+	motion domain.CyclingStream, window windowSpec, now time.Time,
 ) (domain.BestEffort, bool) {
-	// VAM is a rate (Δaltitude / window-hours), not an instantaneous channel —
-	// it gets its own elevation-delta sliding window.
-	if w.Metric == domain.BestEffortMetricVAM {
-		return uc.computeVAMEffort(act, src, samples, w, now)
-	}
-	values := extractChannel(samples, w.Metric)
-	if values == nil {
-		return domain.BestEffort{}, false
-	}
-	avg, startIdx, ok := slidingWindowMax(values, w.Value)
-	if !ok {
-		return domain.BestEffort{}, false
-	}
-	endIdx := startIdx + w.Value - 1
-	if endIdx >= len(samples) {
-		endIdx = len(samples) - 1
-	}
-	startTS := samples[startIdx].Timestamp
-	endTS := samples[endIdx].Timestamp
-
-	return domain.BestEffort{
-		ID:               domain.BestEffortID(uc.newID()),
-		ActivityID:       act.ID,
-		ActivitySourceID: src.ID,
-		UserID:           act.UserID,
-		ActivityType:     act.Type,
-		Discipline:       act.Discipline,
-		Metric:           w.Metric,
-		WindowKind:       domain.BestEffortWindowDuration,
-		WindowValue:      w.Value,
-		AchievedValue:    avg,
-		StartOffset:      int(startTS.Sub(samples[0].Timestamp).Seconds()),
-		DurationS:        endTS.Sub(startTS).Seconds(),
-		Timestamp:        startTS,
-		CreatedAt:        now,
-	}, true
-}
-
-// computeVAMEffort finds the best sustained vertical-ascent rate (m/h) over the
-// window: max over all start points of (altitudeGain over the window) / hours.
-// Requires the altitude channel; skips when there's no net climb in any window.
-func (uc *ComputeBestEffortsForSource) computeVAMEffort(
-	act domain.Activity,
-	src domain.ActivitySource,
-	samples []domain.StreamSample,
-	w windowSpec,
-	now time.Time,
-) (domain.BestEffort, bool) {
-	alt := extractAltitude(samples)
-	if alt == nil || len(alt) < w.Value {
-		return domain.BestEffort{}, false
-	}
-	hours := float64(w.Value) / 3600.0
-	best := math.Inf(-1)
-	bestIdx := 0
-	for i := 0; i+w.Value-1 < len(alt); i++ {
-		// Skip windows where either endpoint is missing altitude.
-		a0, a1 := alt[i], alt[i+w.Value-1]
-		if math.IsNaN(a0) || math.IsNaN(a1) {
-			continue
+	var best domain.BestEffort
+	motion.Sections(func(start, end int) {
+		points := motionPoints(motion.Legs[start:end])
+		effort, ok := uc.cyclingMotionEffort(act, src, samples[start].Timestamp, points, window, now, nil)
+		if ok && betterCyclingEffort(effort, best) {
+			effort.StartOffset = int(effort.Timestamp.Sub(samples[0].Timestamp).Seconds())
+			best = effort
 		}
-		if vam := (a1 - a0) / hours; vam > best {
-			best = vam
-			bestIdx = i
-		}
-	}
-	if math.IsInf(best, -1) || best <= 0 { // no climbing window
-		return domain.BestEffort{}, false
-	}
-	endIdx := bestIdx + w.Value - 1
-	if endIdx >= len(samples) {
-		endIdx = len(samples) - 1
-	}
-	startTS := samples[bestIdx].Timestamp
-	endTS := samples[endIdx].Timestamp
-	return domain.BestEffort{
-		ID:               domain.BestEffortID(uc.newID()),
-		ActivityID:       act.ID,
-		ActivitySourceID: src.ID,
-		UserID:           act.UserID,
-		ActivityType:     act.Type,
-		Discipline:       act.Discipline,
-		Metric:           domain.BestEffortMetricVAM,
-		WindowKind:       domain.BestEffortWindowDuration,
-		WindowValue:      w.Value,
-		AchievedValue:    best,
-		StartOffset:      int(startTS.Sub(samples[0].Timestamp).Seconds()),
-		DurationS:        endTS.Sub(startTS).Seconds(),
-		Timestamp:        startTS,
-		CreatedAt:        now,
-	}, true
-}
-
-// extractAltitude pulls the altitude channel (NaN where missing). Returns nil
-// when fewer than 5 samples carry altitude.
-func extractAltitude(samples []domain.StreamSample) []float64 {
-	out := make([]float64, len(samples))
-	valid := 0
-	for i, s := range samples {
-		if s.AltitudeM != nil && !math.IsNaN(*s.AltitudeM) && !math.IsInf(*s.AltitudeM, 0) {
-			out[i] = *s.AltitudeM
-			valid++
-		} else {
-			out[i] = math.NaN()
-		}
-	}
-	if valid < 5 {
-		return nil
-	}
-	return out
+	})
+	return best, best.WindowValue > 0
 }
 
 // computeDistanceEffort handles the cumulative-distance two-pointer case.
@@ -480,30 +390,6 @@ func (uc *ComputeBestEffortsForSource) computeDistanceEffort(
 	}, true
 }
 
-// extractChannel pulls the per-metric scalar series out of the stream
-// samples. Returns nil when the stream has fewer than 5 valid points for
-// the requested metric — too sparse to compute meaningfully.
-//
-// NaN markers represent "this sample didn't carry the channel"; the
-// sliding-window routine handles them.
-func extractChannel(samples []domain.StreamSample, metric domain.BestEffortMetric) []float64 {
-	out := make([]float64, len(samples))
-	validCount := 0
-	for i, s := range samples {
-		v, ok := readMetric(s, metric)
-		if !ok {
-			out[i] = math.NaN()
-			continue
-		}
-		out[i] = v
-		validCount++
-	}
-	if validCount < 5 {
-		return nil
-	}
-	return out
-}
-
 func readMetric(s domain.StreamSample, metric domain.BestEffortMetric) (float64, bool) {
 	switch metric {
 	case domain.BestEffortMetricPower:
@@ -523,59 +409,9 @@ func readMetric(s domain.StreamSample, metric domain.BestEffortMetric) (float64,
 		return *s.SpeedMps, true
 	default:
 		// pace uses the distance two-pointer scan; vam its own altitude-rate
-		// scan (computeVAMEffort). Neither is an instantaneous channel here.
+		// scan. Neither is an instantaneous channel here.
 		return 0, false
 	}
-}
-
-// slidingWindowMax scans values[] with a sliding window of `windowSec`
-// consecutive samples (assumes 1Hz sampling) and returns
-// (best-average, start-index, ok).
-//
-// Samples carrying math.NaN are excluded from the average. A window is
-// only considered "valid" if at least 80% of its samples are non-NaN —
-// this prevents a 5-second window of mostly-missing data from scoring as
-// "the user's best 5-second power" purely because the average over a
-// tiny non-NaN tail is high.
-func slidingWindowMax(values []float64, windowSec int) (avg float64, startIdx int, ok bool) {
-	if len(values) < windowSec {
-		return 0, 0, false
-	}
-	minValid := windowSec * 80 / 100
-	if minValid < 1 {
-		minValid = 1
-	}
-
-	// Prefix sums + valid-count arrays for O(N) scanning.
-	sums := make([]float64, len(values)+1)
-	valid := make([]int, len(values)+1)
-	for i, v := range values {
-		if math.IsNaN(v) {
-			sums[i+1] = sums[i]
-			valid[i+1] = valid[i]
-		} else {
-			sums[i+1] = sums[i] + v
-			valid[i+1] = valid[i] + 1
-		}
-	}
-
-	var (
-		best  float64
-		bestS int
-		found bool
-	)
-	for start := 0; start+windowSec <= len(values); start++ {
-		wValid := valid[start+windowSec] - valid[start]
-		if wValid < minValid {
-			continue
-		}
-		wSum := sums[start+windowSec] - sums[start]
-		windowAvg := wSum / float64(wValid)
-		if !found || windowAvg > best {
-			best, bestS, found = windowAvg, start, true
-		}
-	}
-	return best, bestS, found
 }
 
 // paceDistancePoint is one sample that carries cumulative distance.

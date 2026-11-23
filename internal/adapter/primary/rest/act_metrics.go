@@ -338,7 +338,7 @@ func actMetricJSON(m domain.Metric) map[string]any {
 }
 
 func (h *MetricHandlers) powerInputs(w http.ResponseWriter, r *http.Request) {
-	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryPower, "bad activity id")
+	act, ok := detailOwned(w, r, h.Auth, h.Access, "bad activity id")
 	if !ok {
 		return
 	}

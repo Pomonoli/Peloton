@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { memberURL } from '#lib/member.js';
 	import { APP_NAME } from '$app/env/public';
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
-	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import RecordLeaderboards from '#lib/components/RecordLeaderboards.svelte';
 	import { recordLabel, recordSport, recordValue, type PersonalRecord } from '#lib/records.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -11,22 +12,50 @@
 
 	let { data } = $props();
 
+	const excludeDownhills = $derived(page.url.searchParams.get('exclude_downhills') === 'true');
 	const boards = $derived(page.url.searchParams.get('tab') === 'leaderboards');
 	let records = $state<PersonalRecord[]>([]);
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
 
-	onMount(async () => {
-		try {
-			const res = await fetch(memberURL('/api/records', data.member));
-			if (!res.ok) throw new Error(await res.text());
-			const b = await res.json();
-			records = b.records ?? [];
-		} catch (e) {
-			error = (e as Error).message || 'failed to load';
-		}
-		loaded = true;
+	$effect(() => {
+		const url = memberURL(
+			excludeDownhills ? '/api/records?exclude_downhills=true' : '/api/records',
+			data.member
+		);
+		if (boards) return;
+		const controller = new AbortController();
+		records = [];
+		loaded = false;
+		error = null;
+		void fetch(url, { signal: controller.signal })
+			.then(async (response) => {
+				if (!response.ok) throw new Error(await response.text());
+				const body = await response.json();
+				if (!controller.signal.aborted) records = body.records ?? [];
+			})
+			.catch((cause) => {
+				if (!controller.signal.aborted) error = cause.message;
+			})
+			.finally(() => {
+				if (!controller.signal.aborted) loaded = true;
+			});
+		return () => controller.abort();
 	});
+
+	function tabURL(leaderboards: boolean) {
+		const query = new SvelteURLSearchParams();
+		if (leaderboards) query.set('tab', 'leaderboards');
+		if (excludeDownhills) query.set('exclude_downhills', 'true');
+		return memberURL(query.size ? `/records?${query}` : '/records', data.member);
+	}
+
+	function setDownhill(exclude: boolean) {
+		const url = new URL(page.url.href);
+		if (exclude) url.searchParams.set('exclude_downhills', 'true');
+		else url.searchParams.delete('exclude_downhills');
+		void goto(url, { reset: false });
+	}
 
 	// Group by activity type, preserving a sensible type order.
 	const TYPE_ORDER = ['ride', 'run', 'swim', 'walk', 'hike', 'workout'];
@@ -62,7 +91,7 @@
 		aria-label={m.member_records()}
 	>
 		<a
-			href={memberURL('/records', data.member)}
+			href={tabURL(false)}
 			aria-current={!boards ? 'page' : undefined}
 			class="rounded px-3 py-2 text-sm"
 			class:bg-accent-500={!boards}
@@ -71,7 +100,7 @@
 			{data.member ? m.record_member_records() : m.record_my_records()}
 		</a>
 		<a
-			href={memberURL('/records?tab=leaderboards', data.member)}
+			href={tabURL(true)}
 			aria-current={boards ? 'page' : undefined}
 			class="rounded px-3 py-2 text-sm"
 			class:bg-accent-500={boards}
@@ -80,16 +109,28 @@
 			{m.record_leaderboards()}
 		</a>
 	</nav>
+	<div class="mb-5">
+		<label class="inline-flex min-h-10 items-center gap-2 text-sm font-medium">
+			<input
+				type="checkbox"
+				checked={excludeDownhills}
+				onchange={(event) => setDownhill(event.currentTarget.checked)}
+			/>
+			{m.records_exclude_downhills()}
+		</label>
+		{#if excludeDownhills}<p class="text-xs text-quiet">{m.records_downhill_help()}</p>{/if}
+	</div>
 	{#if boards}
-		<RecordLeaderboards member={data.member} />
+		<RecordLeaderboards member={data.member} {excludeDownhills} />
 	{:else if !loaded}
 		<p class="text-sm text-quiet">Loading…</p>
 	{:else if error}
 		<p class="text-sm text-red-400">{error}</p>
 	{:else if records.length === 0}
 		<p class="text-sm text-zinc-500">
-			No records yet. Records appear after importing activities with power, pace, or heart-rate
-			data.
+			{excludeDownhills
+				? m.record_no_results()
+				: 'No records yet. Records appear after importing activities with enough recorded data.'}
 		</p>
 	{:else}
 		<div class="space-y-8">

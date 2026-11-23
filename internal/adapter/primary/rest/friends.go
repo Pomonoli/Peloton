@@ -12,6 +12,7 @@ type FriendsHandlers struct {
 }
 
 func (h *FriendsHandlers) Mount(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/riders", h.list)
 	mux.HandleFunc("GET /api/friends", h.list)
 }
 

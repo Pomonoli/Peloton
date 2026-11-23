@@ -1,11 +1,4 @@
-import {
-	formatDistanceEffort,
-	formatHeartRate,
-	formatPower,
-	formatSpeed,
-	formatSpeedKmh,
-	intlLocale
-} from '#lib/format.js';
+import { formatDuration, intlLocale } from '#lib/format.js';
 import { m } from '#lib/paraglide/messages.js';
 
 export type RecordBucket = {
@@ -90,13 +83,24 @@ export function recordLabel(bucket: RecordBucket, measured = true): string {
 		: `${recordMetric(bucket.metric, measured)} · ${window}`;
 }
 
+function recordNumber(value: number): string {
+	return new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 }).format(value);
+}
+
+export function recordSpeed(kmh: number): string {
+	return Number.isFinite(kmh) && kmh > 0 ? `${recordNumber(kmh)} km/h` : m.placeholder_dash();
+}
+
 export function recordValue(bucket: RecordBucket, value: number): string {
 	const { metric, window_value } = bucket;
+	if (!Number.isFinite(value)) return m.placeholder_dash();
 	if (isCyclingDistanceRecord(bucket)) {
 		if (!Number.isFinite(window_value) || window_value <= 0) return m.placeholder_dash();
 		// Stored pace is seconds per kilometer, calculated over the sampled window.
 		// Scale to the category distance so displayed time follows the ranked value.
-		return formatDistanceEffort(window_value, value * (window_value / 1000));
+		return value > 0
+			? `${formatDuration((value * window_value) / 1000)} · ${recordSpeed(3600 / value)}`
+			: m.placeholder_dash();
 	}
 	switch (metric) {
 		case 'pace': {
@@ -104,29 +108,19 @@ export function recordValue(bucket: RecordBucket, value: number): string {
 			return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} /km`;
 		}
 		case 'speed':
-			return formatSpeed(value);
+			return recordSpeed(value * 3.6);
 		case 'power':
-			return formatPower(value);
+			return `${recordNumber(value)} W`;
 		case 'heart_rate':
-			return formatHeartRate(value);
+			return `${recordNumber(value)} bpm`;
 		case 'vam':
-			return `${Math.round(value).toLocaleString(intlLocale())} m/h`;
+			return `${recordNumber(value)} m/h`;
 		default:
-			return Math.round(value).toLocaleString(intlLocale());
+			return recordNumber(value);
 	}
 }
 
-export function bestEffortValue(bucket: RecordBucket, value: number): string {
-	switch (bucket.metric) {
-		case 'speed':
-			return formatSpeedKmh(value * 3.6);
-		case 'power':
-		case 'heart_rate':
-			return recordValue(bucket, Math.round(value));
-		default:
-			return recordValue(bucket, value);
-	}
-}
+export const bestEffortValue = recordValue;
 
 export function recordSport(type: string) {
 	return (

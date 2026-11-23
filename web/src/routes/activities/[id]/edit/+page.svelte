@@ -25,10 +25,7 @@
 	let type = $state(init.type);
 	let discipline = $state(init.discipline);
 	let privacy = $state(init.privacy);
-	let isVirtual = $state(init.isVirtual);
-	let isEbike = $state(init.isEbike);
-	let isCommute = $state(init.isCommute);
-	let isRace = $state(init.isRace);
+
 	let customSubtype = $state(init.customSubtype);
 	let tagsText = $state(init.tags.join(', '));
 	// Gear: picking (incl. "no gear") makes it the user's choice; "reset to
@@ -73,10 +70,7 @@
 		if (type !== init.type) mask.push('type');
 		if (discipline !== init.discipline) mask.push('discipline');
 		if (privacy !== init.privacy) mask.push('privacy');
-		if (isVirtual !== init.isVirtual) mask.push('is_virtual');
-		if (isEbike !== init.isEbike) mask.push('is_ebike');
-		if (isCommute !== init.isCommute) mask.push('is_commute');
-		if (isRace !== init.isRace) mask.push('is_race');
+
 		if (customSubtype !== init.customSubtype) mask.push('custom_subtype');
 		if (tags.join('\0') !== init.tags.join('\0')) mask.push('tags');
 		if (resetGear) mask.push('reset_gear');
@@ -113,10 +107,7 @@
 				type: enumValue(ActivityType, type),
 				discipline: enumValue(Discipline, discipline),
 				privacy,
-				isVirtual,
-				isEbike,
-				isCommute,
-				isRace,
+
 				customSubtype,
 				tags,
 				gearId,
@@ -206,8 +197,7 @@
 			<SportIcon {type} size={24} /> Edit activity
 		</h1>
 		<p class="mt-1 text-sm text-zinc-400">
-			Classification edits (sport, flags) are saved as your overlay — they stick even when a source
-			re-imports.
+			Sport edits are saved as your overlay — they stick even when a source re-imports.
 		</p>
 	</header>
 
@@ -306,20 +296,7 @@
 			/>
 		</div>
 
-		<fieldset class="flex flex-wrap gap-4">
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isRace} /> Race</label
-			>
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isVirtual} /> Virtual</label
-			>
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isCommute} /> Commute</label
-			>
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isEbike} /> E-bike</label
-			>
-		</fieldset>
+		<fieldset class="flex flex-wrap gap-4"></fieldset>
 
 		<!-- Summary corrections (overlay): hand-fix merged numbers; blank = use the
 		     merged value. Survives re-import like the classification edits. -->

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
 // BestEffortRepo implements port.BestEffortRepo.
@@ -36,7 +37,8 @@ func (r *BestEffortRepo) ListPersonalRecords(ctx context.Context, userID domain.
 		       activity_type, metric, window_kind, window_value,
 		       achieved_value, activity_id, ts
 		  FROM best_efforts b
-		 WHERE user_id = $1 AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`)
+		 WHERE user_id = $1 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+`
+		   AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL AND a.type = b.activity_type AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`)
 		 ORDER BY activity_type, metric, window_kind, window_value,
 		          (CASE WHEN metric = ANY($2) THEN achieved_value ELSE -achieved_value END) ASC,
 		          ts ASC`,
@@ -117,7 +119,7 @@ func (r *BestEffortRepo) SaveEfforts(ctx context.Context, efforts []domain.BestE
 // SaveMissingEfforts adds historical windows without replacing results that
 // an import or another backfill already computed.
 func (r *BestEffortRepo) SaveMissingEfforts(ctx context.Context, efforts []domain.BestEffort) error {
-	return r.saveEfforts(ctx, efforts, ` ON CONFLICT (activity_source_id, metric, window_kind, window_value) DO NOTHING`)
+	return r.saveEfforts(ctx, efforts, ` ON CONFLICT (activity_source_id, metric, window_kind, window_value, downhill_excluded) DO NOTHING`)
 }
 
 func (r *BestEffortRepo) saveEfforts(ctx context.Context, efforts []domain.BestEffort, onConflict string) error {
@@ -144,21 +146,21 @@ func (r *BestEffortRepo) saveEfforts(ctx context.Context, efforts []domain.BestE
 				metric, window_kind, window_value,
 				achieved_value,
 				start_offset, duration_s, distance_m,
-				ts, created_at
+				ts, created_at, downhill_excluded
 			) VALUES (
 				$1, $2, $3, $4,
 				$5, $6,
 				$7, $8, $9,
 				$10,
 				$11, $12, $13,
-				$14, COALESCE($15, now())
+				$14, COALESCE($15, now()), $16
 			)`+onConflict,
 			e.ID.UUID(), e.ActivityID.UUID(), e.ActivitySourceID.UUID(), e.UserID.UUID(),
 			string(e.ActivityType), disciplineParam,
 			string(e.Metric), string(e.WindowKind), e.WindowValue,
 			e.AchievedValue,
 			e.StartOffset, e.DurationS, e.DistanceM,
-			e.Timestamp, createdAtParam,
+			e.Timestamp, createdAtParam, e.DownhillExcluded,
 		)
 	}
 
@@ -180,7 +182,7 @@ func (r *BestEffortRepo) ListForActivity(ctx context.Context, activityID domain.
 	rows, err := db.Query(ctx,
 		`SELECT DISTINCT ON (b.metric, b.window_kind, b.window_value) `+prefixedColumns(bestEffortColumns, "b.")+`
 		   FROM best_efforts b JOIN activities a ON a.id = b.activity_id
-		  WHERE b.activity_id = $1 AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
+		  WHERE b.activity_id = $1 AND NOT b.downhill_excluded AND `+recordDistanceSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
 		  ORDER BY b.metric, b.window_kind, b.window_value,
 		           CASE WHEN b.metric = ANY($2) THEN b.achieved_value ELSE -b.achieved_value END, b.ts, b.id`,
 		activityID.UUID(), smallerIsBetterMetrics(),
@@ -266,7 +268,7 @@ func (r *BestEffortRepo) ListBestEffortHistory(
 		   FROM best_efforts b
 		   JOIN activities a ON a.id = b.activity_id AND a.deleted_at IS NULL
 		  WHERE b.user_id = $1 AND b.activity_type = $2
-		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5 AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
+		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
 		  ORDER BY b.activity_id, b.achieved_value `+betterDir,
 		userID.UUID(), activityType, metric, windowKind, windowValue,
 	)
@@ -313,4 +315,13 @@ func canonicalEffortSourceSQL(e string) string {
 	return `EXISTS (SELECT 1 FROM activity_sources src
 		WHERE src.id = ` + e + `activity_source_id AND src.activity_id = a.id
 		  AND ` + canonicalPerformanceSourceSQL + `)`
+}
+
+const recordDistanceSQL = "(b.window_kind <> 'distance' OR b.window_value NOT IN (400, 1609, 1610, 21097, 21100, 42195, 42200))"
+
+func recordVariantSQL(ctx context.Context) string {
+	if port.DownhillsExcluded(ctx) {
+		return "b.downhill_excluded = (b.activity_type = 'ride' AND b.metric IN ('speed', 'pace'))"
+	}
+	return "NOT b.downhill_excluded"
 }

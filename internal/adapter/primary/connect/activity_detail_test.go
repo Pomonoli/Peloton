@@ -125,7 +125,7 @@ func TestZonesEffortsMergedManage(t *testing.T) {
 		t.Fatalf("effort %v", e)
 	}
 	sim, err := f.srv.ListSimilarActivities(f.ctx, &v1.ListSimilarActivitiesRequest{ActivityId: aid.String()})
-	if err != nil || len(sim.GetActivities()) != 1 || !sim.GetActivities()[0].GetIsCurrent() || sim.GetCurrentRank() != 1 {
+	if err != nil || len(sim.GetActivities()) != 1 || !sim.GetActivities()[0].GetIsCurrent() || sim.GetCurrentRank() != 0 {
 		t.Fatalf("similar %v %v", sim, err)
 	}
 	ms, err := f.srv.GetMergedStream(f.ctx, &v1.GetMergedStreamRequest{ActivityId: aid.String()})

@@ -37,7 +37,7 @@
 		failed = false;
 		loading = true;
 		try {
-			const response = await fetch('/api/friends', { signal: request.signal });
+			const response = await fetch('/api/riders', { signal: request.signal });
 			if (!response.ok) throw new Error();
 			const next = (await response.json()) as { members: Member[] };
 			if (!request.signal.aborted) members = next.members;
@@ -148,7 +148,7 @@
 						</div>
 					</dl>
 					<a
-						href={`${profile}#activity-history`}
+						href={`/activities?member=${encodeURIComponent(member.username)}`}
 						class="mt-auto text-sm text-accent-300 hover:underline"
 						>{m.community_activity_history()}</a
 					>

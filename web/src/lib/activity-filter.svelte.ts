@@ -25,14 +25,6 @@ export const DATE_PRESETS = [
 	{ label: '1y', days: 365 }
 ];
 
-// Tri-state classification flags: '' = any, 'true', 'false'.
-export const FLAGS = [
-	{ key: 'virtual', label: 'Virtual' },
-	{ key: 'ebike', label: 'E-bike' },
-	{ key: 'commute', label: 'Commute' },
-	{ key: 'race', label: 'Race' }
-] as const;
-
 export const RANGE_KEYS = ['distance', 'duration', 'elevation', 'speed', 'hr', 'power'] as const;
 export type RangeKey = (typeof RANGE_KEYS)[number];
 export type RangeBounds = { min: string; max: string };
@@ -90,10 +82,6 @@ function emptyRanges(): Record<RangeKey, RangeBounds> {
 		RangeBounds
 	>;
 }
-function emptyFlags(): Record<string, string> {
-	return { virtual: '', ebike: '', commute: '', race: '' };
-}
-
 export function humanize(v: string): string {
 	return v.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -109,7 +97,6 @@ export class ActivityFilter {
 	preset = $state<number | null>(null);
 	// Year is sugar over from/to; options come from the (unfiltered) years facet.
 	year = $state('');
-	flags = $state<Record<string, string>>(emptyFlags());
 	ranges = $state<Record<RangeKey, RangeBounds>>(emptyRanges());
 	moreFilters = $state(false);
 	// Gear id ('' = any), deep-linkable from the gear page.
@@ -130,21 +117,19 @@ export class ActivityFilter {
 	readonly rangesActive = $derived(
 		Object.values(this.ranges).some((r) => r.min !== '' || r.max !== '')
 	);
-	readonly flagsActive = $derived(Object.values(this.flags).some((v) => v !== ''));
 	readonly active = $derived(
 		this.type !== '' ||
 			this.discipline !== '' ||
 			this.from !== '' ||
 			this.to !== '' ||
 			this.gearId !== '' ||
-			this.flagsActive ||
 			this.rangesActive
 	);
 
 	// Change keys for pages to react to: chip/select edits should re-query at
 	// once, free-text (dates, ranges) after a debounce.
 	readonly immediateKey = $derived(
-		JSON.stringify([this.type, this.discipline, this.sort, this.flags, this.gearId])
+		JSON.stringify([this.type, this.discipline, this.sort, this.gearId])
 	);
 	readonly textKey = $derived(JSON.stringify([this.from, this.to, this.ranges]));
 
@@ -186,10 +171,6 @@ export class ActivityFilter {
 		this.year = '';
 	}
 
-	cycleFlag(key: string) {
-		this.flags[key] = this.flags[key] === '' ? 'true' : this.flags[key] === 'true' ? 'false' : '';
-	}
-
 	clear() {
 		this.type = '';
 		this.discipline = '';
@@ -197,7 +178,6 @@ export class ActivityFilter {
 		this.to = '';
 		this.preset = null;
 		this.year = '';
-		this.flags = emptyFlags();
 		this.ranges = emptyRanges();
 		this.gearId = '';
 	}
@@ -211,10 +191,6 @@ export class ActivityFilter {
 		if (this.from) q.set('from', this.from);
 		if (this.to) q.set('to', this.to);
 		if (this.gearId) q.set('gear_id', this.gearId);
-		for (const f of FLAGS) {
-			const v = this.flags[f.key];
-			if (v) q.set(f.key, v);
-		}
 		for (const r of this.rangeSpecs) {
 			for (const bound of ['min', 'max'] as const) {
 				const raw = this.ranges[r.key][bound];

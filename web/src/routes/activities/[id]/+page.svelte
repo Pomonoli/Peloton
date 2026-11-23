@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SortHeader from '#lib/components/SortHeader.svelte';
+	import { compareSortedValues, promoteSort, type SortCriterion } from '#lib/stacked-sort.js';
 	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
@@ -19,7 +21,7 @@
 	import StreamChart from '#lib/components/StreamChart.svelte';
 	import ElevationProfile from '#lib/components/ElevationProfile.svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
-	import KudosComments from '#lib/components/KudosComments.svelte';
+
 	import GearPrompt from '#lib/components/GearPrompt.svelte';
 	import ActivityNav from '#lib/components/ActivityNav.svelte';
 	import {
@@ -41,6 +43,7 @@
 	let bestEfforts = $derived(data.bestEfforts);
 
 	type SegEffort = {
+		id: string;
 		segment_id: string;
 		segment_name: string;
 		segment_distance_m: number;
@@ -51,10 +54,30 @@
 		average_speed_kmh: number | null;
 		local_kom_position?: number;
 		is_personal_record: boolean;
+		personal_rank: number;
 		start_distance_m?: number;
 		end_distance_m?: number;
 	};
 	let segmentEfforts = $state<SegEffort[]>([]);
+	type EffortColumn =
+		| 'segment_name'
+		| 'segment_distance_m'
+		| 'elapsed_s'
+		| 'average_speed_kmh'
+		| 'local_kom_position'
+		| 'avg_heart_rate';
+	let effortOrder = $state<SortCriterion<EffortColumn>[]>([]);
+	let showPRs = $state(false);
+	const achievements = $derived(segmentEfforts.filter((effort) => effort.is_personal_record));
+	const sortedEfforts = $derived(
+		[...segmentEfforts].sort((left, right) => {
+			for (const { column, direction } of effortOrder) {
+				const cmp = compareSortedValues(left[column], right[column], direction);
+				if (cmp !== 0) return cmp;
+			}
+			return 0;
+		})
+	);
 	let canRescan = $state(false);
 	let rescanning = $state(false);
 	let rescanQueued = $state(false);
@@ -68,7 +91,7 @@
 	);
 
 	type ZoneBand = { label: string; low_pct: number; high_pct: number; seconds: number };
-	type ZoneSet = { basis: string; reference: number; total_seconds: number; zones: ZoneBand[] };
+	type ZoneSet = { basis: string; reference?: number; total_seconds: number; zones: ZoneBand[] };
 	type Decoupling = { pct: number; basis: string; coupled: boolean };
 	type Zones = { hr: ZoneSet | null; power: ZoneSet | null; decoupling?: Decoupling };
 	let zones = $state<Zones | null>(null);
@@ -153,6 +176,7 @@
 		// Reset controls when navigating directly between activities.
 		if (a.id) {
 			segmentEfforts = [];
+			showPRs = false;
 			canRescan = false;
 			rescanQueued = false;
 			segmentMessage = '';
@@ -312,7 +336,7 @@
 	});
 
 	// Achievements summary from already-loaded data.
-	const prCount = $derived(segmentEfforts.filter((e) => e.is_personal_record).length);
+	const prCount = $derived(achievements.length);
 	const segCount = $derived(segmentEfforts.length);
 	const hasLocalKOM = $derived(segmentEfforts.some((effort) => effort.local_kom_position != null));
 	const beCount = $derived(bestEfforts.length);
@@ -352,26 +376,6 @@
 						>
 					</p>
 				{/if}
-				{#if a.isVirtual || a.isEbike || a.isCommute || a.isRace}
-					<div class="mt-1.5 flex flex-wrap gap-1.5">
-						{#if a.isRace}<span
-								class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-300"
-								>Race</span
-							>{/if}
-						{#if a.isVirtual}<span
-								class="rounded bg-sky-500/15 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-sky-300"
-								>Virtual</span
-							>{/if}
-						{#if a.isCommute}<span
-								class="rounded bg-zinc-500/15 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-300"
-								>Commute</span
-							>{/if}
-						{#if a.isEbike}<span
-								class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-300"
-								>E-bike</span
-							>{/if}
-					</div>
-				{/if}
 				<p class="mt-0.5 text-xs text-quiet">{a.timezone} · {sourcesLabel}</p>
 			</div>
 		</div>
@@ -393,9 +397,15 @@
 	{#if beCount > 0 || segCount > 0}
 		<div class="flex flex-wrap gap-2 text-xs">
 			{#if prCount > 0}
-				<span class="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">
+				<button
+					type="button"
+					aria-expanded={showPRs}
+					aria-controls="segment-prs"
+					onclick={() => (showPRs = !showPRs)}
+					class="rounded-full bg-emerald-500/15 px-3 py-2 text-emerald-300 hover:bg-emerald-500/25"
+				>
 					🏆 {prCount} segment PR{prCount === 1 ? '' : 's'}
-				</span>
+				</button>
 			{/if}
 			{#if segCount > 0}
 				<span class="rounded-full bg-zinc-800 px-3 py-1 text-zinc-300">
@@ -408,6 +418,35 @@
 				</span>
 			{/if}
 		</div>
+	{/if}
+
+	{#if showPRs}
+		<section
+			id="segment-prs"
+			aria-label={m.segment_personal_record()}
+			class="rounded-lg border border-zinc-800 bg-panel p-3"
+		>
+			<ul class="divide-y divide-zinc-800">
+				{#each achievements as effort (effort.id)}
+					<li
+						class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 py-2 text-sm"
+					>
+						<a
+							href={memberURL(`/segment/${effort.segment_id}`, data.activityOwner)}
+							class="font-medium text-accent-300 hover:underline">{effort.segment_name}</a
+						>
+						<span class="text-quiet tabular-nums"
+							>{formatMetricDistance(effort.segment_distance_m)} · {formatDuration(
+								effort.elapsed_s
+							)} · {formatSpeedKmh(effort.average_speed_kmh)} · {m.segment_personal_record()}{effort.personal_rank >
+							0
+								? ` #${effort.personal_rank}`
+								: ''}</span
+						>
+					</li>
+				{/each}
+			</ul>
+		</section>
 	{/if}
 
 	<!-- Secondary stats: only those that carry a value. -->
@@ -443,7 +482,7 @@
 		</section>
 	{/if}
 
-	{#if a.type === 'ride' && !a.isEbike && !a.isVirtual && a.primaryStreamSourceId && track.length > 1 && a.summary.avgPowerW == null && a.summary.maxPowerW == null && a.summary.normalizedPowerW == null && !stream?.power && !data.mergedStream?.power}
+	{#if data.isOwner && a.type === 'ride' && !a.isEbike && !a.isVirtual && a.primaryStreamSourceId && track.length > 1 && a.summary.avgPowerW == null && a.summary.maxPowerW == null && a.summary.normalizedPowerW == null && !stream?.power && !data.mergedStream?.power}
 		{#key a.id}
 			<EstimatedPower
 				sourceId={a.primaryStreamSourceId}
@@ -688,13 +727,15 @@
 						<div class="rounded-xl border border-zinc-800 bg-panel p-4">
 							<div class="mb-2 flex items-baseline justify-between">
 								<h3 class="text-sm font-medium text-zinc-200">{col.title}</h3>
-								<span class="text-xs text-zinc-500">
-									{zset.basis === 'lthr'
-										? `vs LTHR ${zset.reference} bpm`
-										: zset.basis === 'max'
-											? `vs max HR ${zset.reference} bpm`
-											: `vs FTP ${zset.reference} W`}
-								</span>
+								{#if zset.reference}
+									<span class="text-xs text-zinc-500">
+										{zset.basis === 'lthr'
+											? `vs LTHR ${zset.reference} bpm`
+											: zset.basis === 'max'
+												? `vs max HR ${zset.reference} bpm`
+												: `vs FTP ${zset.reference} W`}
+									</span>
+								{/if}
 							</div>
 							<!-- stacked proportional bar -->
 							<div class="mb-3 flex h-3 overflow-hidden rounded-full bg-zinc-800">
@@ -716,12 +757,14 @@
 										<span class="w-28 shrink-0 text-zinc-300 max-md:w-20 max-md:truncate"
 											>{z.label}</span
 										>
-										<span class="w-24 shrink-0 tabular-nums text-zinc-500 max-md:hidden">
-											{Math.round(z.low_pct * zset.reference)}{z.high_pct > 0
-												? `–${Math.round(z.high_pct * zset.reference)}`
-												: '+'}
-											{col.unit}
-										</span>
+										{#if zset.reference}
+											<span class="w-24 shrink-0 tabular-nums text-zinc-500 max-md:hidden">
+												{Math.round(z.low_pct * zset.reference)}{z.high_pct > 0
+													? `–${Math.round(z.high_pct * zset.reference)}`
+													: '+'}
+												{col.unit}
+											</span>
+										{/if}
 										<div class="h-1.5 flex-1 rounded-full bg-zinc-800">
 											<div
 												class="h-1.5 rounded-full"
@@ -790,18 +833,22 @@
 					<table class="w-full text-sm">
 						<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 							<tr>
-								<th class="px-4 py-2 text-left">Segment</th>
-								<th class="px-4 py-2 text-right">{m.col_distance()}</th>
-								<th class="px-4 py-2 text-right">{m.col_duration()}</th>
-								<th class="px-4 py-2 text-right">{m.segment_avg_speed()}</th>
-								{#if hasLocalKOM}
-									<th class="px-4 py-2 text-right">{m.segment_local_kom()}</th>
-								{/if}
-								<th class="hidden px-4 py-2 text-right md:table-cell">{m.col_avg_hr()}</th>
+								{#each [{ column: 'segment_name', label: m.comparison_segment(), align: 'text-left' }, { column: 'segment_distance_m', label: m.col_distance() }, { column: 'elapsed_s', label: m.col_duration() }, { column: 'average_speed_kmh', label: m.segment_avg_speed() }, ...(hasLocalKOM ? [{ column: 'local_kom_position', label: m.segment_local_kom() } as const] : []), { column: 'avg_heart_rate', label: m.col_avg_hr(), align: 'hidden md:table-cell text-right' }] satisfies { column: EffortColumn; label: string; align?: string }[] as item (item.column)}
+									{@const index = effortOrder.findIndex(
+										(criterion) => criterion.column === item.column
+									)}
+									<SortHeader
+										label={item.label}
+										align={item.align ?? 'text-right'}
+										{index}
+										direction={effortOrder[index]?.direction}
+										onclick={() => (effortOrder = promoteSort(effortOrder, item.column))}
+									/>
+								{/each}
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-zinc-800">
-							{#each segmentEfforts as s, i (i)}
+							{#each sortedEfforts as s (s.id)}
 								<tr
 									class="bg-zinc-900/30 transition-colors hover:bg-zinc-800/50"
 									onmouseenter={() => (hoveredSeg = s)}
@@ -938,6 +985,4 @@
 			</ul>
 		</section>
 	{/if}
-
-	<KudosComments activityId={a.id} />
 </section>

@@ -454,7 +454,7 @@ func (s *ActivityServer) GetActivityStream(
 	if err != nil {
 		return nil, notFoundErr(err)
 	}
-	_, viewer, err := s.visibleActivity(ctx, src.ActivityID.String())
+	activity, viewer, err := s.visibleActivity(ctx, src.ActivityID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -463,14 +463,22 @@ func (s *ActivityServer) GetActivityStream(
 	}
 
 	channels := channelsFromProto(req.GetChannels())
+	resolution := chooseResolution(req.GetMaxResolutionHz())
 	stream, err := s.Streams.QueryStream(ctx, domain.StreamQuery{
 		ActivitySourceID: sourceID,
 		Channels:         channels,
-		Resolution:       chooseResolution(req.GetMaxResolutionHz()),
+		Resolution:       resolution,
 	})
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal,
 			fmt.Errorf("query stream: %w", err))
+	}
+
+	if activity.Type == domain.ActivityTypeRide {
+		stream.ActivitySourceID, stream.Resolution = sourceID, resolution
+		if err := view.ApplyCyclingStreamSpeed(ctx, s.Streams, &stream); err != nil {
+			return nil, connectError(connectrpc.CodeInternal, fmt.Errorf("validate stream: %w", err))
+		}
 	}
 
 	// The repository treats Channels as advisory; enforce the subset here.

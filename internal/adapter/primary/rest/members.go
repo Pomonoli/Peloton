@@ -20,6 +20,23 @@ func (a *Auth) requireMember(w http.ResponseWriter, r *http.Request) (context.Co
 	return ctx, member, true
 }
 
+// requireOwner rejects requests for another rider's private settings.
+func (a *Auth) requireOwner(w http.ResponseWriter, r *http.Request) (domain.UserID, bool) {
+	viewer, ok := a.requireUser(w, r)
+	if !ok {
+		return viewer, false
+	}
+	if key := r.URL.Query().Get("member"); key != "" {
+		_, subject, err := a.Members.Read(r.Context(), viewer, key)
+		if err != nil || subject != viewer {
+			http.Error(w, "Private settings", http.StatusForbidden)
+			return viewer, false
+		}
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	return viewer, true
+}
+
 func (a *Auth) MountMembers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/members/{member}", func(w http.ResponseWriter, r *http.Request) {
 		viewer, ok := a.requireUser(w, r)

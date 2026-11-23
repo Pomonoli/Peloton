@@ -30,7 +30,7 @@ func (r *BestEffortRepo) ListCyclingSourcesForRecordBackfill(ctx context.Context
 			AND a.type = 'ride' AND a.deleted_at IS NULL
 			AND 2 > (SELECT count(*) FROM best_efforts b
 			         WHERE b.activity_source_id = src.id AND b.activity_type = 'ride'
-			           AND b.metric = 'pace' AND b.window_kind = 'distance' AND b.window_value IN (20000, 50000))
+			           AND NOT b.downhill_excluded AND b.metric = 'pace' AND b.window_kind = 'distance' AND b.window_value IN (20000, 50000))
 		ORDER BY src.id LIMIT $2`, after.UUID(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list cycling sources for record backfill: %w", err)

@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { m } from '#lib/paraglide/messages.js';
 	import { memberURL } from '#lib/member.js';
-	import { onMount } from 'svelte';
 
 	type Analysis = {
 		dates: string[];
@@ -8,6 +8,12 @@
 		atl: number[];
 		tsb: number[];
 		tss: number[];
+		coverage?: {
+			imported: number;
+			sensor_estimate: number;
+			duration_estimate: number;
+			missing: number;
+		};
 		current: { ctl: number; atl: number; tsb: number };
 	};
 
@@ -17,23 +23,24 @@
 	let a = $state<Analysis | null>(null);
 	let loading = $state(true);
 
-	async function load() {
+	$effect(() => {
+		const url = memberURL(`/api/analysis?days=${days}`, data.member);
+		if (!data.user) return;
+		const request = new AbortController();
 		loading = true;
-		try {
-			const res = await fetch(memberURL(`/api/analysis?days=${days}`, data.member));
-			if (res.ok) a = await res.json();
-		} catch {
-			/* ignore */
-		}
-		loading = false;
-	}
-
-	onMount(load);
-
-	function setDays(d: number) {
-		days = d;
-		load();
-	}
+		a = null;
+		void fetch(url, { signal: request.signal })
+			.then(async (response) => {
+				if (!response.ok) throw new Error();
+				const result: Analysis = await response.json();
+				if (!request.signal.aborted) a = result;
+			})
+			.catch(() => {})
+			.finally(() => {
+				if (!request.signal.aborted) loading = false;
+			});
+		return () => request.abort();
+	});
 
 	// ---- inline SVG chart geometry --------------------------------------
 	const W = 880;
@@ -42,11 +49,26 @@
 	const plotW = W - PAD.l - PAD.r;
 	const plotH = H - PAD.t - PAD.b;
 
-	type Series = { key: 'ctl' | 'atl' | 'tsb'; label: string; color: string };
+	type Series = { key: 'ctl' | 'atl' | 'tsb'; label: string; description: string; color: string };
 	const series: Series[] = [
-		{ key: 'ctl', label: 'Fitness (CTL)', color: 'var(--plot-speed)' },
-		{ key: 'atl', label: 'Fatigue (ATL)', color: 'var(--plot-fatigue)' },
-		{ key: 'tsb', label: 'Form (TSB)', color: 'var(--plot-form)' }
+		{
+			key: 'ctl',
+			label: 'Fitness (CTL)',
+			description: m.analysis_fitness_description(),
+			color: 'var(--plot-speed)'
+		},
+		{
+			key: 'atl',
+			label: 'Fatigue (ATL)',
+			description: m.analysis_fatigue_description(),
+			color: 'var(--plot-fatigue)'
+		},
+		{
+			key: 'tsb',
+			label: 'Form (TSB)',
+			description: m.analysis_form_description(),
+			color: 'var(--plot-form)'
+		}
 	];
 
 	const bounds = $derived.by(() => {
@@ -108,10 +130,6 @@
 <div class="space-y-6">
 	<header>
 		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Analysis</h1>
-		<p class="mt-1 text-sm text-zinc-400">
-			Fitness (CTL) measures chronic training load. Fatigue (ATL) measures acute load. Form (TSB) is
-			the difference.
-		</p>
 	</header>
 
 	{#if !data.user}
@@ -132,11 +150,29 @@
 							{s.label}
 						</div>
 						<div class="mt-1 text-2xl font-semibold tabular-nums text-zinc-100">
-							{s.key === 'tsb' ? fmt(a.current[s.key]) : a.current[s.key].toFixed(1)}
+							{a.dates.length
+								? s.key === 'tsb'
+									? fmt(a.current[s.key])
+									: a.current[s.key].toFixed(1)
+								: '—'}
 						</div>
+						<p class="mt-1 text-xs text-quiet">{s.description}</p>
 					</div>
 				{/each}
 			</div>
+		{/if}
+
+		{#if a?.coverage}
+			<dl class="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+				{#each [{ label: m.analysis_stress_imported(), count: a.coverage.imported }, { label: m.analysis_stress_sensor(), count: a.coverage.sensor_estimate }, { label: m.analysis_stress_duration(), count: a.coverage.duration_estimate }, { label: m.analysis_stress_missing(), count: a.coverage.missing }] as item (item.label)}
+					<div class="flex gap-1">
+						<dt class="text-quiet">{item.label}</dt>
+						<dd class="font-semibold tabular-nums">{item.count}</dd>
+					</div>
+				{/each}
+			</dl>
+		{:else if a?.dates.length}
+			<p class="text-xs text-quiet">{m.analysis_training_estimated()}</p>
 		{/if}
 
 		<!-- range picker -->
@@ -144,7 +180,7 @@
 			{#each ranges as r (r.d)}
 				<button
 					type="button"
-					onclick={() => setDays(r.d)}
+					onclick={() => (days = r.d)}
 					class="rounded px-3 py-1 text-xs transition-colors"
 					class:bg-zinc-800={days === r.d}
 					class:text-zinc-100={days === r.d}
@@ -160,7 +196,9 @@
 		<div class="rounded-xl border border-zinc-800 bg-panel p-4">
 			{#if loading}
 				<div class="flex h-[280px] items-center justify-center text-sm text-zinc-500">Loading…</div>
-			{:else if !a || a.dates.length === 0}
+			{:else if !a}
+				<p role="alert" class="text-sm text-red-300">{m.analysis_failed()}</p>
+			{:else if a.dates.length === 0}
 				<div class="flex h-[280px] items-center justify-center text-sm text-zinc-500">
 					No training-load data yet. Import some activities first.
 				</div>

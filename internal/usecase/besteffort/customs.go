@@ -24,6 +24,9 @@ func actionInvalid(err error) error { return port.NewActionError(port.ActionErro
 // Create validates and stores a window. The caller runs Backfill afterwards
 // (usually in the background) so existing activities gain the new efforts.
 func (c *Customs) Create(ctx context.Context, in domain.CustomBestEffort) (domain.CustomBestEffort, error) {
+	if domain.RemovedRecordDistance(in.WindowKind, in.WindowValue) {
+		return domain.CustomBestEffort{}, port.NewActionError(port.ActionErrorInvalid, "This distance is no longer a record category")
+	}
 	if err := in.Validate(); err != nil {
 		return domain.CustomBestEffort{}, actionInvalid(err)
 	}

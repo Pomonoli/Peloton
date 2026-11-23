@@ -24,10 +24,10 @@ func TestAPI_RecomputeHistoricalCyclingRecords(t *testing.T) {
 
 	importRide := func(c *itestClient, provider string, speed float64, glitch bool) activity.IngestResult {
 		t.Helper()
-		samples := make([]domain.StreamSample, 151)
+		samples := make([]domain.StreamSample, 351)
 		for i := range samples {
 			seconds, metres := i, float64(i)*speed
-			if glitch && i >= 75 {
+			if glitch && i >= 175 {
 				seconds += 9
 				metres += 400 - speed
 			}
@@ -63,8 +63,8 @@ func TestAPI_RecomputeHistoricalCyclingRecords(t *testing.T) {
 	if err := env.app.BestEfforts.SaveEfforts(ctx, []domain.BestEffort{{
 		ID: domain.BestEffortID(uuid.New()), ActivityID: a.ActivityID, ActivitySourceID: a.SourceID,
 		UserID: alice.userID, ActivityType: domain.ActivityTypeRide, Metric: domain.BestEffortMetricPace,
-		WindowKind: domain.BestEffortWindowDistance, WindowValue: 400, AchievedValue: 25,
-		DurationS: 10, DistanceM: new(400.0), Timestamp: start,
+		WindowKind: domain.BestEffortWindowDistance, WindowValue: 1000, AchievedValue: 25,
+		DurationS: 25, DistanceM: new(1000.0), Timestamp: start,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestAPI_RecomputeHistoricalCyclingRecords(t *testing.T) {
 		return raw
 	}
 	raw := readRaw()
-	if len(raw.Samples) != 151 || raw.Samples[70].RecordingIndex != 72 || domain.ValidateCyclingStream(raw.Samples).Legs[70].Valid {
+	if len(raw.Samples) != 351 || raw.Samples[70].RecordingIndex != 72 || domain.ValidateCyclingStream(raw.Samples).Legs[70].Valid {
 		t.Fatal("the timestamp-sorted database stream hid its original backwards sample")
 	}
 
@@ -94,20 +94,20 @@ func TestAPI_RecomputeHistoricalCyclingRecords(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, row := range rows {
-			if row.ActivityType == domain.ActivityTypeRide && row.Metric == domain.BestEffortMetricPace && row.WindowValue == 400 {
+			if row.ActivityType == domain.ActivityTypeRide && row.Metric == domain.BestEffortMetricPace && row.WindowValue == 1000 {
 				if math.Abs(row.AchievedValue-want) > 0.001 || row.ActivityID != a.ActivityID {
-					t.Fatalf("400 m personal record: %+v", row)
+					t.Fatalf("1 km personal record: %+v", row)
 				}
 				return
 			}
 		}
-		t.Fatal("no 400 m personal record")
+		t.Fatal("no 1 km personal record")
 	}
 	assertFirst := func(want domain.ActivityID) {
 		t.Helper()
-		rows := readRecordBoard(t, alice, "/api/records/leaderboards/ride/pace/distance/400")
+		rows := readRecordBoard(t, alice, "/api/records/leaderboards/ride/pace/distance/1000")
 		if len(rows) != 2 || rows[0].Result.ActivityID != want.String() || rows[0].Result.Rank != 1 || rows[1].Result.Rank != 2 {
-			t.Fatalf("400 m community board: %+v", rows)
+			t.Fatalf("1 km community board: %+v", rows)
 		}
 	}
 	assertPersonal(25)
@@ -124,7 +124,7 @@ func TestAPI_RecomputeHistoricalCyclingRecords(t *testing.T) {
 	}
 	updated, err := env.app.Activities.GetActivity(ctx, a.ActivityID)
 	if err != nil || updated.Summary.MaxSpeedMps == nil || *updated.Summary.MaxSpeedMps != 9 ||
-		updated.Summary.DistanceM == nil || *updated.Summary.DistanceM >= 1350 {
+		updated.Summary.DistanceM == nil || *updated.Summary.DistanceM >= 3150 {
 		t.Fatalf("validated ride summary: %+v, %v", updated.Summary, err)
 	}
 	source, err := env.app.Activities.GetSource(ctx, a.SourceID)

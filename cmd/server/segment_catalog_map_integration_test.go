@@ -165,9 +165,9 @@ func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 		}
 	}
 	tied := speed + "&q=exact+tie&limit=1"
-	first, second := catalog(alice, tied, true, "Exact tie"), catalog(alice, tied+"&offset=1", false, "Exact tie")
-	if first[0].ID != "00000000-0000-0000-0000-000000000001" || second[0].ID != "00000000-0000-0000-0000-000000000002" {
-		t.Fatalf("identical sort keys did not page in ID order: %v %v", first, second)
+	first := catalog(alice, tied, false, "Exact tie")
+	if first[0].ID != "00000000-0000-0000-0000-000000000001" || first[0].MyAttempts != 1 {
+		t.Fatalf("identical definitions or duplicate traversals were not deduplicated: %v", first)
 	}
 
 	// Two genuine traversals use distinct offsets within the same ride. A
@@ -182,7 +182,7 @@ func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 	if err := env.app.Activities.SaveSource(t.Context(), sharedSource); err != nil {
 		t.Fatal(err)
 	}
-	target := domain.SegmentID(uuid.MustParse(second[0].ID))
+	target := domain.SegmentID(uuid.MustParse(first[0].ID))
 	for _, sid := range []domain.SourceID{aliceRide.source, sharedSource.ID} {
 		for _, offset := range []int{0, 120} {
 			effort := domain.SegmentEffort{
@@ -200,19 +200,19 @@ func TestAPI_SegmentCatalogSearchAndViewport(t *testing.T) {
 		}
 	}
 	stack := "q=exact+tie&sort=my_attempts:desc&sort=best_elapsed_s:asc&limit=1"
-	top := catalog(alice, stack, true, "Exact tie")[0]
-	next := catalog(alice, stack+"&offset=1", false, "Exact tie")[0]
-	if top.ID != target.String() || top.MyAttempts != 2 || next.MyAttempts != 1 {
-		t.Fatalf("attempt ordering, repeated attempts, or deduplication failed: %+v %+v", top, next)
+	top := catalog(alice, stack, false, "Exact tie")[0]
+	if top.ID != target.String() || top.MyAttempts != 2 {
+		t.Fatalf("repeated attempts or deduplication failed: %+v", top)
 	}
-	ascending := catalog(alice, "q=exact+tie&sort=my_attempts:asc&sort=name:desc&limit=1", true, "Exact tie")[0]
-	if ascending.ID != next.ID {
-		t.Fatal("ascending attempt sort did not reverse the result")
+	peer := catalog(bob, "q=exact+tie&mine=true&member=alice&sort=my_attempts:desc", false, "Exact tie")
+	if peer[0].MyAttempts != 2 {
+		t.Fatal("attempts were not scoped to the rider being viewed")
 	}
-	peer := catalog(bob, "q=exact+tie&mine=true&member=alice&sort=my_attempts:desc", false, "Exact tie", "Exact tie")
-	if peer[0].MyAttempts != 0 || peer[1].MyAttempts != 0 {
-		t.Fatal("member filter overrode the viewer's attempts")
+	// A legacy route without a start point used to fail scanning the whole page.
+	if _, err := env.pool.Exec(t.Context(), "UPDATE segments SET geom = 'LINESTRING EMPTY'::geography WHERE id = $1", target.UUID()); err != nil {
+		t.Fatal(err)
 	}
+	catalog(alice, "q=exact+tie", false, "Exact tie", "Exact tie")
 
 	env.anon().do(http.MethodGet, "/api/segments/catalog?"+near, nil, http.StatusUnauthorized)
 }

@@ -58,55 +58,65 @@ type ComparedRecord struct {
 }
 
 type HeadToHeadResult struct {
-	Opponent                  domain.User
+	First, Opponent           domain.User
 	Segments                  []ComparedSegment
 	Records                   []ComparedRecord
 	SegmentScore, RecordScore ComparisonScore
 }
 
-func (h *HeadToHead) Compare(ctx context.Context, viewer domain.UserID, member string) (HeadToHeadResult, error) {
+func (h *HeadToHead) Compare(ctx context.Context, viewer domain.UserID, first, second string) (HeadToHeadResult, error) {
 	var out HeadToHeadResult
-	user, err := h.Members.Get(ctx, viewer, viewer.String())
+	caller, err := h.Members.Get(ctx, viewer, viewer.String())
 	if err != nil {
 		return out, err
 	}
-	if !user.IsActive() {
+	if !caller.IsActive() {
 		return out, ErrForbidden
 	}
-	opponent, err := h.Members.Get(ctx, viewer, member)
-	if err != nil {
-		return out, err
-	}
-	if opponent.ID == viewer {
-		return out, port.NewActionError(port.ActionErrorInvalid, "Choose another member")
-	}
-	if !opponent.IsActive() {
-		return out, domain.ErrNotFound
-	}
-	blocked, err := h.Blocks.IsBlockedEitherWay(ctx, viewer, opponent.ID)
-	if err != nil {
-		return out, err
-	}
-	if blocked {
-		return out, domain.ErrNotFound
-	}
 
-	segments, err := h.Segments.ListSharedSegments(ctx, viewer, opponent.ID)
+	riders := [2]domain.User{caller}
+	for i, key := range []string{first, second} {
+		if i == 0 && key == "" {
+			continue
+		}
+		rider, err := h.Members.Get(ctx, viewer, key)
+		if err != nil {
+			return out, err
+		}
+		if !rider.IsActive() {
+			return out, domain.ErrNotFound
+		}
+		if rider.ID != viewer {
+			blocked, err := h.Blocks.IsBlockedEitherWay(ctx, viewer, rider.ID)
+			if err != nil {
+				return out, err
+			}
+			if blocked {
+				return out, domain.ErrNotFound
+			}
+		}
+		riders[i] = rider
+	}
+	user, opponent := riders[0], riders[1]
+	if user.ID == opponent.ID {
+		return out, port.NewActionError(port.ActionErrorInvalid, "Choose two distinct riders")
+	}
+	segments, err := h.Segments.ListSharedSegments(ctx, viewer, user.ID, opponent.ID)
 	if err != nil {
 		return out, err
 	}
-	records, err := h.Records.ListComparisonRecords(ctx, viewer, opponent.ID)
+	records, err := h.Records.ListComparisonRecords(ctx, viewer, user.ID, opponent.ID)
 	if err != nil {
 		return out, err
 	}
-	out.Opponent = opponent
+	out.First, out.Opponent = user, opponent
 	out.Segments = make([]ComparedSegment, 0, len(segments))
 	for _, segment := range segments {
 		row := compareSegment(segment)
 		out.Segments = append(out.Segments, row)
 		out.SegmentScore.add(row.Winner)
 	}
-	out.Records, out.RecordScore = compareRecords(viewer, records)
+	out.Records, out.RecordScore = compareRecords(user.ID, records)
 	return out, nil
 }
 
@@ -130,6 +140,9 @@ func compareRecords(viewer domain.UserID, records []domain.MemberRecord) ([]Comp
 		buckets[bucket] = ComparedRecord{Bucket: bucket}
 	}
 	for _, record := range records {
+		if domain.RemovedRecordDistance(record.Bucket.WindowKind, record.Bucket.WindowValue) {
+			continue
+		}
 		row := buckets[record.Bucket]
 		row.Bucket = record.Bucket
 		if record.UserID == viewer {

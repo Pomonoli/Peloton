@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import uPlot, { type AlignedData, type Options } from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
-	import { formatDateOnly } from '#lib/format.js';
+	import { formatDateOnly, intlLocale } from '#lib/format.js';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { m } from '#lib/paraglide/messages.js';
 
@@ -64,11 +64,8 @@
 
 		const data: AlignedData = [offsets, ...ordered.map((s) => s.values)] as AlignedData;
 
-		// Each series gets its OWN auto-ranged y-scale so channels with very
-		// different magnitudes (e.g. elevation 0–2000 m vs HR 100–180 bpm) are
-		// each visible across the full height instead of one flattening the
-		// rest. A single shared y-axis would be meaningless across mixed units,
-		// so we render only the x-axis; per-series values appear in the legend.
+		// Keep independent scales for overlaid channels with different units.
+		const number = new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 });
 		const scales: Options['scales'] = { x: { time: calendar } };
 		if (calendar) scales.y = {};
 		else
@@ -95,13 +92,17 @@
 							calendar ? formatDateOnly(new Date(s * 1000).toISOString()) : formatSeconds(s)
 						)
 				},
-				...(calendar
+				...(calendar || ordered.length === 1
 					? [
 							{
-								scale: 'y',
+								scale: calendar ? 'y' : 'y0',
+								label: ordered[0]?.unit
+									? `${ordered[0].label} (${ordered[0].unit})`
+									: (ordered[0]?.label ?? ''),
 								stroke: appearanceColor('--plot-axis'),
 								grid: { stroke: appearanceColor('--plot-grid') },
-								values: (_u: uPlot, splits: number[]) => splits.map(formatSeconds)
+								values: (_u: uPlot, splits: number[]) =>
+									splits.map((value) => (calendar ? formatSeconds(value) : number.format(value)))
 							}
 						]
 					: [])
@@ -113,9 +114,12 @@
 					const { formatValue } = s;
 					return {
 						label: s.unit ? `${s.label} (${s.unit})` : s.label,
-						...(formatValue
-							? { value: (_plot: uPlot, value: number | null) => formatValue(value) }
-							: {}),
+						value: (_plot: uPlot, value: number | null) =>
+							value == null
+								? '—'
+								: formatValue
+									? formatValue(value)
+									: `${number.format(value)}${s.unit ? ' ' + s.unit : ''}`,
 						stroke,
 						width: s.fill ? 1 : 1.5,
 						...(s.fill ? { fill: stroke + '2e' } : {}),

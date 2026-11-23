@@ -20,10 +20,7 @@
 	let movingMin = $state<number | ''>('');
 	let distanceKm = $state<number | ''>('');
 	let elevationGainM = $state<number | ''>('');
-	let isVirtual = $state(false);
-	let isEbike = $state(false);
-	let isCommute = $state(false);
-	let isRace = $state(false);
+
 	let customSubtype = $state('');
 	// Gear: blank keeps the sport's default (applied by the server); a pick is
 	// the user's choice.
@@ -69,10 +66,7 @@
 			moving_duration_s: movingMin ? Number(movingMin) * 60 : 0,
 			distance_m: distanceKm ? Math.round(Number(distanceKm) * 1000) : null,
 			elevation_gain_m: elevationGainM ? Number(elevationGainM) : null,
-			is_virtual: isVirtual,
-			is_ebike: isEbike,
-			is_commute: isCommute,
-			is_race: isRace,
+
 			custom_subtype: customSubtype.trim(),
 			gear_id: gearId
 		};
@@ -252,20 +246,7 @@
 			/>
 		</div>
 
-		<fieldset class="flex flex-wrap gap-4">
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isRace} /> Race</label
-			>
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isVirtual} /> Virtual</label
-			>
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isCommute} /> Commute</label
-			>
-			<label class="flex items-center gap-2 text-sm"
-				><input type="checkbox" bind:checked={isEbike} /> E-bike</label
-			>
-		</fieldset>
+		<fieldset class="flex flex-wrap gap-4"></fieldset>
 
 		{#if errMsg}
 			<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">

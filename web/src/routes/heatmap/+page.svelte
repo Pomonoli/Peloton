@@ -125,6 +125,66 @@
 	let map: MapLibreMap | null = null;
 	let currentStyle: ReturnType<typeof basemapStyle>;
 	let mapLoaded = false;
+	let mapFrame: HTMLDivElement;
+	let filtersOpen = $state(false);
+	let fullscreenButton: HTMLButtonElement;
+	let fullscreen = $state(false);
+	let nativeFullscreen = false;
+
+	function resizeMap() {
+		requestAnimationFrame(() => map?.resize());
+	}
+
+	function fullscreenChanged() {
+		if (document.fullscreenElement === mapFrame) {
+			nativeFullscreen = true;
+			fullscreen = true;
+		} else if (nativeFullscreen) {
+			nativeFullscreen = false;
+			fullscreen = false;
+			fullscreenButton?.focus();
+		}
+		resizeMap();
+	}
+
+	async function toggleFullscreen() {
+		if (fullscreen) {
+			if (document.fullscreenElement === mapFrame) {
+				await document.exitFullscreen();
+			} else {
+				fullscreen = false;
+				resizeMap();
+			}
+			return;
+		}
+		if (mapFrame.requestFullscreen) {
+			try {
+				await mapFrame.requestFullscreen();
+				return;
+			} catch {
+				// Some mobile and embedded browsers restrict native fullscreen.
+			}
+		}
+		fullscreen = true;
+		resizeMap();
+	}
+
+	function exitOnEscape(event: KeyboardEvent) {
+		if (event.key === 'Escape' && fullscreen && !nativeFullscreen) {
+			event.preventDefault();
+			void toggleFullscreen();
+		}
+	}
+
+	$effect(() => {
+		if (!fullscreen) return;
+		const overflow = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = overflow;
+		};
+	});
+
 	let fitted = false;
 
 	function bounds(fc: FeatureCollection): LngLatBounds | null {
@@ -289,6 +349,7 @@
 	}
 
 	onMount(() => {
+		filtersOpen = matchMedia('(min-width: 768px)').matches;
 		if (!container) return;
 		currentStyle = basemapStyle(basemap);
 		map = new MapLibreMap({
@@ -360,7 +421,10 @@
 	});
 </script>
 
-<section class="space-y-6">
+<svelte:document onfullscreenchange={fullscreenChanged} />
+<svelte:window onkeydown={exitOnEscape} />
+
+<section class="space-y-4">
 	<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
 		<div>
 			<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">{m.member_heatmap()}</h1>
@@ -375,6 +439,9 @@
 				</p>
 			{/if}
 		</div>
+	</header>
+
+	{#snippet mapControls()}
 		<div class="flex flex-wrap items-center gap-2">
 			<label class="flex items-center gap-2 text-sm">
 				{m.heatmap_layer()}
@@ -474,9 +541,19 @@
 				{m.heatmap_fit_tracks()}
 			</button>
 		</div>
-	</header>
-
-	<ActivityFilterBar {filter} {facets} showSort={false} member={pageData.member?.username} />
+	{/snippet}
+	<details bind:open={filtersOpen}>
+		<summary class="mb-2 w-fit cursor-pointer text-sm font-medium text-accent-300">
+			{m.heatmap_filters()}
+		</summary>
+		<ActivityFilterBar
+			{filter}
+			{facets}
+			controls={mapControls}
+			showSort={false}
+			member={pageData.member?.username}
+		/>
+	</details>
 
 	{#if error}
 		<div
@@ -513,11 +590,24 @@
 		</div>
 	{/if}
 
-	<div class="relative">
+	<div
+		bind:this={mapFrame}
+		class={fullscreen ? 'fixed inset-0 z-[1000] h-dvh w-screen bg-zinc-900' : 'relative'}
+	>
 		<div
 			bind:this={container}
-			class="h-[70vh] min-h-96 w-full overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900"
+			class={fullscreen
+				? 'h-full w-full'
+				: 'h-[70dvh] min-h-72 w-full overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900'}
 		></div>
+		<button
+			type="button"
+			bind:this={fullscreenButton}
+			onclick={toggleFullscreen}
+			class="absolute right-3 top-3 z-10 min-h-10 rounded-md border border-zinc-700 bg-panel px-3 text-xs font-medium shadow hover:text-accent-300"
+		>
+			{fullscreen ? m.heatmap_exit_fullscreen() : m.heatmap_fullscreen()}
+		</button>
 		{#if loading}
 			<div
 				class="pointer-events-none absolute top-3 left-3 rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-300"

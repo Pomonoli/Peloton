@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { intlLocale } from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
@@ -15,7 +14,8 @@
 	} from '#lib/records.js';
 	import SportIcon from './SportIcon.svelte';
 
-	let { member }: { member: MemberView | null } = $props();
+	let { member, excludeDownhills }: { member: MemberView | null; excludeDownhills: boolean } =
+		$props();
 	let rows = $state<CommunityRecord[]>([]);
 	let loading = $state(true);
 	let failed = $state(false);
@@ -32,9 +32,14 @@
 		return Object.entries(bySport);
 	});
 
-	onMount(() => {
+	$effect(() => {
+		const url = excludeDownhills
+			? '/api/records/leaderboards?exclude_downhills=true'
+			: '/api/records/leaderboards';
 		const controller = new AbortController();
-		void fetch('/api/records/leaderboards', { signal: controller.signal })
+		loading = true;
+		failed = false;
+		void fetch(url, { signal: controller.signal })
 			.then(async (response) => {
 				if (!response.ok) throw new Error();
 				const body = await response.json();
@@ -101,7 +106,10 @@
 				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 					{#each records as row (recordPath(row))}
 						<a
-							href={memberURL(recordPath(row), member)}
+							href={memberURL(
+								recordPath(row) + (excludeDownhills ? '?exclude_downhills=true' : ''),
+								member
+							)}
 							class="rounded-lg border border-zinc-800 bg-panel p-3 hover:border-accent-500"
 						>
 							<div class="text-sm font-medium">

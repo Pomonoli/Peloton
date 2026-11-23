@@ -559,3 +559,66 @@ func (r *ActivityRepo) SourceWorkerGroups(context.Context) ([]port.SourceWorkerG
 	}
 	return out, nil
 }
+
+func (r *ActivityRepo) CyclingWeeks(ctx context.Context, userID domain.UserID, start, end time.Time) ([]port.CyclingWeek, error) {
+	distances := map[int]float64{}
+	for _, a := range r.live(ctx, userID) {
+		if a.Type == domain.ActivityTypeRide && !a.StartTime.Before(start) && a.StartTime.Before(end) && a.Summary.DistanceM != nil {
+			distances[int(a.StartTime.Sub(start)/(7*24*time.Hour))] += *a.Summary.DistanceM
+		}
+	}
+	weeks := make([]port.CyclingWeek, 0, len(distances))
+	for i, distance := range distances {
+		weeks = append(weeks, port.CyclingWeek{Start: start.AddDate(0, 0, 7*i), DistanceM: distance})
+	}
+	return weeks, nil
+}
+
+func (r *ActivityRepo) ActivitySportTotals(ctx context.Context, userID domain.UserID) ([]port.ActivitySportTotals, error) {
+	type sport struct {
+		port.ActivitySportTotals
+		pairedDistance, pairedTime float64
+	}
+	bySport := map[domain.ActivityType]sport{}
+	for _, a := range r.live(ctx, userID) {
+		s := bySport[a.Type]
+		s.Type = a.Type
+		s.Count++
+		s.MovingS += a.MovingDuration.Seconds()
+		if a.Summary.DistanceM != nil {
+			s.DistanceM += *a.Summary.DistanceM
+			if *a.Summary.DistanceM > 0 && a.MovingDuration > 0 {
+				s.pairedDistance += *a.Summary.DistanceM
+				s.pairedTime += a.MovingDuration.Seconds()
+			}
+		}
+		bySport[a.Type] = s
+	}
+	totals := make([]port.ActivitySportTotals, 0, len(bySport))
+	for _, s := range bySport {
+		if s.pairedTime > 0 {
+			speed := 3.6 * s.pairedDistance / s.pairedTime
+			s.SpeedKmh = &speed
+		}
+		totals = append(totals, s.ActivitySportTotals)
+	}
+	return totals, nil
+}
+
+func (r *ActivityRepo) TrainingStressCoverage(ctx context.Context, userID domain.UserID, start, end time.Time) (port.TrainingStressCoverage, error) {
+	var out port.TrainingStressCoverage
+	for _, a := range r.live(ctx, userID) {
+		if a.StartTime.Before(start) || !a.StartTime.Before(end) {
+			continue
+		}
+		switch {
+		case a.Summary.TSS == nil:
+			out.Missing++
+		case a.Summary.AvgPowerW != nil || a.Summary.NormalizedPowerW != nil || a.Summary.AvgHeartRateBpm != nil:
+			out.SensorEstimate++
+		default:
+			out.DurationEstimate++
+		}
+	}
+	return out, nil
+}

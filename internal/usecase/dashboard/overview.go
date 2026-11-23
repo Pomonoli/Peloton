@@ -11,11 +11,12 @@ import (
 
 // Overview is the landing dashboard's data.
 type Overview struct {
-	Totals   port.ActivityTotalsResult
-	BySport  []port.ActivityFacet
-	Recent   []domain.Activity
-	ThisWeek port.ActivityTotalsResult
-	LastWeek port.ActivityTotalsResult
+	Totals       port.ActivityTotalsResult
+	BySport      []port.ActivityFacet
+	Recent       []domain.Activity
+	CyclingWeeks []port.CyclingWeek
+	ThisWeek     port.ActivityTotalsResult
+	LastWeek     port.ActivityTotalsResult
 	// Half-open ranges [From, To) of the two weeks, UTC, Monday start.
 	ThisWeekFrom, ThisWeekTo time.Time
 	LastWeekFrom, LastWeekTo time.Time
@@ -59,10 +60,26 @@ func (o *Overviews) Get(ctx context.Context, userID domain.UserID) (Overview, er
 	out.BySport, _, _, _ = o.activities.ActivityFacets(ctx, userID, port.ActivityListFilter{})
 	out.Recent, _ = o.activities.ListRecentActivitiesForUser(ctx, userID, RecentCount)
 
-	thisStart, lastStart := WeekBounds(o.now())
+	now := o.now()
+	thisStart, lastStart := WeekBounds(now)
 	out.ThisWeekFrom, out.ThisWeekTo = thisStart, thisStart.AddDate(0, 0, 7)
 	out.LastWeekFrom, out.LastWeekTo = lastStart, thisStart
 	out.ThisWeek, _ = o.activities.ActivityTotalsForRange(ctx, userID, out.ThisWeekFrom, out.ThisWeekTo)
 	out.LastWeek, _ = o.activities.ActivityTotalsForRange(ctx, userID, out.LastWeekFrom, out.LastWeekTo)
+	start := thisStart.AddDate(0, 0, -77)
+	weeks, err := o.activities.CyclingWeeks(ctx, userID, start, now)
+	if err != nil {
+		return Overview{}, fmt.Errorf("weekly cycling distance: %w", err)
+	}
+	out.CyclingWeeks = make([]port.CyclingWeek, 12)
+	for i := range out.CyclingWeeks {
+		out.CyclingWeeks[i].Start = start.AddDate(0, 0, 7*i)
+	}
+	for _, week := range weeks {
+		i := int(week.Start.Sub(start) / (7 * 24 * time.Hour))
+		if i >= 0 && i < len(out.CyclingWeeks) {
+			out.CyclingWeeks[i].DistanceM = week.DistanceM
+		}
+	}
 	return out, nil
 }

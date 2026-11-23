@@ -23,7 +23,8 @@ import (
 // the reconstruction logic in a trigger — keeping the SQL transformation
 // next to the Go that produces it makes the data flow easier to follow.
 type SegmentRepo struct {
-	pool *pgxpool.Pool
+	pool       *pgxpool.Pool
+	routeCache similarRouteCache
 }
 
 func NewSegmentRepo(pool *pgxpool.Pool) *SegmentRepo {
@@ -798,62 +799,4 @@ func (r *SegmentRepo) UserSegmentStats(ctx context.Context, userID domain.UserID
 		return domain.UserSegmentStats{}, fmt.Errorf("user segment stats: %w", err)
 	}
 	return st, nil
-}
-
-// FindSimilarActivities implements port.SegmentRepo; the criteria come from
-// the query (domain.SimilarRouteQueryFor).
-func (r *SegmentRepo) FindSimilarActivities(ctx context.Context, q domain.SimilarRouteQuery) ([]domain.SimilarActivity, error) {
-	if q.DistanceM <= 0 {
-		return nil, nil
-	}
-	db := dbtx(ctx, r.pool)
-	rows, err := db.Query(ctx,
-		`SELECT a.id, a.title, a.type, a.start_time, a.distance_m,
-		        a.moving_duration_s, a.elapsed_duration_s,
-		        a.avg_heart_rate_bpm, a.avg_power_w,
-		        COALESCE(sh.shared, 0)                                        AS shared,
-		        (SELECT count(DISTINCT segment_id) FROM segment_efforts
-		          WHERE activity_id = $1)                                     AS target_count
-		   FROM activities a
-		   LEFT JOIN (
-		        SELECT e.activity_id, count(DISTINCT e.segment_id) AS shared
-		          FROM segment_efforts e
-		         WHERE e.segment_id IN (
-		             SELECT DISTINCT segment_id FROM segment_efforts WHERE activity_id = $1)
-		         GROUP BY e.activity_id
-		   ) sh ON sh.activity_id = a.id
-		  WHERE a.user_id = $2
-		    AND a.deleted_at IS NULL`+communityReadSQL(ctx, "a.")+`
-		    AND a.id <> $1
-		    AND a.type = $3
-		    AND a.start_lat BETWEEN $4::float8 - $7::float8 AND $4::float8 + $7::float8
-		    AND a.start_lng BETWEEN $5::float8 - $7::float8 AND $5::float8 + $7::float8
-		    AND a.distance_m IS NOT NULL
-		    AND abs(a.distance_m - $6::float8) <= $8::float8 * $6::float8
-		  ORDER BY a.start_time ASC`,
-		q.ActivityID.UUID(), q.UserID.UUID(), string(q.Type),
-		q.StartLat, q.StartLng, q.DistanceM, q.StartToleranceDeg, q.DistanceTolerance,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("find similar activities: %w", err)
-	}
-	defer rows.Close()
-
-	var out []domain.SimilarActivity
-	for rows.Next() {
-		var (
-			sa domain.SimilarActivity
-			id uuid.UUID
-		)
-		if err := rows.Scan(
-			&id, &sa.Title, &sa.Type, &sa.StartTime, &sa.DistanceM,
-			&sa.MovingS, &sa.ElapsedS, &sa.AvgHeartRateBpm, &sa.AvgPowerW,
-			&sa.SharedSegments, &sa.TargetSegments,
-		); err != nil {
-			return nil, fmt.Errorf("scan similar activity: %w", err)
-		}
-		sa.ActivityID = domain.ActivityID(id)
-		out = append(out, sa)
-	}
-	return out, rows.Err()
 }

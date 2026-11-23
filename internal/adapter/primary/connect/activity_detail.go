@@ -76,7 +76,7 @@ func (s *ActivityServer) GetActivityZones(ctx context.Context, req *v1.GetActivi
 	if err != nil {
 		return nil, err
 	}
-	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
+	act, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
@@ -84,18 +84,21 @@ func (s *ActivityServer) GetActivityZones(ctx context.Context, req *v1.GetActivi
 	if err != nil {
 		return nil, actionErr(err)
 	}
-	out := &v1.GetActivityZonesResponse{Hr: zoneSummaryToProto(z.HR), Power: zoneSummaryToProto(z.Power)}
+	out := &v1.GetActivityZonesResponse{Hr: zoneSummaryToProto(z.HR, viewer.IsOwner), Power: zoneSummaryToProto(z.Power, viewer.IsOwner)}
 	if z.Decoupling != nil {
 		out.Decoupling = &v1.Decoupling{Pct: z.Decoupling.Pct, Basis: z.Decoupling.Basis, Coupled: z.Decoupling.Coupled}
 	}
 	return out, nil
 }
 
-func zoneSummaryToProto(z *domain.ZoneSummary) *v1.ZoneSummary {
+func zoneSummaryToProto(z *domain.ZoneSummary, includeReference bool) *v1.ZoneSummary {
 	if z == nil {
 		return nil
 	}
-	out := &v1.ZoneSummary{Basis: z.Basis, Reference: z.Reference, TotalSeconds: connectClampInt32(z.TotalSeconds)}
+	out := &v1.ZoneSummary{Basis: z.Basis, TotalSeconds: connectClampInt32(z.TotalSeconds)}
+	if includeReference {
+		out.Reference = z.Reference
+	}
 	for _, b := range z.Zones {
 		out.Zones = append(out.Zones, &v1.ZoneBand{Label: b.Label, LowPct: b.LowPct, HighPct: b.HighPct, Seconds: connectClampInt32(b.Seconds)})
 	}

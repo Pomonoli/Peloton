@@ -8,6 +8,7 @@ import { chromium } from 'playwright-core';
 const origin = 'http://peloton-browser.test';
 const build = fileURLToPath(new URL('../build/', import.meta.url));
 const endpoint = '/api/activities/heatmap/performance';
+const originalEndpoint = '/api/activities/heatmap';
 const members = ['ada', 'mira', 'sam'].map((username) => ({
 	id: username,
 	username,
@@ -41,7 +42,7 @@ try {
 			return route.fulfill({ json: basemap });
 		}
 		if (url.origin !== origin) return route.abort();
-		if (path === endpoint) {
+		if (path === endpoint || path === originalEndpoint) {
 			const member = url.searchParams.get('member');
 			const viewport = url.searchParams.has('level');
 			const from = url.searchParams.get('from');
@@ -76,7 +77,16 @@ try {
 				}
 			});
 		}
-		if (path === '/api/friends') return route.fulfill({ json: { members } });
+		if (path === '/api/overview') {
+			return route.fulfill({
+				json: {
+					totals: { count: 0, distance_m: 0, moving_s: 0, elevation_gain_m: 0 },
+					cycling_weeks: [],
+					recent: []
+				}
+			});
+		}
+		if (path === '/api/riders') return route.fulfill({ json: { members } });
 		if (path.startsWith('/api/members/')) {
 			return route.fulfill({ json: members.find((member) => path.endsWith('/' + member.id)) });
 		}
@@ -157,6 +167,30 @@ try {
 		]
 	);
 
+	const fullscreen = page.getByRole('button', { name: 'Fullscreen', exact: true });
+	await fullscreen.click();
+	await page.getByRole('button', { name: 'Exit fullscreen' }).waitFor();
+	await page.getByRole('button', { name: 'Exit fullscreen' }).click();
+	await fullscreen.waitFor();
+	assert.equal(await layer.inputValue(), 'gradient');
+
+	const scale = page.locator('select').filter({ has: page.locator('option[value="fixed"]') });
+	await scale.selectOption('fixed');
+	assert.equal(await scale.inputValue(), 'fixed');
+	await page.getByRole('button', { name: 'Light', exact: true }).click();
+	assert.equal(
+		await page.getByRole('button', { name: 'Light', exact: true }).getAttribute('aria-pressed'),
+		'true'
+	);
+	await page.getByRole('button', { name: 'Dark', exact: true }).click();
+	await layer.selectOption('density');
+	const originalTracks = page.getByLabel('Show original tracks');
+	await Promise.all([
+		page.waitForResponse((response) => new URL(response.url()).pathname === originalEndpoint),
+		originalTracks.check()
+	]);
+	await originalTracks.uncheck();
+
 	await page.getByRole('link', { name: 'Switch member' }).click();
 	await page.getByRole('link', { name: /Sam @sam/ }).click();
 	await heatmap().click();
@@ -164,12 +198,41 @@ try {
 	await tracks(2).waitFor();
 	assert.ok(calls.some(({ member, from }) => member === 'sam' && from === null));
 
+	await page.setViewportSize({ width: 390, height: 760 });
+	await page.addInitScript(() =>
+		Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { value: undefined })
+	);
+	await page.goto(origin + '/heatmap?member=sam');
+	await tracks(2).waitFor();
+	assert.equal(
+		await page.locator('details').filter({ hasText: 'Map filters' }).getAttribute('open'),
+		null
+	);
+	await page.getByText('Map filters', { exact: true }).click();
+	await fit.waitFor();
+	await fullscreen.click();
+	const exit = page.getByRole('button', { name: 'Exit fullscreen' });
+	await exit.waitFor();
+	assert.equal(
+		await exit.evaluate((button) =>
+			Math.round(button.parentElement.getBoundingClientRect().height)
+		),
+		760
+	);
+	await page.keyboard.press('Escape');
+	await fullscreen.waitFor();
+	await page.setViewportSize({ width: 1280, height: 900 });
+
 	stall = true;
 	await page.clock.install();
 	await page.goto(origin + '/heatmap?member=mira');
 	await page.getByText('Preparing ride history (1 remaining)…').waitFor();
-	await page.clock.fastForward(31_000);
-	await page.getByText('Heatmap preparation stopped making progress.', { exact: false }).waitFor();
+	const stalled = page.getByText('Heatmap preparation stopped making progress.', { exact: false });
+	for (let i = 0; i < 5 && !(await stalled.isVisible()); i++) {
+		await page.clock.fastForward(i === 0 ? 31_000 : 1000);
+		await delay(200);
+	}
+	await stalled.waitFor();
 	const stopped = calls.length;
 	await page.clock.fastForward(31_000);
 	assert.equal(calls.length, stopped, 'stalled preparation should stop polling');

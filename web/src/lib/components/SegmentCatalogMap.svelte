@@ -233,7 +233,8 @@
 						...bounds,
 						limit: '150',
 						...(query ? { q: query } : {}),
-						...(onlyMine ? { mine: 'true', ...(subject ? { member: subject } : {}) } : {})
+						...(onlyMine ? { mine: 'true' } : {}),
+						...(subject ? { member: subject } : {})
 					},
 					criteria,
 					request.signal

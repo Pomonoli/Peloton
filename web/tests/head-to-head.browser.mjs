@@ -11,6 +11,7 @@ const browser = await chromium.launch({
 });
 const you = { id: 'ada', username: 'ada', display_name: 'Ada', avatar_url: '' };
 const rider = { id: 'mira', username: 'mira', display_name: 'Mira', avatar_url: '' };
+const third = { id: 'sam', username: 'sam', display_name: 'Sam', avatar_url: '' };
 const effort = (value, activity_id) => ({ value, activity_id });
 const segment = (id, name, myTime, theirTime, winner) => ({
 	id,
@@ -71,9 +72,15 @@ try {
 				'/cairn.v1.AuthService/GetCurrentUser': {
 					user: { id: you.id, username: you.username, displayName: you.display_name }
 				},
-				'/api/friends': { members: [you, rider] },
-				'/api/profiles/mira': { user: rider, is_self: false, activities: [], has_more: false },
+				'/api/overview': {
+					totals: { count: 0, distance_m: 0, moving_s: 0, elevation_gain_m: 0 },
+					cycling_weeks: [],
+					recent: []
+				},
+				'/api/riders': { members: [you, rider, third] },
+				'/api/members/mira': rider,
 				'/api/head-to-head': {
+					first: url.searchParams.get('first') === 'sam' ? third : you,
 					opponent: rider,
 					segments: improved
 						? [segment('canal', 'Canal Sprint', 100, 90, 'opponent'), ...segments.slice(1)]
@@ -97,7 +104,7 @@ try {
 		});
 
 		await page.goto(origin + '/head-to-head');
-		const picker = page.getByLabel('Compare with', { exact: true });
+		const picker = page.getByLabel('Second rider', { exact: true });
 		await picker.selectOption('mira');
 		await page.waitForURL(origin + '/head-to-head?member=mira');
 		await page.getByRole('tabpanel', { name: 'Segments' }).getByText('Canal Sprint').waitFor();
@@ -149,7 +156,11 @@ try {
 		assert.equal(await panel.getByLabel('Filter by winner').inputValue(), 'tie');
 		await panel.getByLabel('Filter by winner').selectOption('');
 		improved = true;
-		await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+		await page.getByLabel('First rider', { exact: true }).selectOption('sam');
+		await page.waitForURL(
+			(url) => url.searchParams.get('first') === 'sam' && url.searchParams.get('member') === 'mira'
+		);
+		assert.equal(await picker.locator('option[value="sam"]').count(), 0);
 		await canal.getByText('1:30', { exact: true }).waitFor();
 		assert.equal(await page.getByRole('main').locator('dl dd').first().textContent(), '0');
 		assert.deepEqual(errors, []);

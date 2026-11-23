@@ -1,4 +1,9 @@
-import { loadMemberPage } from '#lib/member.js';
+import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = loadMemberPage;
+export const load: PageLoad = async ({ parent, url }) => {
+	const { user } = await parent();
+	if (!user) redirect(302, '/login');
+	if (url.searchParams.has('member')) redirect(302, '/health');
+	return {};
+};

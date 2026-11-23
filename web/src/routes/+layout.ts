@@ -40,31 +40,19 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 	const features = await loadFeatures(fetch);
 	try {
 		const res = await clients.auth.getCurrentUser({});
-		// Best-effort unread count for the header bell; never fail the shell on it.
-		let unreadCount = 0;
-		try {
-			const n = await clients.notification.listNotifications({
-				onlyUnread: true,
-				page: { cursor: '', limit: 50 }
-			});
-			unreadCount = n.notifications.length;
-		} catch {
-			/* ignore */
-		}
 		return {
 			user: userToView(res.user),
 			permissions: res.permissions ?? [],
-			unreadCount,
 			features
 		};
 	} catch (err) {
 		if (isUnauthenticated(err)) {
-			return { user: null, permissions: [], unreadCount: 0, features };
+			return { user: null, permissions: [], features };
 		}
 		// Backend reachable but errored — render the shell anyway so a
 		// transient hiccup doesn't take the whole UI down.
 		console.warn('GetCurrentUser failed', err);
-		return { user: null, permissions: [], unreadCount: 0, features };
+		return { user: null, permissions: [], features };
 	}
 };
 

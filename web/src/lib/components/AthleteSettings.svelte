@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { memberURL } from '#lib/member.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
 	import { formatDateOnly } from '#lib/format.js';
-
-	let { data } = $props();
 
 	type Spec = { key: string; label: string; unit: string; min: number; max: number };
 	type Entry = { id: string; key: string; effective_date: string; value: number };
@@ -58,7 +56,7 @@
 	async function load() {
 		loading = true;
 		try {
-			const res = await fetch(memberURL('/api/athlete/metrics', data.member));
+			const res = await fetch('/api/athlete/metrics');
 			if (res.ok) {
 				const d = await res.json();
 				specs = d.specs ?? [];
@@ -140,29 +138,26 @@
 
 <div class="space-y-6">
 	<header>
-		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Athlete profile</h1>
+		<h2 class="text-lg font-semibold">{m.health_athlete_settings()}</h2>
 		<p class="mt-1 max-w-2xl text-sm text-zinc-400">
 			Dated physiological values, used to calculate Training Stress Score (TSS) and the fitness
 			curves. Calculations interpolate between the nearest dates.
 		</p>
 	</header>
-
-	{#if !data.member}
-		<div class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-panel p-4">
-			<div class="text-sm text-zinc-300">
-				Changed your values? Recompute TSS + the training-load history with the new numbers.
-			</div>
-			<button
-				type="button"
-				onclick={recalculate}
-				disabled={recalcBusy}
-				class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
-			>
-				{recalcBusy ? 'Recalculating…' : 'Recalculate training load'}
-			</button>
-			{#if recalcMsg}<span class="text-xs text-zinc-400">{recalcMsg}</span>{/if}
+	<div class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-panel p-4">
+		<div class="text-sm text-zinc-300">
+			Changed your values? Recompute TSS + the training-load history with the new numbers.
 		</div>
-	{/if}
+		<button
+			type="button"
+			onclick={recalculate}
+			disabled={recalcBusy}
+			class="rounded bg-accent-500 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
+		>
+			{recalcBusy ? 'Recalculating…' : 'Recalculate training load'}
+		</button>
+		{#if recalcMsg}<span class="text-xs text-zinc-400">{recalcMsg}</span>{/if}
+	</div>
 	{#if error}
 		<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
 			{error}
@@ -199,22 +194,20 @@
 										<span class="font-medium tabular-nums text-zinc-100"
 											>{fmtValue(spec, e.value)}</span
 										>
-										{#if !data.member}
-											<button
-												type="button"
-												onclick={() => remove(e.id)}
-												class="text-quiet hover:text-red-400"
-												aria-label="Delete"
-												title="Delete">✕</button
-											>
-										{/if}
+										<button
+											type="button"
+											onclick={() => remove(e.id)}
+											class="text-quiet hover:text-red-400"
+											aria-label="Delete"
+											title="Delete">✕</button
+										>
 									</span>
 								</li>
 							{/each}
 						</ul>
 					{/if}
 
-					{#if dr && !data.member}
+					{#if dr}
 						<div class="flex items-end gap-2 max-md:flex-wrap">
 							<div>
 								<label

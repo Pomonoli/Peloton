@@ -320,6 +320,23 @@ func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestCl
 		}
 		return body
 	}
+	for _, path := range []string{"/api/athlete/metrics" + query, "/api/health" + query + "&type=HRV"} {
+		bob.do(http.MethodGet, path, nil, http.StatusForbidden)
+	}
+	bob.do(http.MethodGet, activity+"/power-inputs", nil, http.StatusNotFound)
+	if body := alice.do(http.MethodGet, "/api/athlete/metrics", nil, http.StatusOK); !bytes.Contains(body, []byte(metricID)) {
+		t.Fatal("the owner could not read their athlete settings")
+	}
+	if body := alice.do(http.MethodGet, "/api/health?type=HRV", nil, http.StatusOK); !bytes.Contains(body, []byte(`"value":57.5`)) {
+		t.Fatal("the owner could not read their health measurements")
+	}
+	if body := alice.do(http.MethodGet, activity+"/power-inputs", nil, http.StatusOK); !bytes.Contains(body, []byte(`"weight_kg":73.5`)) {
+		t.Fatal("the owner could not read their archived weight")
+	}
+	if body := requireBody(activity+"/zones", `"power":{`); bytes.Contains(body, []byte(`"reference"`)) {
+		t.Fatal("zone output disclosed the rider's thresholds")
+	}
+
 	for _, req := range []struct{ path, want string }{
 		{"/api/members/" + alice.name, alice.userID.String()},
 		{"/api/profiles/" + alice.name, old.ActivityID.String()},
@@ -330,8 +347,6 @@ func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestCl
 		{"/api/best-efforts/history" + query + "&type=ride&metric=power&window_kind=duration&window_value=300", old.ActivityID.String()},
 		{"/api/analysis" + query + "&days=30", `"ctl":[`},
 		{"/api/activities/heatmap" + query, old.ActivityID.String()},
-		{"/api/athlete/metrics" + query, metricID},
-		{"/api/health" + query + "&type=HRV", `"value":57.5`},
 		{"/api/segments" + query, segmentID},
 		{"/api/segments/catalog" + query + "&mine=true", segmentID},
 		{segment + query, old.ActivityID.String()},
@@ -340,10 +355,8 @@ func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestCl
 		{activity + "/segment-efforts", segmentID},
 		{activity + "/merged-stream", `"heart_rate"`},
 		{activity + "/similar", old.ActivityID.String()},
-		{activity + "/zones", `"power":{`},
 		{activity + "/laps", `"laps":[`},
 		{activity + "/manage", `"provider":"garmin"`},
-		{activity + "/power-inputs", `"weight_kg":73.5`},
 		{activity + "/export/options", `"gps":true`},
 		{activity + "/export.gpx", "<trkpt"},
 	} {
@@ -399,7 +412,9 @@ func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestCl
 	bob.do(http.MethodPost, activity+"/rescan-segments", nil, http.StatusNotFound)
 	bob.do(http.MethodGet, activity+"/sources/"+old.ID.String()+"/parsed", nil, http.StatusNotFound)
 	bob.do(http.MethodDelete, "/api/athlete/metrics/"+metricID, nil, http.StatusOK)
-	requireBody("/api/athlete/metrics"+query, metricID)
+	if body := alice.do(http.MethodGet, "/api/athlete/metrics", nil, http.StatusOK); !bytes.Contains(body, []byte(metricID)) {
+		t.Fatal("another rider deleted an owner-only metric")
+	}
 	requireBody("/api/activities/feed"+query, "Garmin historical ride")
 	connection := requireBody("/api/connections/garmin"+query, `"connected":false`)
 	if bytes.Contains(connection, []byte("fixture-alice")) {

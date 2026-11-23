@@ -79,11 +79,7 @@
 		records:
 			'M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1-10 0z M7 6H4.5a2.5 2.5 0 0 0 2.6 4 M17 6h2.5a2.5 2.5 0 0 1-2.6 4',
 		segments: 'm8 3 4 8 5-5 5 15H2L8 3',
-		feed: 'M4 11a9 9 0 0 1 9 9 M4 4a16 16 0 0 1 16 16 M5 19h.01',
-		clubs:
-			'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',
-		notifications: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0',
-		athlete: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+
 		health:
 			'M19.5 12.6 12 20l-7.5-7.4A5 5 0 1 1 12 6.3a5 5 0 1 1 7.5 6.3 M6.7 12h1.5l1.3-2 2.5 4.5 1.3-2h2',
 		connections:
@@ -102,7 +98,6 @@
 	type NavItem = { href: string; label: string; icon: string; badge?: number };
 	type NavGroup = { title: string; items: NavItem[] };
 
-	const unread = $derived(data.unreadCount ?? 0);
 	const isAdmin = $derived(data.permissions?.includes('admin') ?? false);
 	const canModerate = $derived(data.permissions?.includes('moderate') ?? false);
 
@@ -118,27 +113,13 @@
 				{ href: '/stats', label: m.nav_stats(), icon: icons.stats },
 				{ href: '/records', label: 'Records', icon: icons.records },
 				{ href: '/segments', label: m.nav_segments(), icon: icons.segments },
-				{ href: '/head-to-head', label: m.comparison_title(), icon: icons.friends }
-			]
-		},
-		{
-			title: 'Social',
-			items: [
-				{ href: '/feed', label: 'Feed', icon: icons.feed },
-				{ href: '/friends', label: m.friends_title(), icon: icons.friends },
-				{ href: '/clubs', label: 'Clubs', icon: icons.clubs }
+				{ href: '/head-to-head', label: m.comparison_title(), icon: icons.friends },
+				{ href: '/riders', label: m.friends_title(), icon: icons.friends }
 			]
 		},
 		{
 			title: 'Account',
 			items: [
-				{
-					href: '/notifications',
-					label: m.notifications_aria(),
-					icon: icons.notifications,
-					badge: unread
-				},
-				{ href: '/athlete', label: m.nav_athlete(), icon: icons.athlete },
 				{ href: '/health', label: 'Health', icon: icons.health },
 				{ href: '/gear', label: m.nav_gear(), icon: icons.gear },
 				{ href: '/connections', label: m.nav_connections(), icon: icons.connections },
@@ -319,7 +300,7 @@
 
 	<div class="flex min-w-0 flex-1 flex-col">
 		{#if data.user}
-			<!-- Mobile top bar — hamburger + brand + notifications. Never rendered ≥md. -->
+			<!-- Mobile top bar — menu and brand. Never rendered ≥md. -->
 			<header
 				class="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/80 px-4 py-3 backdrop-blur md:hidden"
 			>
@@ -342,32 +323,6 @@
 					</svg>
 				</button>
 				{@render brand()}
-				<a
-					href="/notifications"
-					class="relative ml-auto rounded p-1.5 text-zinc-400 transition-colors hover:text-zinc-100"
-					class:text-zinc-100={unread > 0}
-					aria-label={m.notifications_aria()}
-					title={m.notifications_aria()}
-				>
-					<svg
-						class="h-5 w-5"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.8"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d={icons.notifications} />
-					</svg>
-					{#if unread > 0}
-						<span
-							class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-semibold text-on-accent"
-						>
-							{unread > 9 ? '9+' : unread}
-						</span>
-					{/if}
-				</a>
 			</header>
 		{:else}
 			<!-- Logged-out header (login, signup, shared/public pages) -->
@@ -423,7 +378,7 @@
 								{member.display_name || member.username}
 							</a>
 						</div>
-						<a href="/friends" class="text-accent-400 hover:underline">{m.member_switch()}</a>
+						<a href="/riders" class="text-accent-400 hover:underline">{m.member_switch()}</a>
 					</div>
 					{#if page.data.member}<MemberNav {member} />{/if}
 				</div>

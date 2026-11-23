@@ -30,6 +30,21 @@ type ActivityTotalsResult struct {
 	ElevationGainM float64
 }
 
+type TrainingStressCoverage struct {
+	Imported, SensorEstimate, DurationEstimate, Missing int
+}
+
+type CyclingWeek struct {
+	Start     time.Time
+	DistanceM float64
+}
+
+type ActivitySportTotals struct {
+	Type domain.ActivityType
+	ActivityTotalsResult
+	SpeedKmh *float64
+}
+
 // ActivityFacet is a (value, count) bucket for faceted filtering — e.g.
 // {Value: "run", Count: 49}. Value is the raw stored enum string.
 type ActivityFacet struct {
@@ -144,6 +159,10 @@ type ActivityReader interface {
 	// ActivityTotalsForRange returns totals for activities whose start_time
 	// falls in [start, end) — the dashboard's this/last week.
 	ActivityTotalsForRange(ctx context.Context, userID domain.UserID, start, end time.Time) (ActivityTotalsResult, error)
+
+	TrainingStressCoverage(ctx context.Context, userID domain.UserID, start, end time.Time) (TrainingStressCoverage, error)
+	CyclingWeeks(ctx context.Context, userID domain.UserID, start, end time.Time) ([]CyclingWeek, error)
+	ActivitySportTotals(ctx context.Context, userID domain.UserID) ([]ActivitySportTotals, error)
 
 	// ActivityYearStats returns per-calendar-year totals (newest year first).
 	ActivityYearStats(ctx context.Context, userID domain.UserID) ([]ActivityYearStat, error)

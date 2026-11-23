@@ -31,11 +31,11 @@ func (h *AthleteHandlers) Mount(mux *http.ServeMux) {
 
 // list returns the metric registry (for the UI form) plus the user's entries.
 func (h *AthleteHandlers) list(w http.ResponseWriter, r *http.Request) {
-	ctx, me, ok := h.Auth.requireMember(w, r)
+	me, ok := h.Auth.requireOwner(w, r)
 	if !ok {
 		return
 	}
-	entries, err := h.Profile.Entries(ctx, me)
+	entries, err := h.Profile.Entries(r.Context(), me)
 	if err != nil {
 		http.Error(w, "load failed", http.StatusInternalServerError)
 		return
@@ -60,7 +60,7 @@ func (h *AthleteHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 // put upserts one dated measurement.
 func (h *AthleteHandlers) put(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
+	me, ok := h.Auth.requireOwner(w, r)
 	if !ok {
 		return
 	}
@@ -92,7 +92,7 @@ func (h *AthleteHandlers) put(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AthleteHandlers) remove(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
+	me, ok := h.Auth.requireOwner(w, r)
 	if !ok {
 		return
 	}
@@ -111,7 +111,7 @@ func (h *AthleteHandlers) remove(w http.ResponseWriter, r *http.Request) {
 // recalculate re-derives TSS under the current profile so a profile edit
 // corrects the CTL/ATL/TSB history.
 func (h *AthleteHandlers) recalculate(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
+	me, ok := h.Auth.requireOwner(w, r)
 	if !ok {
 		return
 	}

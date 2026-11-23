@@ -30,7 +30,12 @@ func (h *HeadToHeadHandlers) compare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
-	result, err := h.Views.Compare(r.Context(), caller.UserID, r.URL.Query().Get("member"))
+	query := r.URL.Query()
+	second := query.Get("second")
+	if second == "" {
+		second = query.Get("member")
+	}
+	result, err := h.Views.Compare(r.Context(), caller.UserID, query.Get("first"), second)
 	if err != nil {
 		h.Log.Debug("load head-to-head comparison", "error", err)
 		writeActionError(w, err, "Unable to load the comparison")
@@ -62,7 +67,7 @@ func (h *HeadToHeadHandlers) compare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"opponent": userCardJSON(result.Opponent), "segments": segments, "records": records,
+		"first": userCardJSON(result.First), "opponent": userCardJSON(result.Opponent), "segments": segments, "records": records,
 		"segment_score": comparisonScoreJSON(result.SegmentScore),
 		"record_score":  comparisonScoreJSON(result.RecordScore),
 	})

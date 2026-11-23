@@ -151,8 +151,7 @@ func locateEffort(e domain.SegmentEffort, seg domain.Segment, s []domain.StreamS
 	return row
 }
 
-// Similar groups the activity with the ones over the same route. Without
-// start coordinates and a distance the group is the activity alone.
+// Similar groups the activity with directionally overlapping GPS routes.
 func (d *Details) Similar(ctx context.Context, act domain.Activity) (domain.SimilarGroup, error) {
 	if d.segments == nil {
 		return domain.SimilarGroup{}, ErrUnavailable
@@ -187,6 +186,12 @@ func (d *Details) MergedStream(ctx context.Context, act domain.Activity) (stream
 		st, err := d.streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: s.ID, Resolution: domain.StreamResolution5s})
 		if err != nil || len(st.Samples) == 0 {
 			continue
+		}
+		if act.Type == domain.ActivityTypeRide {
+			st.ActivitySourceID, st.Resolution = s.ID, domain.StreamResolution5s
+			if err := ApplyCyclingStreamSpeed(ctx, d.streams, &st); err != nil {
+				return streamalign.MergedStream{}, false, fmt.Errorf("validate stream: %w", err)
+			}
 		}
 		streams[s.ID] = st
 		if !domain.ProviderDataRestricted(s.Provider) {

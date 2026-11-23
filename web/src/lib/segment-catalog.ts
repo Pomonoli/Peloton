@@ -1,3 +1,4 @@
+import type { SortCriterion } from '#lib/stacked-sort.js';
 import type { FeatureCollection, LineString } from 'geojson';
 import { decodePolylineLonLat } from '#lib/polyline.js';
 
@@ -10,7 +11,7 @@ export interface CatalogSegment {
 	local_kom_holder: string;
 	member_count: number;
 	my_attempts: number;
-	start: [number, number];
+	start: [number, number] | null;
 	polyline?: string;
 	polyline_precision?: number;
 }
@@ -19,19 +20,12 @@ export type SortColumn = Exclude<
 	keyof CatalogSegment,
 	'id' | 'start' | 'polyline' | 'polyline_precision'
 >;
-export type CatalogSort = { column: SortColumn; direction: 'asc' | 'desc' };
+export type CatalogSort = SortCriterion<SortColumn>;
 
 export function defaultCatalogSort(mySegments: boolean): CatalogSort[] {
 	return mySegments
 		? [{ column: 'my_attempts', direction: 'desc' }]
 		: [{ column: 'name', direction: 'asc' }];
-}
-
-export function nextCatalogSort(order: CatalogSort[], column: SortColumn, append: boolean) {
-	const active = order.find((item) => item.column === column);
-	const next: CatalogSort = { column, direction: active?.direction === 'asc' ? 'desc' : 'asc' };
-	if (!append) return [next];
-	return active ? order.map((item) => (item.column === column ? next : item)) : [...order, next];
 }
 
 export interface CatalogPage {

@@ -45,7 +45,7 @@ func (s *CommunityRecords) Detail(ctx context.Context, viewer domain.UserID, buc
 	if viewer == (domain.UserID{}) {
 		return nil, port.NewActionError(port.ActionErrorForbidden, "Authentication required")
 	}
-	if !bucket.Valid() {
+	if !bucket.Valid() || domain.RemovedRecordDistance(bucket.WindowKind, bucket.WindowValue) {
 		return nil, port.NewActionError(port.ActionErrorInvalid, "Invalid record category or window")
 	}
 	return s.Reader.ListCommunityRecords(ctx, &bucket)

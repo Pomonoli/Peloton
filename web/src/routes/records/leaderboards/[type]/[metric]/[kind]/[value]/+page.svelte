@@ -13,7 +13,10 @@
 <section class="space-y-5">
 	<header>
 		<a
-			href={memberURL('/records?tab=leaderboards', data.member)}
+			href={memberURL(
+				'/records?tab=leaderboards' + (data.excludeDownhills ? '&exclude_downhills=true' : ''),
+				data.member
+			)}
 			class="text-sm text-accent-400 hover:underline"
 		>
 			← {m.record_leaderboards()}
@@ -22,6 +25,11 @@
 			{recordLabel(bucket)}
 		</h1>
 		<p class="mt-1 text-sm text-quiet">{recordSport(bucket.activity_type)}</p>
+		{#if data.excludeDownhills && bucket.activity_type === 'ride' && ['speed', 'pace'].includes(bucket.metric)}<p
+				class="text-xs text-quiet"
+			>
+				{m.records_downhill_help()}
+			</p>{/if}
 	</header>
 	{#if records.length === 0}
 		<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">

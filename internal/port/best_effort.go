@@ -69,3 +69,15 @@ type CyclingRecordBackfillStore interface {
 	ListCyclingSourcesForRecordBackfill(ctx context.Context, after domain.SourceID, limit int) ([]domain.SourceID, error)
 	SaveMissingEfforts(ctx context.Context, efforts []domain.BestEffort) error
 }
+
+type excludeDownhillsKey struct{}
+
+// WithDownhillsExcluded selects the elevation-verified variant of cycling speed records.
+func WithDownhillsExcluded(ctx context.Context) context.Context {
+	return context.WithValue(ctx, excludeDownhillsKey{}, true)
+}
+
+func DownhillsExcluded(ctx context.Context) bool {
+	exclude, _ := ctx.Value(excludeDownhillsKey{}).(bool)
+	return exclude
+}

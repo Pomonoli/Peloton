@@ -106,7 +106,7 @@ func detailLapsJSON(laps []domain.ActivityLap) []map[string]any {
 }
 
 func (h *DetailHandlers) zones(w http.ResponseWriter, r *http.Request) {
-	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryZones, "bad activity id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryZones, "bad activity id")
 	if !ok {
 		return
 	}
@@ -115,14 +115,14 @@ func (h *DetailHandlers) zones(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err, "stream query failed")
 		return
 	}
-	resp := map[string]any{"hr": detailZoneSummaryJSON(z.HR), "power": detailZoneSummaryJSON(z.Power)}
+	resp := map[string]any{"hr": detailZoneSummaryJSON(z.HR, viewer.IsOwner), "power": detailZoneSummaryJSON(z.Power, viewer.IsOwner)}
 	if z.Decoupling != nil {
 		resp["decoupling"] = map[string]any{"pct": z.Decoupling.Pct, "basis": z.Decoupling.Basis, "coupled": z.Decoupling.Coupled}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func detailZoneSummaryJSON(s *domain.ZoneSummary) any {
+func detailZoneSummaryJSON(s *domain.ZoneSummary, includeReference bool) any {
 	if s == nil {
 		return nil
 	}
@@ -130,7 +130,11 @@ func detailZoneSummaryJSON(s *domain.ZoneSummary) any {
 	for i, b := range s.Zones {
 		zones[i] = map[string]any{"label": b.Label, "low_pct": b.LowPct, "high_pct": b.HighPct, "seconds": b.Seconds}
 	}
-	return map[string]any{"basis": s.Basis, "reference": s.Reference, "total_seconds": s.TotalSeconds, "zones": zones}
+	out := map[string]any{"basis": s.Basis, "total_seconds": s.TotalSeconds, "zones": zones}
+	if includeReference {
+		out["reference"] = s.Reference
+	}
+	return out
 }
 
 func (h *DetailHandlers) mergedStream(w http.ResponseWriter, r *http.Request) {
@@ -184,30 +188,33 @@ func (h *DetailHandlers) similar(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(g.Rows))
 	for _, row := range g.Rows {
 		out = append(out, map[string]any{
-			"id":              row.ActivityID.String(),
-			"is_current":      row.IsCurrent,
-			"title":           row.Title,
-			"type":            row.Type,
-			"start_time":      row.StartTime.UTC(),
-			"distance_m":      row.DistanceM,
-			"moving_s":        row.MovingS,
-			"elapsed_s":       row.ElapsedS,
-			"avg_heart_rate":  row.AvgHeartRateBpm,
-			"avg_power":       row.AvgPowerW,
-			"pace_s_per_km":   row.PaceSPerKm,
-			"shared_segments": row.SharedSegments,
-			"overlap_pct":     row.OverlapPct,
+			"id":                row.ActivityID.String(),
+			"is_current":        row.IsCurrent,
+			"title":             row.Title,
+			"type":              row.Type,
+			"start_time":        row.StartTime.UTC(),
+			"distance_m":        row.DistanceM,
+			"moving_s":          row.MovingS,
+			"elapsed_s":         row.ElapsedS,
+			"avg_heart_rate":    row.AvgHeartRateBpm,
+			"avg_power":         row.AvgPowerW,
+			"pace_s_per_km":     row.PaceSPerKm,
+			"average_speed_kmh": row.AverageSpeedKmh,
+			"shared_segments":   row.SharedSegments,
+			"overlap_pct":       row.OverlapPct,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"target_segments": g.TargetSegments,
 		"activities":      out,
 		"summary": map[string]any{
-			"count":            len(g.Rows),
-			"best_moving_s":    g.BestMovingS,
-			"current_moving_s": g.CurrentMovingS,
-			"current_rank":     g.CurrentRank,
-			"is_best":          g.IsBest,
+			"count":             len(g.Rows),
+			"best_moving_s":     g.BestMovingS,
+			"best_speed_kmh":    g.BestSpeedKmh,
+			"current_speed_kmh": g.CurrentSpeedKmh,
+			"current_moving_s":  g.CurrentMovingS,
+			"current_rank":      g.CurrentRank,
+			"is_best":           g.IsBest,
 		},
 	})
 }

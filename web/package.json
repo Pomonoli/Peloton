@@ -18,7 +18,8 @@
     "licenses": "license-checker-rseidelsohn --production --excludePrivatePackages --onlyAllow 'MIT;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;0BSD;MPL-2.0;BlueOak-1.0.0;CC0-1.0;Python-2.0'",
     "unused": "knip --dependencies",
     "test:head-to-head": "node tests/head-to-head.browser.mjs",
-    "test:heatmap": "node tests/heatmap.browser.mjs"
+    "test:heatmap": "node tests/heatmap.browser.mjs",
+    "test:views": "node tests/peloton-views.browser.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

@@ -39,6 +39,7 @@ func NewStats(activities port.ActivityReader, metrics port.MetricRepo, bestEffor
 type StatsResult struct {
 	Totals          port.ActivityTotalsResult
 	BySport         []port.ActivityFacet
+	SportTotals     []port.ActivitySportTotals
 	ByDiscipline    []port.ActivityFacet
 	ByYear          []port.ActivityYearStat
 	LongestDistance *domain.Activity
@@ -53,6 +54,10 @@ func (s *Stats) Get(ctx context.Context, userID domain.UserID) (StatsResult, err
 	}
 	out := StatsResult{Totals: totals}
 	out.BySport, out.ByDiscipline, _, _ = s.activities.ActivityFacets(ctx, userID, port.ActivityListFilter{})
+	out.SportTotals, err = s.activities.ActivitySportTotals(ctx, userID)
+	if err != nil {
+		return StatsResult{}, fmt.Errorf("totals by sport: %w", err)
+	}
 	out.ByYear, _ = s.activities.ActivityYearStats(ctx, userID)
 	out.LongestDistance = s.first(ctx, userID, "distance_desc")
 	out.LongestDuration = s.first(ctx, userID, "duration_desc")
@@ -78,11 +83,7 @@ func (s *Stats) TrainingLoad(ctx context.Context, userID domain.UserID, days int
 	if s.metrics == nil {
 		return nil, ErrUnavailable
 	}
-	if days <= 0 || days > TrainingLoadMaxDays {
-		days = TrainingLoadDefaultDays
-	}
-	end := s.now().UTC().Add(24 * time.Hour)
-	start := end.AddDate(0, 0, -days)
+	start, end := s.trainingLoadBounds(days)
 	if port.IsCommunityActivityRead(ctx) {
 		hidden, err := s.activities.HasHiddenTrainingStress(ctx, userID, end)
 		if err != nil {
@@ -102,6 +103,19 @@ func (s *Stats) TrainingLoad(ctx context.Context, userID domain.UserID, days int
 	return domain.TrainingLoadSeries(metrics), nil
 }
 
+func (s *Stats) trainingLoadBounds(days int) (time.Time, time.Time) {
+	if days <= 0 || days > TrainingLoadMaxDays {
+		days = TrainingLoadDefaultDays
+	}
+	end := s.now().UTC().Add(24 * time.Hour)
+	return end.AddDate(0, 0, -days), end
+}
+
+func (s *Stats) TrainingStressCoverage(ctx context.Context, userID domain.UserID, days int) (port.TrainingStressCoverage, error) {
+	start, end := s.trainingLoadBounds(days)
+	return s.activities.TrainingStressCoverage(ctx, userID, start, end)
+}
+
 // BestEffortHistory is one bucket's progression.
 type BestEffortHistory struct {
 	Items []domain.BestEffortHistoryItem
@@ -113,7 +127,7 @@ func (s *Stats) BestEffortHistory(ctx context.Context, userID domain.UserID, act
 	if s.bestEfforts == nil {
 		return BestEffortHistory{}, ErrUnavailable
 	}
-	if activityType == "" || !domain.BestEffortHistoryMetrics[metric] || (windowKind != "distance" && windowKind != "duration") || windowValue <= 0 {
+	if activityType == "" || !domain.BestEffortHistoryMetrics[metric] || (windowKind != "distance" && windowKind != "duration") || windowValue <= 0 || domain.RemovedRecordDistance(domain.BestEffortWindowKind(windowKind), windowValue) {
 		return BestEffortHistory{}, port.NewActionError(port.ActionErrorInvalid, "type, metric, window_kind (distance|duration) and window_value are required")
 	}
 	items, err := s.bestEfforts.ListBestEffortHistory(ctx, userID, activityType, metric, windowKind, windowValue)

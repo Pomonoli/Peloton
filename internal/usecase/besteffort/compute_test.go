@@ -10,76 +10,25 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
-func TestSlidingWindowMax_FindsLastWindow(t *testing.T) {
-	// values = [0, 1, 2, ..., 59]. The max 5-sample window is the tail.
-	values := make([]float64, 60)
-	for i := range values {
-		values[i] = float64(i)
+func TestTimedSensorEffortUsesTimestampsAndRejectsGaps(t *testing.T) {
+	start := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+	samples := []domain.StreamSample{
+		{Timestamp: start, PowerW: new(int16(100))},
+		{Timestamp: start.Add(3 * time.Second), PowerW: new(int16(100))},
+		{Timestamp: start.Add(6 * time.Second), PowerW: new(int16(100))},
+		{Timestamp: start.Add(9 * time.Second)},
+		{Timestamp: start.Add(20 * time.Second), PowerW: new(int16(900))},
+		{Timestamp: start.Add(50 * time.Second), PowerW: new(int16(900))},
 	}
-
-	avg, start, ok := slidingWindowMax(values, 5)
-	if !ok {
-		t.Fatal("expected ok=true")
+	uc := NewComputeBestEffortsForSource(nil, nil, nil, nil, nil, nil)
+	window := windowSpec{domain.BestEffortMetricPower, domain.BestEffortWindowDuration, 5}
+	result, ok := uc.timedSensorEffort(domain.Activity{}, domain.ActivitySource{}, samples, window, start)
+	if !ok || result.AchievedValue != 100 || result.DurationS != 5 {
+		t.Fatalf("incorrect measured window: %+v, %v", result, ok)
 	}
-	if start != 55 {
-		t.Errorf("start = %d, want 55", start)
-	}
-	wantAvg := (55.0 + 56 + 57 + 58 + 59) / 5
-	if math.Abs(avg-wantAvg) > 1e-9 {
-		t.Errorf("avg = %f, want %f", avg, wantAvg)
-	}
-}
-
-func TestSlidingWindowMax_BelowWindow(t *testing.T) {
-	values := []float64{1, 2, 3}
-	_, _, ok := slidingWindowMax(values, 10)
-	if ok {
-		t.Error("expected ok=false for activity shorter than window")
-	}
-}
-
-func TestSlidingWindowMax_TolerantToNaN(t *testing.T) {
-	// Place high power at 200, surrounded by NaN. 80%-valid threshold
-	// should reject a window dominated by NaN.
-	values := make([]float64, 30)
-	for i := range values {
-		values[i] = math.NaN()
-	}
-	values[10] = 1000
-
-	// 5-sample window with only one valid sample: 20% valid, below 80%
-	// threshold — should be ignored.
-	_, _, ok := slidingWindowMax(values, 5)
-	if ok {
-		t.Error("expected ok=false: single valid sample insufficient")
-	}
-
-	// Now fill the window properly with 4 valid samples of value 100 each
-	// (80% of 5 = 4 valid samples).
-	for i := 10; i < 14; i++ {
-		values[i] = 100
-	}
-	avg, _, ok := slidingWindowMax(values, 5)
-	if !ok {
-		t.Fatal("expected ok=true with 4 valid + 1 NaN in a 5-sample window")
-	}
-	if math.Abs(avg-100) > 1e-9 {
-		t.Errorf("avg = %f, want 100 (NaN excluded from mean)", avg)
-	}
-}
-
-func TestSlidingWindowMax_PicksBestNotLastOrFirst(t *testing.T) {
-	// Spike in the middle.
-	values := []float64{50, 50, 50, 50, 50, 50, 50, 200, 200, 200, 50, 50, 50}
-	avg, start, ok := slidingWindowMax(values, 3)
-	if !ok {
-		t.Fatal("expected ok=true")
-	}
-	if start != 7 {
-		t.Errorf("start = %d, want 7", start)
-	}
-	if math.Abs(avg-200) > 1e-9 {
-		t.Errorf("avg = %f, want 200", avg)
+	window.Value = 10
+	if _, ok := uc.timedSensorEffort(domain.Activity{}, domain.ActivitySource{}, samples, window, start); ok {
+		t.Fatal("missing data was bridged to create a record")
 	}
 }
 
@@ -181,7 +130,7 @@ func TestComputeVAMEffort(t *testing.T) {
 	uc := NewComputeBestEffortsForSource(nil, nil, nil, nil, fixedNow, fixedID)
 
 	// 400 samples at 1Hz, climbing 1 m/sample. Over a 300s window the gain is
-	// 299 m → VAM = 299 / (300/3600) h = 3588 m/h.
+	// 300 m → VAM = 300 / (300/3600) h = 3600 m/h.
 	base := time.Unix(1000, 0).UTC()
 	samples := make([]domain.StreamSample, 400)
 	for i := range samples {
@@ -189,15 +138,15 @@ func TestComputeVAMEffort(t *testing.T) {
 		samples[i] = domain.StreamSample{Timestamp: base.Add(time.Duration(i) * time.Second), AltitudeM: &alt}
 	}
 	w := windowSpec{domain.BestEffortMetricVAM, domain.BestEffortWindowDuration, 300}
-	be, ok := uc.computeVAMEffort(domain.Activity{}, domain.ActivitySource{}, samples, w, fixedNow())
+	be, ok := uc.timedSensorEffort(domain.Activity{}, domain.ActivitySource{}, samples, w, fixedNow())
 	if !ok {
 		t.Fatal("expected a VAM effort")
 	}
 	if be.Metric != domain.BestEffortMetricVAM {
 		t.Fatalf("metric = %q", be.Metric)
 	}
-	if be.AchievedValue < 3580 || be.AchievedValue > 3596 {
-		t.Fatalf("VAM = %.1f m/h, want ~3588", be.AchievedValue)
+	if math.Abs(be.AchievedValue-3600) > .01 {
+		t.Fatalf("VAM = %.1f m/h, want 3600", be.AchievedValue)
 	}
 
 	// Flat altitude → no climbing window → no effort.
@@ -206,7 +155,7 @@ func TestComputeVAMEffort(t *testing.T) {
 		alt := 100.0
 		flat[i] = domain.StreamSample{Timestamp: base.Add(time.Duration(i) * time.Second), AltitudeM: &alt}
 	}
-	if _, ok := uc.computeVAMEffort(domain.Activity{}, domain.ActivitySource{}, flat, w, fixedNow()); ok {
+	if _, ok := uc.timedSensorEffort(domain.Activity{}, domain.ActivitySource{}, flat, w, fixedNow()); ok {
 		t.Fatal("flat altitude should produce no VAM effort")
 	}
 }
@@ -220,5 +169,26 @@ func TestReadMetricRejectsInvalidSensorSamples(t *testing.T) {
 	}
 	if value, ok := readMetric(domain.StreamSample{PowerW: new(int16(0))}, domain.BestEffortMetricPower); !ok || value != 0 {
 		t.Fatal("a recorded zero watt sample is valid coasting data")
+	}
+}
+
+func TestGPSOnlyHistoricalRunningRecords(t *testing.T) {
+	start := time.Date(2024, 5, 1, 9, 0, 0, 0, time.UTC)
+	samples := make([]domain.StreamSample, 310)
+	for i := range samples {
+		samples[i] = domain.StreamSample{
+			Timestamp: start.Add(time.Duration(i) * time.Second),
+			Latitude:  new(51 + float64(i*4)*180/(math.Pi*domain.EarthRadiusMeters)), Longitude: new(4.0),
+		}
+	}
+	windows := []windowSpec{
+		{domain.BestEffortMetricPace, domain.BestEffortWindowDistance, 1000},
+		{domain.BestEffortMetricSpeed, domain.BestEffortWindowDuration, 60},
+		{domain.BestEffortMetricHeartRate, domain.BestEffortWindowDuration, 60},
+	}
+	uc := NewComputeBestEffortsForSource(nil, nil, nil, nil, nil, nil)
+	got := uc.computeAll(domain.Activity{Type: domain.ActivityTypeRun, StartTime: start}, domain.ActivitySource{}, samples, windows)
+	if len(got) != 2 || math.Abs(got[0].AchievedValue-250) > .1 || math.Abs(got[1].AchievedValue-4) > .01 {
+		t.Fatalf("GPS-only records: %+v", got)
 	}
 }

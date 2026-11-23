@@ -41,7 +41,7 @@ func TestCompareSegmentElapsedSpeedAndScore(t *testing.T) {
 func TestCompareEveryStandardCyclingRecord(t *testing.T) {
 	you, them := domain.UserID{1}, domain.UserID{2}
 	expectedWindows := map[domain.BestEffortMetric]int{
-		domain.BestEffortMetricPace:  9,
+		domain.BestEffortMetricPace:  5,
 		domain.BestEffortMetricSpeed: 3, domain.BestEffortMetricPower: 6,
 		domain.BestEffortMetricVAM: 3, domain.BestEffortMetricHeartRate: 4,
 	}
@@ -61,7 +61,7 @@ func TestCompareEveryStandardCyclingRecord(t *testing.T) {
 		}
 	}
 	rows, score := compareRecords(you, records)
-	if len(rows) != 25 || score != (ComparisonScore{Wins: 9, Losses: 12}) {
+	if len(rows) != 21 || score != (ComparisonScore{Wins: 5, Losses: 12}) {
 		t.Fatalf("rows %d, score %+v", len(rows), score)
 	}
 	for _, row := range rows {

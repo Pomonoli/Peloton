@@ -92,7 +92,7 @@ describe('Head-to-Head rows', () => {
 			'Mira'
 		);
 		expect(rows[1]?.cells).toMatchObject({
-			you: { text: '8:20', detail: '36.0 km/h' },
+			you: { text: '8:20', detail: '36 km/h' },
 			opponent: { text: '10:25', detail: '28.8 km/h' },
 			difference: { text: '125 sec', detail: '25%' }
 		});

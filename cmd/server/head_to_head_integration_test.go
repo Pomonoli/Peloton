@@ -268,6 +268,24 @@ func TestAPI_HeadToHead(t *testing.T) {
 			t.Fatalf("comparison did not fall back to the eligible Garmin record: %+v", row)
 		}
 	}
+	// A third signed-in rider can compare this pair without inheriting either
+	// selected rider's access to hidden or provider-restricted activities.
+	peerPath := "/api/head-to-head?first=" + bob.name + "&second=" + alice.name
+	peerBody := admin.do(http.MethodGet, peerPath, nil, http.StatusOK)
+	var peer headToHeadResponse
+	if err := json.Unmarshal(peerBody, &peer); err != nil {
+		t.Fatal(err)
+	}
+	if len(peer.Segments) != 3 || peer.Segments[0].ID != canal.ID || peer.Segments[0].You.Value != 120 {
+		t.Fatalf("wrong comparison for the selected pair: %s", peerBody)
+	}
+	for _, row := range peer.Records {
+		if row.Metric == "power" && row.Window == 300 && (row.You == nil || row.You.ActivityID != bID.String() || row.You.Value != 225) {
+			t.Fatalf("third-party comparison exposed a private activity: %+v", row)
+		}
+	}
+	admin.do(http.MethodGet, "/api/head-to-head?first="+alice.name+"&second="+alice.name, nil, http.StatusBadRequest)
+
 	if err := env.app.Blocks.Block(ctx, bob.userID, alice.userID); err != nil {
 		t.Fatal(err)
 	}

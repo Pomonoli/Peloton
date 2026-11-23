@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { APP_NAME } from '$app/env/public';
-	import { onMount } from 'svelte';
+	import WeeklyDistance from '#lib/components/WeeklyDistance.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { memberURL } from '#lib/member.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
@@ -9,30 +9,31 @@
 		formatDistance,
 		formatDuration,
 		formatElevation,
+		formatMovingSpeed,
 		formatRelativeDate
 	} from '#lib/format.js';
 
 	let { data } = $props();
 
-	type Facet = { value: string; count: number };
-	type Recent = {
-		id: string;
-		title: string;
-		type: string;
-		discipline: string;
-		start_time: string;
-		distance_m: number | null;
-		elapsed_duration_s: number;
-	};
 	type WeekStat = { count: number; distance_m: number; moving_s: number; elevation_gain_m: number };
 	type Overview = {
 		totals: WeekStat;
-		by_sport: Facet[];
+		cycling_weeks: { start: string; distance_m: number }[];
 		recent: Recent[];
 		this_week?: WeekStat;
 		last_week?: WeekStat;
 	};
 
+	type Recent = {
+		id: string;
+		title: string;
+		type: string;
+		start_time: string;
+		distance_m: number | null;
+		moving_duration_s: number;
+		elevation_gain_m: number | null;
+	};
+	let failed = $state(false);
 	let ov = $state<Overview | null>(null);
 
 	// Deep-link a week's stat block into the activities view filtered to that
@@ -52,55 +53,24 @@
 		return memberURL(`/activities?from=${iso(monday)}&to=${iso(next)}`, data.member);
 	}
 
-	type FeedItem = {
-		source: 'self' | 'following' | 'federated';
-		id: string;
-		title: string;
-		type: string;
-		start_time: string;
-		distance_m?: number | null;
-		elevation_gain_m?: number | null;
-		elapsed_duration_s?: number;
-		start_place?: string;
-		start_location_redacted?: boolean;
-		map_image_url?: string;
-		url?: string;
-		owner?: { display_name?: string; username?: string; remote?: boolean; actor?: string };
-	};
-	let feed = $state<FeedItem[]>([]);
-
-	onMount(async () => {
+	$effect(() => {
 		if (!data.user) return;
-		try {
-			const res = await fetch(memberURL('/api/overview', data.member));
-			if (res.ok) ov = await res.json();
-		} catch {
-			/* ignore */
-		}
-		if (data.member) return;
-		try {
-			const fr = await fetch('/api/feed/home');
-			if (fr.ok) feed = (await fr.json()).activities ?? [];
-		} catch {
-			/* ignore */
-		}
+		const url = memberURL('/api/overview', data.member);
+		const controller = new AbortController();
+		ov = null;
+		failed = false;
+		void (async () => {
+			try {
+				const response = await fetch(url, { signal: controller.signal });
+				if (!response.ok) throw new Error();
+				const result: Overview = await response.json();
+				if (!controller.signal.aborted) ov = result;
+			} catch {
+				if (!controller.signal.aborted) failed = true;
+			}
+		})();
+		return () => controller.abort();
 	});
-
-	// Quick filter: which feed sources to show (own / friends / federated).
-	// The federated chip only exists when the instance federates at all.
-	let sources = $state({ self: true, following: true, federated: true });
-	const sourceMeta = $derived(
-		[
-			{ key: 'self' as const, label: 'Mine' },
-			{ key: 'following' as const, label: 'Friends' },
-			{ key: 'federated' as const, label: 'Federated' }
-		].filter((s) => s.key !== 'federated' || data.features?.federation)
-	);
-	const shown = $derived<FeedItem[]>(
-		data.member
-			? (ov?.recent ?? []).map((a) => ({ ...a, source: 'following', owner: data.member! }))
-			: feed.filter((a) => sources[a.source])
-	);
 
 	const summary = $derived(
 		ov
@@ -136,7 +106,10 @@
 			<div class="flex flex-wrap items-end justify-between gap-4">
 				<div>
 					<h1 class="text-2xl font-semibold tracking-tight">
-						{#if data.member}{m.nav_overview()}{:else}Welcome back, {data.user.displayName}{/if}
+						{#if data.member}{data.member.display_name ||
+								data.member.username}{:else}{m.overview_welcome({
+								name: data.user.displayName || data.user.username
+							})}{/if}
 					</h1>
 					{#if !data.member}<p class="mt-1 text-sm text-zinc-400">
 							Your training at a glance.
@@ -154,6 +127,14 @@
 				{/if}
 			</div>
 		</header>
+
+		{#if ov}
+			<WeeklyDistance weeks={ov.cycling_weeks} />
+		{:else if failed}
+			<p role="alert" class="text-sm text-red-300">{m.overview_failed()}</p>
+		{:else}
+			<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
+		{/if}
 
 		{#snippet weekBlock(label: string, w: WeekStat | undefined, href: string)}
 			<section class="rounded-xl border border-zinc-800 bg-panel p-4">
@@ -200,8 +181,10 @@
 		<div class="grid gap-6 lg:grid-cols-[20rem_1fr]">
 			<!-- Left sidebar: weekly stats + stuff -->
 			<aside class="space-y-4">
-				{@render weekBlock('This week', ov?.this_week, weekHref(0))}
-				{@render weekBlock('Last week', ov?.last_week, weekHref(1))}
+				{#if ov}
+					{@render weekBlock('This week', ov?.this_week, weekHref(0))}
+					{@render weekBlock('Last week', ov?.last_week, weekHref(1))}
+				{/if}
 
 				<nav class="rounded-xl border border-zinc-800 bg-panel p-4 text-sm">
 					<h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Explore</h2>
@@ -218,157 +201,45 @@
 							href={memberURL('/segments', data.member)}
 							class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60">Segments</a
 						>
-						<a
-							href={memberURL('/athlete', data.member)}
-							class="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800/60"
-							>{m.nav_athlete()}</a
-						>
 					</div>
 				</nav>
 			</aside>
 
-			<!-- Main content: the feed (own + friends + federated, quick-filterable) -->
-			<main>
-				<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-					<h2 class="text-sm font-medium text-zinc-300">
-						{data.member ? m.member_recent_activities() : 'Your feed'}
-					</h2>
-					{#if feed.length > 0}
-						<div class="flex flex-wrap gap-1.5">
-							{#each sourceMeta as s (s.key)}
-								<button
-									type="button"
-									onclick={() => (sources[s.key] = !sources[s.key])}
-									class="rounded-full border px-2.5 py-1 text-xs {sources[s.key]
-										? 'border-accent-500/40 bg-accent-500/20 text-accent-300'
-										: 'border-zinc-700 text-zinc-500 hover:text-zinc-300'}"
+			<section aria-labelledby="recent-activities">
+				<h2 id="recent-activities" class="mb-3 text-sm font-medium">
+					{m.member_recent_activities()}
+				</h2>
+				<div class="space-y-3">
+					{#each ov?.recent ?? [] as activity (activity.id)}
+						<article class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-4">
+							<a
+								href={`/activities/${activity.id}`}
+								class="flex items-center gap-3 hover:text-accent-300"
+							>
+								<SportIcon type={activity.type} size={24} />
+								<span class="min-w-0 flex-1 truncate font-medium"
+									>{activity.title || m.ride_activity()}</span
 								>
-									{s.label}<span class="ml-1 opacity-60"
-										>{feed.filter((a) => a.source === s.key).length}</span
-									>
-								</button>
-							{/each}
-						</div>
-					{/if}
-				</div>
-				{#if shown.length > 0}
-					<div class="space-y-3">
-						{#each shown as a (a.source + ':' + a.id)}
-							<article class="rounded-lg border border-zinc-800 bg-panel p-4 shadow-sm">
-								<div class="mb-2 flex items-center gap-2 text-sm text-zinc-400">
-									<span class="font-medium text-zinc-100"
-										>{a.owner?.display_name || a.owner?.username}</span
-									>
-									{#if a.source === 'self'}
-										<span
-											class="rounded bg-zinc-700/50 px-1.5 py-0.5 text-[10px] uppercase text-zinc-300"
-											>you</span
-										>
-									{:else if a.source === 'federated'}
-										<span
-											class="rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] uppercase text-violet-300"
-											>federated</span
-										>
-									{/if}
-									<span>·</span>
-									<span>{formatRelativeDate(a.start_time)}</span>
-								</div>
-								{#if a.source === 'federated'}
-									<a
-										href={a.url || '#'}
-										target="_blank"
-										rel="noopener"
-										class="flex items-center gap-3 hover:opacity-90"
-									>
-										<SportIcon type={a.type} size={24} />
-										<div class="min-w-0 flex-1">
-											<div class="truncate font-medium">{a.title || 'Activity'}</div>
-											<div class="truncate text-xs text-zinc-500">
-												{a.owner?.actor ? new URL(a.owner.actor).host : ''} ↗
-											</div>
-										</div>
-									</a>
-								{:else}
-									<a href={`/activities/${a.id}`} class="flex items-center gap-3 hover:opacity-90">
-										<SportIcon type={a.type} size={24} />
-										<div class="min-w-0 flex-1">
-											<div class="truncate font-medium">{a.title || 'Untitled'}</div>
-											{#if a.start_place}<div class="truncate text-xs text-zinc-400">
-													{a.start_place}
-												</div>{:else if a.start_location_redacted}<div
-													class="truncate text-xs text-zinc-400"
-												>
-													📍 Start location hidden
-												</div>{/if}
-										</div>
-									</a>
-								{/if}
-								{#if a.distance_m || a.elapsed_duration_s || a.elevation_gain_m}
-									<div
-										class="mt-3 flex divide-x divide-zinc-800 rounded-md border border-zinc-800 text-sm"
-									>
-										{#if a.distance_m}
-											<div class="flex-1 px-3 py-1.5">
-												<div class="text-[10px] uppercase tracking-wide text-zinc-500">
-													Distance
-												</div>
-												<div class="font-semibold tabular-nums">{formatDistance(a.distance_m)}</div>
-											</div>
-										{/if}
-										{#if a.elapsed_duration_s}
-											<div class="flex-1 px-3 py-1.5">
-												<div class="text-[10px] uppercase tracking-wide text-zinc-500">Time</div>
-												<div class="font-semibold tabular-nums">
-													{formatDuration(a.elapsed_duration_s)}
-												</div>
-											</div>
-										{/if}
-										{#if a.elevation_gain_m}
-											<div class="flex-1 px-3 py-1.5">
-												<div class="text-[10px] uppercase tracking-wide text-zinc-500">
-													Elevation
-												</div>
-												<div class="font-semibold tabular-nums">
-													{Math.round(a.elevation_gain_m)} m
-												</div>
-											</div>
-										{/if}
+								<span class="text-xs text-quiet">{formatRelativeDate(activity.start_time)}</span>
+							</a>
+							<dl
+								class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-zinc-800 pt-2 text-sm sm:grid-cols-4"
+							>
+								{#each [{ label: m.detail_stat_distance(), value: formatDistance(activity.distance_m) }, { label: m.col_moving(), value: activity.moving_duration_s > 0 ? formatDuration(activity.moving_duration_s) : '—' }, { label: m.col_elevation(), value: formatElevation(activity.elevation_gain_m) }, { label: m.col_average_speed(), value: formatMovingSpeed(activity.distance_m, activity.moving_duration_s) }] as stat (stat.label)}
+									<div>
+										<dt class="text-xs text-quiet">{stat.label}</dt>
+										<dd class="font-semibold tabular-nums">{stat.value}</dd>
 									</div>
-								{/if}
-								{#if a.map_image_url}
-									<a
-										href={a.source === 'federated' ? a.url || '#' : `/activities/${a.id}`}
-										target={a.source === 'federated' ? '_blank' : undefined}
-										rel="noopener"
-										class="mt-3 block"
-									>
-										<img
-											src={a.map_image_url}
-											alt="Course map"
-											loading="lazy"
-											class="aspect-[3/1] w-full rounded-md border border-zinc-800 object-cover"
-											onerror={(e) =>
-												((e.currentTarget as HTMLImageElement).style.display = 'none')}
-										/>
-									</a>
-								{/if}
-							</article>
-						{/each}
-					</div>
-				{:else if feed.length > 0}
-					<div
-						class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
-					>
-						No activities match the selected filters.
-					</div>
-				{:else}
-					<div
-						class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
-					>
-						{data.member ? m.activities_empty() : m.community_feed_empty()}
-					</div>
-				{/if}
-			</main>
+								{/each}
+							</dl>
+						</article>
+					{:else}
+						{#if ov}<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+								{m.activities_empty()}
+							</p>{/if}
+					{/each}
+				</div>
+			</section>
 		</div>
 	</div>
 {/if}

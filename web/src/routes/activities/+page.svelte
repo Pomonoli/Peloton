@@ -11,6 +11,7 @@
 		formatDistance,
 		formatDuration,
 		formatElevation,
+		formatMovingSpeed,
 		formatRelativeDate
 	} from '#lib/format.js';
 
@@ -23,7 +24,7 @@
 		discipline: string;
 		start_time: string;
 		timezone: string;
-		elapsed_duration_s: number;
+		moving_duration_s: number;
 		distance_m: number | null;
 		elevation_gain_m: number | null;
 		tss: number | null;
@@ -265,7 +266,7 @@
 				<li>
 					<a
 						href={`/activities/${activity.id}`}
-						class="flex items-center gap-5 rounded-lg border border-zinc-800 bg-panel px-5 py-4 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
+						class="flex flex-wrap items-center gap-5 rounded-lg border border-zinc-800 bg-panel px-5 py-4 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
 					>
 						<div
 							class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300"
@@ -298,7 +299,9 @@
 							class="hidden h-8 w-24 shrink-0 rounded border border-zinc-800 object-cover lg:block"
 							onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 						/>
-						<dl class="hidden gap-6 text-right text-xs text-zinc-400 md:flex">
+						<dl
+							class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-zinc-400 max-md:w-full md:grid-cols-4 md:text-right"
+						>
 							<div>
 								<dt class="text-zinc-500">{m.col_distance()}</dt>
 								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100">
@@ -306,9 +309,11 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-zinc-500">{m.col_duration()}</dt>
+								<dt class="text-zinc-500">{m.col_moving()}</dt>
 								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100">
-									{formatDuration(activity.elapsed_duration_s)}
+									{activity.moving_duration_s > 0
+										? formatDuration(activity.moving_duration_s)
+										: '—'}
 								</dd>
 							</div>
 							<div>
@@ -318,9 +323,9 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-zinc-500">TSS</dt>
-								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100">
-									{activity.tss != null ? activity.tss.toFixed(0) : m.placeholder_dash()}
+								<dt class="text-zinc-500">{m.col_average_speed()}</dt>
+								<dd class="font-medium tabular-nums">
+									{formatMovingSpeed(activity.distance_m, activity.moving_duration_s)}
 								</dd>
 							</div>
 						</dl>

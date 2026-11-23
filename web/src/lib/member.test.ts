@@ -16,10 +16,7 @@ it('preserves activity filters when linking to a member', () => {
 		'/analysis',
 		'/heatmap',
 		'/segments',
-		'/head-to-head',
-		'/athlete',
-		'/health',
-		'/gear'
+		'/head-to-head'
 	]);
 	expect(memberLinks(member).every(({ url }) => url.endsWith('member=a%20rider'))).toBe(true);
 });

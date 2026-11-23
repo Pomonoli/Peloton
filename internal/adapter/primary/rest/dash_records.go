@@ -1,12 +1,14 @@
 package rest
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/besteffort"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 )
@@ -38,7 +40,7 @@ func (h *RecordHandlers) records(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	recs, err := h.Stats.PersonalRecords(ctx, userID)
+	recs, err := h.Stats.PersonalRecords(recordReadContext(ctx, r), userID)
 	if err != nil {
 		h.Log.Error("list personal records failed", "user_id", userID, "error", err)
 		writeActionError(w, err, "load failed")
@@ -67,7 +69,7 @@ func (h *RecordHandlers) history(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	activityType, metric, windowKind := q.Get("type"), q.Get("metric"), q.Get("window_kind")
 	windowValue, _ := strconv.Atoi(q.Get("window_value"))
-	hist, err := h.Stats.BestEffortHistory(ctx, userID, activityType, metric, windowKind, windowValue)
+	hist, err := h.Stats.BestEffortHistory(recordReadContext(ctx, r), userID, activityType, metric, windowKind, windowValue)
 	if err != nil {
 		h.Log.Error("best-effort history failed", "user", userID, "error", err)
 		writeActionError(w, err, "load failed")
@@ -194,7 +196,7 @@ func (h *RecordHandlers) communityRecords(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	rows, err := h.Community.List(r.Context(), viewer)
+	rows, err := h.Community.List(recordReadContext(r.Context(), r), viewer)
 	h.writeCommunityRecords(w, rows, err)
 }
 
@@ -204,7 +206,7 @@ func (h *RecordHandlers) communityRecord(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	value, _ := strconv.Atoi(r.PathValue("value"))
-	rows, err := h.Community.Detail(r.Context(), viewer, domain.RecordBucket{
+	rows, err := h.Community.Detail(recordReadContext(r.Context(), r), viewer, domain.RecordBucket{
 		ActivityType: domain.ActivityType(r.PathValue("type")), Metric: domain.BestEffortMetric(r.PathValue("metric")),
 		WindowKind: domain.BestEffortWindowKind(r.PathValue("kind")), WindowValue: value,
 	})
@@ -234,4 +236,11 @@ func (h *RecordHandlers) writeCommunityRecords(w http.ResponseWriter, rows []dom
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"records": results})
+}
+
+func recordReadContext(ctx context.Context, r *http.Request) context.Context {
+	if r.URL.Query().Get("exclude_downhills") == "true" {
+		return port.WithDownhillsExcluded(ctx)
+	}
+	return ctx
 }

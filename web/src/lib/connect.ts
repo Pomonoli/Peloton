@@ -4,7 +4,6 @@ import { createConnectTransport } from '@connectrpc/connect-web';
 import { ActivityService } from '#lib/proto/cairn/v1/activity_pb.js';
 import { SegmentService } from '#lib/proto/cairn/v1/segment_pb.js';
 import { MetricsService } from '#lib/proto/cairn/v1/metrics_pb.js';
-import { NotificationService } from '#lib/proto/cairn/v1/notification_pb.js';
 import { AdminService } from '#lib/proto/cairn/v1/admin_pb.js';
 import { AuthService, ExternalAccountService } from '#lib/proto/cairn/v1/auth_pb.js';
 import { GearService } from '#lib/proto/cairn/v1/gear_pb.js';
@@ -36,7 +35,6 @@ export function connectClients(fetchFn?: typeof fetch, baseUrl?: string) {
 		activity: createClient(ActivityService, transport),
 		segment: createClient(SegmentService, transport),
 		metrics: createClient(MetricsService, transport),
-		notification: createClient(NotificationService, transport),
 		admin: createClient(AdminService, transport),
 		auth: createClient(AuthService, transport),
 		externalAccount: createClient(ExternalAccountService, transport),

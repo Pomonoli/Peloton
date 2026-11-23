@@ -1,7 +1,4 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
-export const load: PageLoad = async ({ parent, params }) => {
-	const { user } = await parent();
-	if (!user) redirect(302, '/login');
-	return { user, slug: params.slug };
-};
+
+export const load: PageLoad = () => redirect(302, '/riders');

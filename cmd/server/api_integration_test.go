@@ -107,9 +107,10 @@ func tileServer(t *testing.T) *httptest.Server {
 }
 
 type itestEnv struct {
-	t   *testing.T
-	srv *httptest.Server
-	app *App
+	t    *testing.T
+	srv  *httptest.Server
+	app  *App
+	pool *pgxpool.Pool
 }
 
 type itestClient struct {
@@ -177,7 +178,7 @@ func newITestEnvWithOverrides(t *testing.T, overrides map[string]string) *itestE
 	if app.NATSBus != nil {
 		t.Cleanup(app.NATSBus.Close)
 	}
-	return &itestEnv{t: t, srv: srv, app: app}
+	return &itestEnv{t: t, srv: srv, app: app, pool: pool}
 }
 
 // user creates an account directly through the repo and signs it in over /auth/password.

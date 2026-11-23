@@ -12,6 +12,7 @@
 		rows,
 		columns,
 		extraSort,
+		first,
 		opponent,
 		searchLabel,
 		empty
@@ -19,6 +20,7 @@
 		rows: ComparisonRow[];
 		columns: Column[];
 		extraSort: { key: SortKey; label: string }[];
+		first: string;
 		opponent: string;
 		searchLabel: string;
 		empty: string;
@@ -52,7 +54,7 @@
 		class="min-h-10 w-full rounded-lg border border-zinc-700 bg-panel px-2 text-sm"
 	>
 		<option value="">{m.comparison_all_results()}</option>
-		<option value="you">{m.comparison_you()}</option>
+		<option value="you">{first}</option>
 		<option value="opponent">{opponent}</option>
 		<option value="tie">{m.comparison_ties()}</option>
 	</select>
