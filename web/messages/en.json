@@ -554,6 +554,8 @@
 	"records_exclude_downhills": "Exclude downhills",
 	"records_downhill_help": "Cycling speed and distance records require enough GPS and elevation to rule out significant downhill assistance.",
 	"col_average_speed": "Average speed",
+	"col_average_pace": "Average pace",
+	"col_max_speed": "Max speed",
 	"col_moving": "Moving time",
 	"col_sport": "Sport",
 	"health_athlete_settings": "Athlete settings",

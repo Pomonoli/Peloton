@@ -2,7 +2,8 @@
 	import { APP_NAME } from '$app/env/public';
 	import { onMount } from 'svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
-	import { formatDistance, formatDuration, formatRelativeDate } from '#lib/format.js';
+	import { formatDistance, formatDuration, formatRelativeDate, formatSpeed } from '#lib/format.js';
+	import { m } from '#lib/paraglide/messages.js';
 
 	let { data } = $props();
 
@@ -85,9 +86,19 @@
 				<div class="text-lg font-semibold">{formatDistance(activity.distance_m ?? 0)}</div>
 			</div>
 			<div>
-				<div class="text-xs text-zinc-400">Time</div>
+				<div class="text-xs text-zinc-400">{m.ride_elapsed()}</div>
 				<div class="text-lg font-semibold">{formatDuration(activity.elapsed_duration_s)}</div>
 			</div>
+			<div>
+				<div class="text-xs text-zinc-400">{m.col_moving()}</div>
+				<div class="text-lg font-semibold">{formatDuration(activity.moving_duration_s)}</div>
+			</div>
+			{#if activity.avg_speed_mps != null && can('pace_speed')}
+				<div>
+					<div class="text-xs text-zinc-400">{m.col_average_speed()}</div>
+					<div class="text-lg font-semibold">{formatSpeed(activity.avg_speed_mps)}</div>
+				</div>
+			{/if}
 			{#if activity.elevation_gain_m}<div>
 					<div class="text-xs text-zinc-400">Elevation</div>
 					<div class="text-lg font-semibold">{Math.round(activity.elevation_gain_m)} m</div>

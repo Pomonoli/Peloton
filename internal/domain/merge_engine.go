@@ -279,10 +279,5 @@ func mergeDeriveInvariants(out *Activity) {
 		out.EndTime = out.StartTime.Add(out.ElapsedDuration)
 	}
 
-	// Derived: recompute avg speed from merged distance ÷ moving-time so it
-	// stays consistent when distance/duration win from different sources.
-	if out.Summary.DistanceM != nil && *out.Summary.DistanceM > 0 && out.MovingDuration > 0 {
-		v := *out.Summary.DistanceM / out.MovingDuration.Seconds()
-		out.Summary.AvgSpeedMps = &v
-	}
+	out.RecalculateAverageSpeed()
 }

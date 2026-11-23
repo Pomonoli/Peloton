@@ -80,6 +80,7 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 	activities := postgres.NewActivityRepo(pool)
 	streams := postgres.NewStreamRepo(pool)
 	store := postgres.NewMaintenanceRepo(pool)
+	overrides := postgres.NewClassificationOverrideRepo(pool)
 	gear := postgres.NewGearRepo(pool)
 	tx := postgres.NewTxManager(pool)
 	records := postgres.NewBestEffortRepo(pool)
@@ -173,7 +174,7 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 						}
 					}
 				}
-				return activity.RefreshCyclingSummary(ctx, activities, streams, activities, id)
+				return activity.RefreshCyclingSummary(ctx, activities, streams, activities, overrides, id)
 			})
 			if err != nil {
 				failures = append(failures, fmt.Errorf("recompute activity %s: %w", id, err))

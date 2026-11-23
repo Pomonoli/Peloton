@@ -12,8 +12,8 @@
 		formatDistance,
 		formatDuration,
 		formatElevation,
-		formatMovingSpeed,
-		formatRelativeDate
+		formatRelativeDate,
+		formatSpeed
 	} from '#lib/format.js';
 
 	let { data } = $props();
@@ -26,6 +26,8 @@
 		start_time: string;
 		timezone: string;
 		moving_duration_s: number;
+		elapsed_duration_s: number;
+		avg_speed_mps: number | null;
 		distance_m: number | null;
 		elevation_gain_m: number | null;
 		tss: number | null;
@@ -323,7 +325,7 @@
 							onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 						/>
 						<dl
-							class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-zinc-400 max-md:ml-[2.875rem] max-md:w-full max-md:grid-cols-4 max-md:gap-x-1.5 md:grid-cols-4 md:text-right"
+							class="grid grid-cols-3 gap-x-4 gap-y-2 text-xs text-zinc-400 max-md:ml-[2.875rem] max-md:w-full max-md:gap-x-1.5 md:grid-cols-5 md:text-right"
 						>
 							<div>
 								<dt class="text-zinc-500">{m.col_distance()}</dt>
@@ -334,9 +336,13 @@
 							<div>
 								<dt class="text-zinc-500">{m.col_moving()}</dt>
 								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
-									{activity.moving_duration_s > 0
-										? formatDuration(activity.moving_duration_s)
-										: '—'}
+									{formatDuration(activity.moving_duration_s)}
+								</dd>
+							</div>
+							<div>
+								<dt class="text-zinc-500">{m.ride_elapsed()}</dt>
+								<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
+									{formatDuration(activity.elapsed_duration_s)}
 								</dd>
 							</div>
 							<div>
@@ -348,7 +354,7 @@
 							<div>
 								<dt class="text-zinc-500">{m.col_average_speed()}</dt>
 								<dd class="font-medium tabular-nums">
-									{formatMovingSpeed(activity.distance_m, activity.moving_duration_s)}
+									{formatSpeed(activity.avg_speed_mps)}
 								</dd>
 							</div>
 						</dl>

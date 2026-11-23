@@ -68,7 +68,7 @@ func (g *garminRideIngester) IngestRide(ctx context.Context, sync domain.GarminS
 			return false, fmt.Errorf("archive Garmin activity: %w", err)
 		}
 	}
-	jr := &workerv1.JobResult{WorkerName: "garmin-connect", WorkerVersion: "1.0"}
+	jr := &workerv1.JobResult{WorkerName: "garmin-connect", WorkerVersion: fileTimingParserVersion}
 	_, err = ingestActivityEventChecked(ctx, g.app, g.log, jr, event, func(ctx context.Context) error {
 		if err := g.repo.Guard(ctx, sync.UserID, sync.Lease); err != nil {
 			return err
@@ -92,10 +92,12 @@ func (g *garminRideIngester) checkRemoved(ctx context.Context, user domain.UserI
 func garminPayload(ride domain.GarminActivity, file port.UploadInput) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, error) {
 	var payload *cairnv1.ActivitySourcePayload
 	var stream *cairnv1.ActivityStream
+	var hasFITTimer bool
 	if len(file.Raw) != 0 {
-		p, st, err := fileimport.Parse(file.Filename, file.Raw)
+		p, st, timer, err := fileimport.ParseWithTimer(file.Filename, file.Raw)
 		if err == nil && p.GetElapsedDuration().AsDuration() > 0 {
 			payload, stream = p, st
+			hasFITTimer = timer
 		}
 	}
 	if payload == nil {
@@ -110,8 +112,17 @@ func garminPayload(ride domain.GarminActivity, file port.UploadInput) (*cairnv1.
 				AvgHeartRateBpm: ride.AvgHeartRate, AvgPowerW: ride.AvgPower, AvgCadence: ride.AvgCadence,
 			},
 		}
-	} else if ride.Moving > 0 {
-		payload.MovingDuration = durationpb.New(min(ride.Moving, payload.GetElapsedDuration().AsDuration()))
+	} else if !hasFITTimer {
+		elapsed := payload.GetElapsedDuration().AsDuration()
+		if ride.Moving > 0 {
+			payload.MovingDuration = durationpb.New(min(ride.Moving, elapsed))
+		}
+		if fileimport.Ext(file.Filename) == ".gpx" && payload.GetMovingDuration().AsDuration() < elapsed {
+			samples := protoconv.ActivityStreamSamplesFromProto(stream, payload.GetStartTime().AsTime())
+			if moving, ok := domain.EstimateGPSMovingTime(samples, elapsed, nil); ok {
+				payload.MovingDuration = durationpb.New(moving)
+			}
+		}
 	}
 	if payload.Summary.AvgCadence == nil {
 		payload.Summary.AvgCadence = ride.AvgCadence

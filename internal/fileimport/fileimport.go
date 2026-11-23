@@ -42,17 +42,25 @@ func ContentType(ext string) string {
 
 // Parse decodes a GPX, TCX or FIT file, dispatching on extension / content sniffing.
 func Parse(filename string, raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, error) {
+	payload, stream, _, err := ParseWithTimer(filename, raw)
+	return payload, stream, err
+}
+
+// ParseWithTimer also reports whether the file provided reliable FIT timer data.
+func ParseWithTimer(filename string, raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, bool, error) {
 	name := strings.ToLower(filename)
 	head := strings.ToLower(string(raw[:min(512, len(raw))]))
 	switch {
 	case strings.HasSuffix(name, ".gpx") || strings.Contains(head, "<gpx"):
-		return parseGPX(raw)
+		p, st, err := parseGPX(raw)
+		return p, st, false, err
 	case strings.HasSuffix(name, ".tcx") || strings.Contains(head, "trainingcenterdatabase"):
-		return parseTCX(raw)
+		p, st, err := parseTCX(raw)
+		return p, st, false, err
 	case strings.HasSuffix(name, ".fit") || (len(raw) > 12 && string(raw[8:12]) == ".FIT"):
 		return parseFIT(raw)
 	}
-	return nil, nil, fmt.Errorf("unrecognised file type %q (supported: .gpx, .tcx, .fit)", filename)
+	return nil, nil, false, fmt.Errorf("unrecognised file type %q (supported: .gpx, .tcx, .fit)", filename)
 }
 
 // ---------------------------------------------------------------------------
@@ -71,8 +79,8 @@ type gpxFile struct {
 }
 
 type gpxPt struct {
-	Lat  float64  `xml:"lat,attr"`
-	Lon  float64  `xml:"lon,attr"`
+	Lat  *float64 `xml:"lat,attr"`
+	Lon  *float64 `xml:"lon,attr"`
 	Ele  *float64 `xml:"ele"`
 	Time string   `xml:"time"`
 	Ext  struct {
@@ -107,10 +115,14 @@ func parseGPX(raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStre
 				if power == nil {
 					power = p.Ext.PowerInWatts
 				}
-				b.add(samplePoint{
-					Time: t, HasLatLon: true, Lat: p.Lat, Lon: p.Lon,
-					Alt: p.Ele, HR: p.Ext.HR, Cad: p.Ext.Cad, Power: power, Temp: p.Ext.ATemp,
-				})
+				point := samplePoint{
+					Time: t,
+					Alt:  p.Ele, HR: p.Ext.HR, Cad: p.Ext.Cad, Power: power, Temp: p.Ext.ATemp,
+				}
+				if p.Lat != nil && p.Lon != nil {
+					point.HasLatLon, point.Lat, point.Lon = true, *p.Lat, *p.Lon
+				}
+				b.add(point)
 			}
 		}
 	}
@@ -185,14 +197,14 @@ func parseTCX(raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStre
 // FIT (Garmin/Wahoo/etc. binary)
 // ---------------------------------------------------------------------------
 
-func parseFIT(raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, error) {
+func parseFIT(raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, bool, error) {
 	f, err := fit.Decode(bytes.NewReader(raw))
 	if err != nil {
-		return nil, nil, fmt.Errorf("fit: %w", err)
+		return nil, nil, false, fmt.Errorf("fit: %w", err)
 	}
 	act, err := f.Activity()
 	if err != nil {
-		return nil, nil, fmt.Errorf("fit: not an activity file: %w", err)
+		return nil, nil, false, fmt.Errorf("fit: not an activity file: %w", err)
 	}
 
 	sport := ""
@@ -204,12 +216,15 @@ func parseFIT(raw []byte) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStre
 	for _, rec := range act.Records {
 		b.add(fitRecordSample(rec))
 	}
-	return b.finish()
+	return finishFIT(b, act)
 }
 
 // fitRecordSample converts one FIT record, skipping invalid (sentinel) fields.
 func fitRecordSample(rec *fit.RecordMsg) samplePoint {
 	sp := samplePoint{Time: rec.Timestamp}
+	if fit.IsBaseTime(sp.Time) {
+		sp.Time = time.Time{}
+	}
 	if !rec.PositionLat.Invalid() && !rec.PositionLong.Invalid() {
 		sp.HasLatLon = true
 		sp.Lat = rec.PositionLat.Degrees()
@@ -425,6 +440,10 @@ func (c *columns) summary(n int) *cairnv1.ActivitySummary {
 }
 
 func (b *activityBuilder) finish() (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, error) {
+	return b.finishWithin(time.Time{}, time.Time{})
+}
+
+func (b *activityBuilder) finishWithin(recordedStart, recordedEnd time.Time) (*cairnv1.ActivitySourcePayload, *cairnv1.ActivityStream, error) {
 	pts := b.pts
 	for len(pts) > 0 && pts[0].Time.IsZero() {
 		pts = pts[1:]
@@ -432,18 +451,23 @@ func (b *activityBuilder) finish() (*cairnv1.ActivitySourcePayload, *cairnv1.Act
 	for len(pts) > 0 && pts[len(pts)-1].Time.IsZero() {
 		pts = pts[:len(pts)-1]
 	}
-	if len(pts) == 0 {
+	if len(pts) == 0 && recordedStart.IsZero() {
 		return nil, nil, fmt.Errorf("no timestamped track points")
 	}
-	start, end := pts[0].Time, pts[len(pts)-1].Time
-	if end.Before(start) {
-		// Keep the recorded order in the stream even when the final point's
-		// clock rolled backwards.
-		end = start
-		for _, p := range pts {
-			if p.Time.After(end) {
-				end = p.Time
+	start, end := recordedStart, recordedEnd
+	if len(pts) > 0 {
+		trackStart, trackEnd := pts[0].Time, pts[len(pts)-1].Time
+		if trackEnd.Before(trackStart) {
+			// Keep the recorded order when the final point's clock rolled backwards.
+			trackEnd = trackStart
+			for _, p := range pts {
+				if p.Time.After(trackEnd) {
+					trackEnd = p.Time
+				}
 			}
+		}
+		if recordedStart.IsZero() || recordedStart.After(trackStart) || recordedEnd.Before(trackEnd) {
+			start, end = trackStart, trackEnd
 		}
 	}
 

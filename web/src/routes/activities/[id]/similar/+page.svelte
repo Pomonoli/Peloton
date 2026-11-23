@@ -1,10 +1,10 @@
 <script lang="ts">
 	import {
 		formatDistance,
-		formatDistanceEffort,
 		formatDuration,
 		formatDateOnly,
-		formatSpeedKmh
+		formatPace,
+		formatSpeed
 	} from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
@@ -63,8 +63,8 @@
 	});
 
 	function performance(speed: number | null): string {
-		if (!speed || speed <= 0) return '—';
-		return isRide ? formatSpeedKmh(speed) : `${formatDuration(3600 / speed)} /km`;
+		const mps = speed == null ? null : speed / 3.6;
+		return isRide ? formatSpeed(mps) : formatPace(mps);
 	}
 
 	const chart = $derived.by(() => {
@@ -165,7 +165,7 @@
 							<title>
 								{formatDateOnly(b.row.start_time)} · {performance(b.row.average_speed_kmh)}
 								{#if isRide}
-									· {m.ride_elapsed()} {formatDistanceEffort(b.row.distance_m, b.row.elapsed_s)}
+									· {m.ride_elapsed()} {formatDuration(b.row.elapsed_s)}
 								{/if}
 							</title>
 						</rect>
@@ -188,11 +188,13 @@
 						<tr>
 							<th class="px-3 py-2 text-left font-medium">Date</th>
 							<th class="px-3 py-2 text-right font-medium">Distance</th>
-							<th class="px-3 py-2 text-right font-medium">Moving</th>
+							<th class="px-3 py-2 text-right font-medium">{m.col_moving()}</th>
 							{#if isRide}
 								<th class="px-3 py-2 text-right font-medium">{m.ride_elapsed()}</th>
 							{/if}
-							<th class="px-3 py-2 text-right font-medium">{isRide ? 'Average speed' : 'Pace'}</th>
+							<th class="px-3 py-2 text-right font-medium">
+								{isRide ? m.col_average_speed() : m.col_average_pace()}
+							</th>
 							<th class="px-3 py-2 text-right font-medium">HR</th>
 							<th class="px-3 py-2 text-right font-medium">Power</th>
 							<th class="px-3 py-2 text-right font-medium">Overlap</th>
@@ -214,7 +216,7 @@
 								</td>
 								{#if isRide}
 									<td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
-										{formatDistanceEffort(r.distance_m, r.elapsed_s)}
+										{formatDuration(r.elapsed_s)}
 									</td>
 								{/if}
 								<td class="px-3 py-2 text-right tabular-nums"

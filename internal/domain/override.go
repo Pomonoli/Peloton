@@ -87,9 +87,7 @@ func (o ClassificationOverride) ApplyTo(a *Activity) {
 	}
 	// Re-derive avg speed when distance or moving time was overridden, so the
 	// headline pace/speed stays consistent with the corrected numbers.
-	if (o.DistanceM != nil || o.MovingDuration != nil) &&
-		a.Summary.DistanceM != nil && a.MovingDuration > 0 {
-		spd := *a.Summary.DistanceM / a.MovingDuration.Seconds()
-		a.Summary.AvgSpeedMps = &spd
+	if o.DistanceM != nil || o.MovingDuration != nil {
+		a.RecalculateAverageSpeed()
 	}
 }

@@ -99,7 +99,7 @@ func (g *actIngester) IngestFile(ctx context.Context, in port.UploadInput) (port
 		return port.UploadResult{}, port.NewActionError(port.ActionErrorInvalid, "parse failed: "+err.Error())
 	}
 	sum := sha256.Sum256(in.Raw)
-	jr := &workerv1.JobResult{WorkerName: "file-upload", WorkerVersion: "1.0"}
+	jr := &workerv1.JobResult{WorkerName: "file-upload", WorkerVersion: fileTimingParserVersion}
 	ev := &workerv1.ImportedActivity{
 		Ref:     &workerv1.ExternalRef{UserId: in.UserID.String(), Provider: "upload", ExternalId: hex.EncodeToString(sum[:16])},
 		Payload: payload,

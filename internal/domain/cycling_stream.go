@@ -48,7 +48,7 @@ func ValidateCyclingStream(samples []StreamSample) CyclingStream {
 	for i := 1; i < len(samples); i++ {
 		out.Legs[i] = cyclingLeg(samples[i-1], samples[i], maxGap, withGPS, out.HasMotion)
 	}
-	out.removeSpikes(samples)
+	out.removeSpikes(samples, true)
 	if withGPS {
 		out.removeDrift(samples)
 	}
@@ -145,14 +145,14 @@ func plausibleCyclingChange(before, after, seconds float64) bool {
 	return change <= 4*seconds+3 && change >= -8*seconds-3
 }
 
-func (s CyclingStream) removeSpikes(samples []StreamSample) {
+func (s CyclingStream) removeSpikes(samples []StreamSample, checkAcceleration bool) {
 	var rejectPrevious bool
 	for i := 2; i < len(s.Legs); i++ {
 		before, after := s.Legs[i-1], s.Legs[i]
 		rejectNext := false
 		if before.Valid && after.Valid && before.HasMotion && after.HasMotion {
 			v0, v1 := before.DistanceM/before.Seconds, after.DistanceM/after.Seconds
-			if !plausibleCyclingChange(v0, v1, (before.Seconds+after.Seconds)/2) {
+			if checkAcceleration && !plausibleCyclingChange(v0, v1, (before.Seconds+after.Seconds)/2) {
 				if v1 > v0 {
 					rejectNext = true
 				} else {

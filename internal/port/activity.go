@@ -13,6 +13,13 @@ type CyclingSummaryStore interface {
 	SaveCyclingSummary(ctx context.Context, act domain.Activity) error
 }
 
+// ActivityTimingArchive recovers timing from original uploads when a
+// historical parsed summary or stored track lacks the necessary data.
+type ActivityTimingArchive interface {
+	FITMovingTime(context.Context, domain.ActivitySource) (time.Duration, bool, error)
+	GPXMovingTime(context.Context, domain.ActivitySource) (time.Duration, bool, error)
+}
+
 // ActivityYearStat is a per-year aggregate for the Stats page.
 type ActivityYearStat struct {
 	Year           int

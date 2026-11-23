@@ -125,6 +125,8 @@ func dashStatsRecordJSON(a *domain.Activity) map[string]any {
 		"type": string(a.Type), "discipline": string(a.Discipline),
 		"distance_m":         dist,
 		"elapsed_duration_s": int64(a.ElapsedDuration.Seconds()),
+		"moving_duration_s":  int64(a.MovingDuration.Seconds()),
+		"avg_speed_mps":      a.Summary.AvgSpeedMps,
 	}
 }
 

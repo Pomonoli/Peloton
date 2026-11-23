@@ -45,10 +45,6 @@ export function formatSpeedKmh(kmh: number | null | undefined): string {
 	return `${num(kmh, 1)} km/h`;
 }
 
-export function formatMovingSpeed(distanceM: number | null | undefined, movingS: number) {
-	return formatSpeedKmh(distanceM != null && movingS > 0 ? (distanceM * 3.6) / movingS : null);
-}
-
 export function formatTimeAndSpeed(time: string, speedKmh: number | null | undefined): string {
 	const speed = formatSpeedKmh(speedKmh);
 	return speed === DASH ? time : `${time} · ${speed}`;
@@ -94,7 +90,8 @@ export function formatElevation(m: number | null | undefined): string {
 }
 
 export function formatSpeed(metersPerSecond: number | null | undefined): string {
-	if (metersPerSecond == null || metersPerSecond < 0) return DASH;
+	if (metersPerSecond == null || !Number.isFinite(metersPerSecond) || metersPerSecond < 0)
+		return DASH;
 	if (prefs.units === 'imperial') {
 		return `${num((metersPerSecond * 3600) / M_PER_MILE)} mph`;
 	}

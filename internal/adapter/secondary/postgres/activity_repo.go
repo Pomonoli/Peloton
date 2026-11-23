@@ -25,6 +25,17 @@ func NewActivityRepo(pool *pgxpool.Pool) *ActivityRepo {
 	return &ActivityRepo{pool: pool}
 }
 
+func (r *ActivityRepo) SaveActivityTiming(ctx context.Context, act domain.Activity) error {
+	tag, err := dbtx(ctx, r.pool).Exec(ctx, `
+		UPDATE activities SET moving_duration_s = $3, avg_speed_mps = $4, tss = $5, updated_at = now()
+		WHERE id = $1 AND updated_at = $2 AND deleted_at IS NULL`,
+		act.ID.UUID(), act.UpdatedAt, int64(act.MovingDuration/time.Second), act.Summary.AvgSpeedMps, act.Summary.TSS)
+	if err == nil && tag.RowsAffected() == 0 {
+		return errors.New("activity changed while rebuilding its timing")
+	}
+	return err
+}
+
 func (r *ActivityRepo) SaveCyclingSummary(ctx context.Context, act domain.Activity) error {
 	tag, err := dbtx(ctx, r.pool).Exec(ctx, `
 		UPDATE activities SET distance_m = $3, avg_speed_mps = $4, max_speed_mps = $5

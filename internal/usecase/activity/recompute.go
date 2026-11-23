@@ -33,7 +33,8 @@ type RecomputeActivityFromSources struct {
 	tx            port.TxManager
 	now           func() time.Time
 
-	Streams port.StreamRepo
+	Streams       port.StreamRepo
+	TimingArchive port.ActivityTimingArchive
 }
 
 // NewRecomputeActivityFromSources wires the dependencies. now defaults
@@ -84,8 +85,7 @@ type RecomputeResult struct {
 	// and was soft-deleted instead of re-merged.
 	SoftDeleted bool
 
-	// GearChanged is true when the activity's gear attachment differs from
-	// before (incl. a soft-delete of an activity that had gear).
+	// GearChanged is true when the attachment or its usage totals changed.
 	GearChanged bool
 }
 
@@ -200,7 +200,9 @@ func (uc *RecomputeActivityFromSources) recomputeInTx(ctx context.Context, id do
 	result.UserID = merged.UserID
 	result.SourceIDs = collectSourceIDs(sources)
 	result.Created = !prevExists
-	result.GearChanged = !sameGear(prev.GearID, merged.GearID)
+	result.GearChanged = !sameGear(prev.GearID, merged.GearID) ||
+		(merged.GearID != nil && (prev.MovingDuration != merged.MovingDuration ||
+			!sameMetric(prev.Summary.DistanceM, merged.Summary.DistanceM)))
 	return nil
 }
 
@@ -221,12 +223,20 @@ func (uc *RecomputeActivityFromSources) applyOverlays(
 	overrides map[domain.FieldGroup]domain.SourceID,
 	resolver domain.PolicyResolver,
 ) error {
-	if err := uc.applyClassificationOverride(ctx, id, merged); err != nil {
+	overlay, err := uc.applyClassificationOverride(ctx, id, merged)
+	if err != nil {
 		return err
 	}
-	if err := applyCyclingSummary(ctx, uc.Streams, merged); err != nil {
+	load := newSummaryStreamReader(ctx, uc.Streams)
+	if overlay.MovingDuration == nil {
+		if err := applyMovingTime(ctx, merged, sources, load, uc.TimingArchive); err != nil {
+			return err
+		}
+	}
+	if err := applyCyclingSummary(load, merged, overlay.DistanceM == nil); err != nil {
 		return err
 	}
+	merged.RecalculateAverageSpeed()
 	uc.fillEstimatedTSS(ctx, merged)
 	return uc.assignGear(ctx, merged, prev, sources, overrides, resolver)
 }
@@ -250,24 +260,27 @@ func (uc *RecomputeActivityFromSources) loadFieldOverrides(ctx context.Context, 
 	return overrides, nil
 }
 
-// applyClassificationOverride applies the user's classification overlay
-// (type/discipline/flags) on top of the merge, so a manual correction survives
-// re-derivation. Loaded each run; an empty/absent overlay is a no-op.
-func (uc *RecomputeActivityFromSources) applyClassificationOverride(ctx context.Context, id domain.ActivityID, merged *domain.Activity) error {
-	if uc.classOverride == nil {
-		return nil
+func loadClassificationOverride(ctx context.Context, repo port.ClassificationOverrideRepo, id domain.ActivityID) (domain.ClassificationOverride, error) {
+	if repo == nil {
+		return domain.ClassificationOverride{}, nil
 	}
-	co, err := uc.classOverride.Get(ctx, id)
+	co, err := repo.Get(ctx, id)
 	if err != nil {
-		return fmt.Errorf("load classification override: %w", err)
+		return co, fmt.Errorf("load classification override: %w", err)
 	}
-	co.ApplyTo(merged)
-	// An override can change Type independently of Discipline; drop a
-	// now-incompatible discipline so the result stays valid.
+	return co, nil
+}
+
+func (uc *RecomputeActivityFromSources) applyClassificationOverride(ctx context.Context, id domain.ActivityID, merged *domain.Activity) (domain.ClassificationOverride, error) {
+	overlay, err := loadClassificationOverride(ctx, uc.classOverride, id)
+	if err != nil {
+		return overlay, err
+	}
+	overlay.ApplyTo(merged)
 	if !merged.Discipline.CompatibleWith(merged.Type) {
 		merged.Discipline = domain.DisciplineNone
 	}
-	return nil
+	return overlay, nil
 }
 
 // fillEstimatedTSS derives a training-stress score when no source provided one,
@@ -495,7 +508,7 @@ func (uc *RecomputeActivityFromSources) PreviewMerge(ctx context.Context, id dom
 	if prev.ProviderRestricted == restricted {
 		preserveUserEdits(&merged, prev)
 	}
-	if err := uc.applyClassificationOverride(ctx, id, &merged); err != nil {
+	if _, err := uc.applyClassificationOverride(ctx, id, &merged); err != nil {
 		return domain.Activity{}, err
 	}
 	uc.fillEstimatedTSS(ctx, &merged)

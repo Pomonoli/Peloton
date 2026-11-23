@@ -75,6 +75,18 @@ Repeat the `docker run` command above with the same environment file. Peloton ap
 
 After deploying the updated server and applying migration 84 (downhill variants) and migration 85 (catalog index), run `docker exec peloton /usr/local/bin/cairn records recompute` with the existing deployment configuration. Existing records must be recomputed to pick up the updated downhill selection and the cumulative-ascent calculation. The command rebuilds historical records for every rider, validates cycling distance and speed, and rematches cycling segments with stored GPS. It can be rerun and preserves original files, activities, and existing raw streams. When stored samples are missing, it can recover them from archived FIT, GPX, or TCX files that are still accessible to the instance. Activities without the necessary measurements may have fewer record categories.
 
+### Backfill activity moving time
+
+After deploying the updated server, run the timing backfill with the deployment's existing database and archive configuration. This command can be rerun.
+
+```sh
+docker exec peloton /usr/local/bin/cairn activities backfill-moving-time
+```
+
+It uses stored GPS tracks and available FIT or GPX archives to fill in moving time for earlier imports. It refreshes activity average speed, time-based training stress estimates, and gear totals. It preserves elapsed time, source data, imported training stress, manual timing edits, personal records, and segment efforts.
+
+Garmin FIT imports use complete timer start and stop events or the device's timer total. GPS can exclude stops while the timer is running when the track has adequate coverage. GPX imports estimate motion from coherent GPS displacement over windows of about eight seconds. Separate thresholds for starting and continuing movement help distinguish stops from slow climbing. The estimator also detects sustained near-stationary periods, rejects implausible jumps, and omits gaps above the recording's cadence-based limit of 5–15 seconds. At least 70% of the reference duration must be observed. With less coverage, Peloton retains the available source or previously stored time. Very slow movement, short stops, and sustained GPS drift can still be ambiguous.
+
 **Exclude downhills** reads a separate set of verified cycling speed and distance efforts. Peloton smooths altitude over 50 metres and requires continuous GPS and elevation through each eligible effort. An effort is excluded if it drops at least 3 metres at an average grade of at least 1.5%, or if 20% or more of the effort is on a sustained descent of at least 3%. The standard records remain available. Route comparisons use versioned GPS streams and refresh when an import or recovery changes the underlying recording.
 
 Climbing records report the most elevation gained within each continuous time window. Descents contribute zero gain, small altitude fluctuations are ignored, and recording gaps break the window.

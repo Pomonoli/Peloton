@@ -56,6 +56,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newGenSecretsCmd())
 	root.AddCommand(newAttachmentsCmd())
 	root.AddCommand(newRecordsCmd())
+	root.AddCommand(newActivitiesCmd())
 	return root
 }
 

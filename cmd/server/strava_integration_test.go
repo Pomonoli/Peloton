@@ -178,6 +178,11 @@ func TestAPI_StravaCrossProviderMerge(t *testing.T) {
 			case "strava":
 				source := importStravaFixture(t, env, a, "same", start.Add(25*time.Second), 1, cairnv1.ActivityType_ACTIVITY_TYPE_RIDE)
 				if independent == (domain.ActivityID{}) {
+					act, err := env.app.Activities.GetActivity(ctx, source.ActivityID)
+					if err != nil || act.MovingDuration != source.Parsed.MovingDuration ||
+						act.Summary.AvgSpeedMps == nil || *act.Summary.AvgSpeedMps != *act.Summary.DistanceM/act.MovingDuration.Seconds() {
+						t.Fatalf("Strava-only timing not preserved: %+v, %v", act, err)
+					}
 					// Access checks before an independent ride exists.
 					viewer.rpc("/cairn.v1.ActivityService/GetActivity", map[string]any{"id": source.ActivityID.String()}, http.StatusNotFound)
 					hidden, err := env.app.Stats.Get(port.WithActivityReadViewer(ctx, false), rider.userID)
@@ -297,7 +302,8 @@ func importStravaFixture(t *testing.T, env *itestEnv, a domain.ExternalAccount, 
 	ia := &workerv1.ImportedActivity{
 		Ref: &workerv1.ExternalRef{UserId: a.UserID.String(), Provider: "strava", ExternalAccountId: a.ID.String(), ExternalId: id},
 		Payload: &cairnv1.ActivitySourcePayload{
-			Type: kind, Timezone: "UTC", StartTime: timestamppb.New(start), ElapsedDuration: duration, MovingDuration: duration,
+			Type: kind, Timezone: "UTC", StartTime: timestamppb.New(start),
+			ElapsedDuration: duration, MovingDuration: durationpb.New(350 * time.Second),
 			Title: "Strava-only title", Summary: &cairnv1.ActivitySummary{DistanceM: new(2500.0), AvgPowerW: new(int32(333))},
 		},
 		Stream: stream,

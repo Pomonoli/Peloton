@@ -9,8 +9,8 @@
 		formatDistance,
 		formatDuration,
 		formatElevation,
-		formatMovingSpeed,
-		formatRelativeDate
+		formatRelativeDate,
+		formatSpeed
 	} from '#lib/format.js';
 
 	let { data } = $props();
@@ -31,6 +31,7 @@
 		start_time: string;
 		distance_m: number | null;
 		moving_duration_s: number;
+		avg_speed_mps: number | null;
 		elevation_gain_m: number | null;
 	};
 	let failed = $state(false);
@@ -82,7 +83,7 @@
 		return [
 			{ label: 'Activities', value: totals.count.toLocaleString(intlLocale()) },
 			{ label: 'Distance', value: formatDistance(totals.distance_m) },
-			{ label: 'Moving time', value: formatDuration(totals.moving_s) },
+			{ label: m.col_moving(), value: formatDuration(totals.moving_s) },
 			{ label: 'Elevation', value: formatElevation(totals.elevation_gain_m) }
 		];
 	}
@@ -220,7 +221,7 @@
 									<dl
 										class="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-0.5 text-xs text-quiet tabular-nums"
 									>
-										{#each [{ label: m.detail_stat_distance(), value: formatDistance(activity.distance_m) }, { label: m.col_moving(), value: activity.moving_duration_s > 0 ? formatDuration(activity.moving_duration_s) : '—' }, { label: m.col_elevation(), value: formatElevation(activity.elevation_gain_m) }, { label: m.col_average_speed(), value: formatMovingSpeed(activity.distance_m, activity.moving_duration_s) }] as stat (stat.label)}
+										{#each [{ label: m.detail_stat_distance(), value: formatDistance(activity.distance_m) }, { label: m.col_moving(), value: formatDuration(activity.moving_duration_s) }, { label: m.col_elevation(), value: formatElevation(activity.elevation_gain_m) }, { label: m.col_average_speed(), value: formatSpeed(activity.avg_speed_mps) }] as stat (stat.label)}
 											<div>
 												<dt class="sr-only">{stat.label}</dt>
 												<dd>{stat.value}</dd>

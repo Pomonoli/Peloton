@@ -10,10 +10,9 @@
 	import {
 		intlLocale,
 		formatDistance,
-		formatDistanceEffort,
 		formatDuration,
 		formatElevation,
-		formatSpeedKmh
+		formatSpeed
 	} from '#lib/format.js';
 
 	let { data } = $props();
@@ -33,6 +32,8 @@
 		discipline: string;
 		distance_m: number;
 		elapsed_duration_s: number;
+		moving_duration_s: number;
+		avg_speed_mps: number | null;
 	} | null;
 	type Stats = {
 		totals: { count: number; distance_m: number; moving_s: number; elevation_gain_m: number };
@@ -148,7 +149,11 @@
 									</div>
 									{#if card.distanceRecord && card.r.type === 'ride'}
 										<div class="text-sm text-quiet">
-											{formatDistanceEffort(card.r.distance_m, card.r.elapsed_duration_s)}
+											{m.col_moving()}
+											{formatDuration(card.r.moving_duration_s)}
+											{#if card.r.avg_speed_mps != null}
+												· {formatSpeed(card.r.avg_speed_mps)}
+											{/if}
 										</div>
 									{/if}
 								</div>
@@ -258,7 +263,9 @@
 									<td class="p-2 text-right sm:px-4"
 										>{sport.moving_s > 0 ? formatDuration(sport.moving_s) : '—'}</td
 									>
-									<td class="p-2 text-right sm:px-4">{formatSpeedKmh(sport.speed_kmh)}</td>
+									<td class="p-2 text-right sm:px-4">
+										{formatSpeed(sport.speed_kmh == null ? null : sport.speed_kmh / 3.6)}
+									</td>
 								</tr>
 							{/each}
 						</tbody>

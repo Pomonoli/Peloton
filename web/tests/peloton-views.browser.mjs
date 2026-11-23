@@ -26,6 +26,8 @@ const recent = {
 	start_time: '2026-11-22T13:00:00Z',
 	distance_m: 45000,
 	moving_duration_s: 4500,
+	elapsed_duration_s: 5000,
+	avg_speed_mps: 10,
 	elevation_gain_m: 50
 };
 const rides = [
@@ -129,7 +131,7 @@ try {
 						primaryStreamSourceId: 'mira-source',
 						movingDuration: '4500s',
 						elapsedDuration: '5000s',
-						summary: { distanceM: 45000 }
+						summary: { distanceM: 45000, avgSpeedMps: recent.avg_speed_mps, maxSpeedMps: 11 }
 					}
 				},
 				'/cairn.v1.ActivityService/GetActivityStream': {
@@ -150,11 +152,42 @@ try {
 					cycling_weeks: weeks
 				},
 				'/api/activities/mira-ride/segment-efforts': { efforts: rides, can_rescan: false },
+				'/api/activities/mira-ride/similar': {
+					target_segments: 1,
+					activities: [
+						{
+							id: recent.id,
+							is_current: true,
+							start_time: recent.start_time,
+							distance_m: recent.distance_m,
+							moving_s: recent.moving_duration_s,
+							elapsed_s: recent.elapsed_duration_s,
+							average_speed_kmh: 36
+						},
+						{
+							id: 'mira-previous-ride',
+							is_current: false,
+							start_time: '2026-11-14T13:00:00Z',
+							distance_m: recent.distance_m,
+							moving_s: 4800,
+							elapsed_s: 5400,
+							average_speed_kmh: 33.75,
+							overlap_pct: 0.99
+						}
+					],
+					summary: {
+						count: 2,
+						best_speed_kmh: 36,
+						current_speed_kmh: 36,
+						current_rank: 1,
+						is_best: true
+					}
+				},
 				'/api/stats': {
 					totals,
 					by_year: [],
 					by_discipline: [],
-					records: {},
+					records: { longest_distance: recent },
 					sport_totals: [
 						{ value: 'ride', count: 1, distance_m: 45000, moving_s: 4500, speed_kmh: 36 }
 					]
@@ -205,6 +238,7 @@ try {
 		const done = () => sheet.getByRole('button', { name: 'Done' }).click();
 		await open('/');
 		await main.getByRole('heading', { name: /Ada/ }).waitFor();
+		await main.getByText('36.00 km/h', { exact: true }).waitFor();
 		assert.equal(
 			await page.locator('html').getAttribute('data-theme'),
 			width === 360 || width === 430 ? 'dark' : 'light'
@@ -249,6 +283,9 @@ try {
 			await page.waitForURL(origin + '/analysis');
 			await tabbar.getByRole('link', { name: 'Activities' }).click();
 			await main.getByRole('link', { name: /Canal ride/ }).waitFor();
+			await main.getByText('36.00 km/h', { exact: true }).waitFor();
+			await main.getByText('1:15:00', { exact: true }).waitFor();
+			await main.getByText('1:23:20', { exact: true }).waitFor();
 			const filters = main.getByRole('button', { name: /^Filters/ });
 			await filters.click();
 			const filteredRequest = page.waitForRequest((request) => {
@@ -306,13 +343,22 @@ try {
 		assert.equal(await chart.getByRole('button').count(), 12);
 		assert.match(await chart.locator('[aria-live]').textContent(), /45 km/);
 		assert.equal(await chart.getByRole('button', { name: / · 0 km/ }).count(), 11);
-		await page.getByText('36.0 km/h', { exact: true }).waitFor();
+		await page.getByText('36.00 km/h', { exact: true }).waitFor();
 		assert.equal(
 			await page.getByRole('main').getByRole('link', { name: 'Health', exact: true }).count(),
 			0
 		);
 
 		await page.getByRole('link', { name: 'Canal ride' }).click();
+		await page.waitForURL(origin + '/activities/mira-ride');
+		const headline = main.locator('dl').first();
+		await headline.getByText('36.00 km/h', { exact: true }).waitFor();
+		await headline.getByText('1:15:00', { exact: true }).waitFor();
+		const secondary = main
+			.locator('dl')
+			.filter({ has: page.getByText('Max speed', { exact: true }) });
+		await secondary.getByText('1:23:20', { exact: true }).waitFor();
+		await secondary.getByText('39.60 km/h', { exact: true }).waitFor();
 		const pr = page.getByRole('button', { name: /2 segment PRs/ });
 		await pr.click();
 		const achievements = page.locator('#segment-prs');
@@ -332,6 +378,10 @@ try {
 		);
 		assert.equal(await page.getByText('Kudos', { exact: true }).count(), 0);
 		assert.equal(await page.getByText('Comments', { exact: true }).count(), 0);
+		await open('/activities/mira-ride/similar');
+		const comparison = main.getByRole('table');
+		await comparison.getByRole('cell', { name: '1:23:20', exact: true }).waitFor();
+		await comparison.getByRole('cell', { name: /36\.00 km\/h/ }).waitFor();
 		await open('/activities/mira-ride/streams');
 		await page.locator('.uplot').waitFor();
 
@@ -353,7 +403,8 @@ try {
 		assert.deepEqual(catalogSort.slice(0, 2), ['local_kom_holder:asc', 'average_speed_kmh:asc']);
 		await open('/stats?member=mira');
 		await page.getByRole('heading', { name: 'By sport' }).waitFor();
-		await page.getByRole('cell', { name: '36.0 km/h' }).waitFor();
+		await page.getByRole('cell', { name: '36.00 km/h' }).waitFor();
+		await main.getByText('Moving time 1:15:00 · 36.00 km/h', { exact: true }).waitFor();
 		await noPageOverflow('/stats');
 		await open('/analysis?member=mira');
 		await page.getByText('Your long-term training load', { exact: false }).waitFor();

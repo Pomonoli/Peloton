@@ -10,7 +10,7 @@ import (
 )
 
 // RefreshCyclingSummary rebuilds motion statistics without re-merging sources.
-func RefreshCyclingSummary(ctx context.Context, reader port.ActivityReader, streams port.StreamRepo, store port.CyclingSummaryStore, id domain.ActivityID) error {
+func RefreshCyclingSummary(ctx context.Context, reader port.ActivityReader, streams port.StreamRepo, store port.CyclingSummaryStore, overrides port.ClassificationOverrideRepo, id domain.ActivityID) error {
 	act, err := reader.GetActivity(ctx, id)
 	if errors.Is(err, domain.ErrNotFound) {
 		return nil
@@ -22,9 +22,14 @@ func RefreshCyclingSummary(ctx context.Context, reader port.ActivityReader, stre
 		return nil
 	}
 	before := act.Summary
-	if err := applyCyclingSummary(ctx, streams, &act); err != nil {
+	overlay, err := loadClassificationOverride(ctx, overrides, id)
+	if err != nil {
 		return err
 	}
+	if err := applyCyclingSummary(newSummaryStreamReader(ctx, streams), &act, overlay.DistanceM == nil); err != nil {
+		return err
+	}
+	act.RecalculateAverageSpeed()
 	if sameMetric(before.DistanceM, act.Summary.DistanceM) && sameMetric(before.AvgSpeedMps, act.Summary.AvgSpeedMps) &&
 		sameMetric(before.MaxSpeedMps, act.Summary.MaxSpeedMps) {
 		return nil
@@ -38,8 +43,8 @@ func sameMetric(a, b *float64) bool {
 
 // applyCyclingSummary validates measurements from the same source selected
 // by the activity merge. A summary-only source retains its supplied values.
-func applyCyclingSummary(ctx context.Context, streams port.StreamRepo, act *domain.Activity) error {
-	if streams == nil || act.Type != domain.ActivityTypeRide {
+func applyCyclingSummary(load summaryStreamReader, act *domain.Activity, deriveDistance bool) error {
+	if act.Type != domain.ActivityTypeRide {
 		return nil
 	}
 	distanceSource, hasDistanceSource := act.MergeProvenance.Winner(domain.FieldGroupDistance)
@@ -52,23 +57,24 @@ func applyCyclingSummary(ctx context.Context, streams port.StreamRepo, act *doma
 			speedSource, hasSpeedSource = *act.PrimaryStreamSourceID, true
 		}
 	}
-	if hasDistanceSource {
-		motion, err := cyclingMotion(ctx, streams, distanceSource)
+	if hasDistanceSource && deriveDistance {
+		samples, err := load(distanceSource)
 		if err != nil {
 			return err
 		}
+		motion := domain.ValidateCyclingStream(samples)
 		applyCyclingDistance(act, motion)
 		if hasSpeedSource && speedSource == distanceSource {
-			applyCyclingSpeed(act, motion)
+			applyCyclingMaxSpeed(act, motion)
 			return nil
 		}
 	}
 	if hasSpeedSource {
-		motion, err := cyclingMotion(ctx, streams, speedSource)
+		samples, err := load(speedSource)
 		if err != nil {
 			return err
 		}
-		applyCyclingSpeed(act, motion)
+		applyCyclingMaxSpeed(act, domain.ValidateCyclingStream(samples))
 	}
 	return nil
 }
@@ -80,21 +86,29 @@ func applyCyclingDistance(act *domain.Activity, motion domain.CyclingStream) {
 	}
 }
 
-func cyclingMotion(ctx context.Context, streams port.StreamRepo, id domain.SourceID) (domain.CyclingStream, error) {
-	raw, err := streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: id, Resolution: domain.StreamResolutionRaw})
-	if err != nil {
-		return domain.CyclingStream{}, fmt.Errorf("read cycling summary stream %s: %w", id, err)
+type summaryStreamReader func(domain.SourceID) ([]domain.StreamSample, error)
+
+func newSummaryStreamReader(ctx context.Context, streams port.StreamRepo) summaryStreamReader {
+	cached := make(map[domain.SourceID][]domain.StreamSample)
+	return func(id domain.SourceID) ([]domain.StreamSample, error) {
+		if samples, ok := cached[id]; ok || streams == nil {
+			return samples, nil
+		}
+		raw, err := streams.QueryStream(ctx, domain.StreamQuery{ActivitySourceID: id, Resolution: domain.StreamResolutionRaw})
+		if err != nil {
+			return nil, fmt.Errorf("read activity summary stream %s: %w", id, err)
+		}
+		cached[id] = raw.Samples
+		return raw.Samples, nil
 	}
-	return domain.ValidateCyclingStream(raw.Samples), nil
 }
 
-func applyCyclingSpeed(act *domain.Activity, motion domain.CyclingStream) {
+func applyCyclingMaxSpeed(act *domain.Activity, motion domain.CyclingStream) {
 	if !motion.HasMotion {
 		return
 	}
-	distance, seconds, peak := motion.SpeedSummary()
-	act.Summary.AvgSpeedMps, act.Summary.MaxSpeedMps = nil, nil
+	_, seconds, peak := motion.SpeedSummary()
 	if seconds > 0 {
-		act.Summary.AvgSpeedMps, act.Summary.MaxSpeedMps = new(distance/seconds), &peak
+		act.Summary.MaxSpeedMps = &peak
 	}
 }

@@ -303,15 +303,11 @@
 	const speedSports = new Set(['ride', 'ebikeride', 'velomobile', 'handcycle', 'inline_skate']);
 	const useSpeed = $derived(speedSports.has(a.type) || speedSports.has(a.discipline));
 
-	// Primary metric next to distance/time/elevation: pace or avg speed.
-	const primaryPace = $derived.by(() => {
-		const s = a.summary;
-		if (useSpeed) return { label: 'Avg speed', value: formatSpeed(s.avgSpeedMps) };
-		// derive avg pace from distance/time when no avg_speed provided
-		const mps =
-			s.avgSpeedMps ?? (s.distanceM && a.movingDurationS ? s.distanceM / a.movingDurationS : null);
-		return { label: 'Avg pace', value: formatPace(mps) };
-	});
+	const primaryPace = $derived(
+		useSpeed
+			? { label: m.col_average_speed(), value: formatSpeed(a.summary.avgSpeedMps) }
+			: { label: m.col_average_pace(), value: formatPace(a.summary.avgSpeedMps) }
+	);
 
 	// Secondary stats — only those that actually have a value are rendered.
 	const secondaryStats = $derived.by(() => {
@@ -320,9 +316,9 @@
 		const push = (label: string, v: string) => {
 			if (v && v !== '–' && v !== '—') out.push({ label, value: v });
 		};
-		push('Elapsed', formatDuration(a.elapsedDurationS));
-		if (useSpeed) push('Max speed', formatSpeed(s.maxSpeedMps));
-		else push('Avg speed', formatSpeed(s.avgSpeedMps));
+		push(m.ride_elapsed(), formatDuration(a.elapsedDurationS));
+		if (useSpeed) push(m.col_max_speed(), formatSpeed(s.maxSpeedMps));
+		else push(m.col_average_speed(), formatSpeed(s.avgSpeedMps));
 		push('Avg HR', formatHeartRate(s.avgHeartRateBpm));
 		push('Max HR', formatHeartRate(s.maxHeartRateBpm));
 		push('Avg power', formatPower(s.avgPowerW));

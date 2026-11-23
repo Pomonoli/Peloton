@@ -39,6 +39,7 @@ type dashFeedActivity struct {
 	MovingDurationS  float64  `json:"moving_duration_s"`
 	ElapsedDurationS int64    `json:"elapsed_duration_s"`
 	DistanceM        *float64 `json:"distance_m"`
+	AvgSpeedMps      *float64 `json:"avg_speed_mps"`
 	ElevationGainM   *float64 `json:"elevation_gain_m"`
 	TSS              *float64 `json:"tss"`
 	StartPlace       string   `json:"start_place"`
@@ -188,6 +189,7 @@ func dashFeedActivityOf(a domain.Activity, gearPrompt bool) dashFeedActivity {
 		MovingDurationS:  a.MovingDuration.Seconds(),
 		ElapsedDurationS: int64(a.ElapsedDuration.Seconds()),
 		DistanceM:        a.Summary.DistanceM,
+		AvgSpeedMps:      a.Summary.AvgSpeedMps,
 		ElevationGainM:   a.Summary.ElevationGainM,
 		TSS:              a.Summary.TSS,
 		StartPlace:       a.StartPlace,

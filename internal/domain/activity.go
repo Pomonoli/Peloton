@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // ---------------------------------------------------------------------------
 // Activity
@@ -118,6 +121,20 @@ type ActivitySummary struct {
 	// Swim-specific
 	PoolLengthM  *int
 	TotalStrokes *int
+}
+
+// ActivityAverageSpeed returns the whole-activity average in metres per
+// second. Segment and best-effort speeds use their own elapsed intervals.
+func ActivityAverageSpeed(distance *float64, moving time.Duration) *float64 {
+	if distance == nil || !(*distance > 0) || math.IsInf(*distance, 0) || moving <= 0 {
+		return nil
+	}
+	return new(*distance / moving.Seconds())
+}
+
+func (a *Activity) RecalculateAverageSpeed() {
+	// The activity row and its aggregates store durations in whole seconds.
+	a.Summary.AvgSpeedMps = ActivityAverageSpeed(a.Summary.DistanceM, a.MovingDuration.Truncate(time.Second))
 }
 
 // IsDeleted reports whether the activity is soft-deleted.

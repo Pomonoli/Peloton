@@ -364,6 +364,9 @@ func newApp(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, logger 
 	if err := wireAppBlobStore(ctx, app, cfg, logger); err != nil {
 		return nil, err
 	}
+	if app.BlobStore != nil {
+		app.RecomputeActivity.TimingArchive = activityTimingArchive{blobs: app.BlobStore, log: logger}
+	}
 	mirrorInstanceEnv(ctx, app, cfg, logger)
 	wireOperatorAdmin(app, logger)
 	// After the blob store: variants need it (nil → nothing is derived).
@@ -501,6 +504,18 @@ func wireAppSecondaryRepos(app *App, pool *pgxpool.Pool, secretBox *auth.SecretB
 	app.Attachments = postgres.NewAttachmentRepo(pool)
 	app.SourceDenylist = postgres.NewSourceDenylistRepo(pool)
 	app.Health = postgres.NewHealthRepo(pool)
+}
+
+func backfillMovingTime(ctx context.Context, pool *pgxpool.Pool, archive port.ActivityTimingArchive) (int, error) {
+	return (activity.TimingBackfill{
+		Activities:       postgres.NewActivityRepo(pool),
+		ActivitiesToScan: postgres.NewMaintenanceRepo(pool),
+		Gear:             postgres.NewGearRepo(pool),
+		Tx:               postgres.NewTxManager(pool),
+		Streams:          postgres.NewStreamRepo(pool),
+		Overrides:        postgres.NewClassificationOverrideRepo(pool),
+		Archive:          archive,
+	}).Execute(ctx)
 }
 
 // wireAppIngestUseCases builds the ingest, recluster, gear and post-ingest compute use cases.

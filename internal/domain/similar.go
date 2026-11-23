@@ -1,6 +1,9 @@
 package domain
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // SimilarRow is one activity of a same-route group.
 type SimilarRow struct {
@@ -82,10 +85,9 @@ func ReferenceAsSimilar(a Activity, targetSegments int) SimilarActivity {
 
 func similarRow(sa SimilarActivity, current bool, target int) SimilarRow {
 	r := SimilarRow{SimilarActivity: sa, IsCurrent: current}
-	if sa.DistanceM != nil && *sa.DistanceM > 0 && sa.MovingS > 0 {
-		p := float64(sa.MovingS) / (*sa.DistanceM / 1000.0)
-		r.PaceSPerKm = &p
-		r.AverageSpeedKmh = new(3600 / p)
+	if speed := ActivityAverageSpeed(sa.DistanceM, time.Duration(sa.MovingS)*time.Second); speed != nil {
+		r.PaceSPerKm = new(1000 / *speed)
+		r.AverageSpeedKmh = new(3.6 * *speed)
 	}
 	if current {
 		r.OverlapPct = 1
