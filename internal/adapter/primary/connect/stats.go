@@ -21,12 +21,13 @@ import (
 type StatsServer struct {
 	cairnv1connect.UnimplementedStatsServiceHandler
 
-	Overviews *dashboard.Overviews
-	Stats     *dashboard.Stats
-	Content   port.ContentSigner
-	Gear      *gearuc.Service
-	MapETag   func(domain.Activity) string
-	Members   *view.Members
+	Overviews  *dashboard.Overviews
+	Stats      *dashboard.Stats
+	Content    port.ContentSigner
+	Gear       *gearuc.Service
+	MapETag    func(domain.Activity) string
+	Members    *view.Members
+	Visibility *view.Visibility
 }
 
 var _ cairnv1connect.StatsServiceHandler = (*StatsServer)(nil)
@@ -59,7 +60,9 @@ func (s *StatsServer) GetOverview(ctx context.Context, req *v1.GetOverviewReques
 	}
 	names := gearNamesOf(ctx, s.Gear, ov.Recent...)
 	for _, a := range ov.Recent {
-		out.Recent = append(out.Recent, decorateActivity(ctx, activityReadToProto(a, nil, !port.IsCommunityActivityRead(ctx)), a, names, s.Content, s.MapETag))
+		if item := sharedActivityToProto(ctx, s.Visibility, a, nil, names, s.Content, s.MapETag); item != nil {
+			out.Recent = append(out.Recent, item)
+		}
 	}
 	return out, nil
 }

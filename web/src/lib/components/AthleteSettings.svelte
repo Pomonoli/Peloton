@@ -138,7 +138,7 @@
 
 <div class="space-y-6">
 	<header>
-		<h2 class="text-lg font-semibold">{m.health_athlete_settings()}</h2>
+		<h1 class="text-2xl font-semibold tracking-tight">{m.health_athlete_settings()}</h1>
 		<p class="mt-1 max-w-2xl text-sm text-zinc-400">
 			Dated physiological values, used to calculate Training Stress Score (TSS) and the fitness
 			curves. Calculations interpolate between the nearest dates.

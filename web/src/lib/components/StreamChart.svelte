@@ -22,12 +22,20 @@
 		syncKey,
 		hoverT = null,
 		calendar = false,
+		yAxis,
+		legend = true,
 		onHover
 	}: {
 		offsets: number[];
 		series: Series[];
 		height?: number;
-		calendar?: boolean; // dated efforts with a shared elapsed-time scale
+		calendar?: boolean;
+		yAxis?: {
+			label: string;
+			format: (value: number) => string;
+			range?: (min: number, max: number) => [number, number];
+		};
+		legend?: boolean;
 		syncKey?: string;
 		// hoverT: externally-driven hover position (seconds offset) — shows the
 		// cursor at that x without emitting. null clears it.
@@ -56,7 +64,12 @@
 	}
 
 	function build() {
-		if (!container || offsets.length === 0 || series.length === 0) return;
+		if (!container) return;
+		if (offsets.length === 0 || series.length === 0) {
+			plot?.destroy();
+			plot = undefined;
+			return;
+		}
 
 		// Filled series (e.g. elevation) render FIRST so they sit behind the
 		// metric lines like a background mountain profile.
@@ -67,8 +80,15 @@
 		// Keep independent scales for overlaid channels with different units.
 		const number = new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 });
 		const scales: Options['scales'] = { x: { time: calendar } };
-		if (calendar) scales.y = {};
-		else
+		if (calendar) {
+			const range = yAxis?.range;
+			scales.y = range
+				? {
+						range: (_plot, min, max) =>
+							min == null || max == null ? [null, null] : range(min, max)
+					}
+				: {};
+		} else
 			ordered.forEach((_, i) => {
 				scales[`y${i}`] = {};
 			});
@@ -76,6 +96,7 @@
 		const opts: Options = {
 			width: container.clientWidth || 800,
 			height,
+			legend: { show: legend },
 			cursor: {
 				drag: { x: true, y: false },
 				// When a syncKey is given, join a uPlot sync group so the hover
@@ -96,13 +117,21 @@
 					? [
 							{
 								scale: calendar ? 'y' : 'y0',
-								label: ordered[0]?.unit
-									? `${ordered[0].label} (${ordered[0].unit})`
-									: (ordered[0]?.label ?? ''),
+								label:
+									yAxis?.label ??
+									(ordered[0]?.unit
+										? `${ordered[0].label} (${ordered[0].unit})`
+										: (ordered[0]?.label ?? '')),
 								stroke: appearanceColor('--plot-axis'),
 								grid: { stroke: appearanceColor('--plot-grid') },
 								values: (_u: uPlot, splits: number[]) =>
-									splits.map((value) => (calendar ? formatSeconds(value) : number.format(value)))
+									splits.map((value) =>
+										yAxis
+											? yAxis.format(value)
+											: calendar
+												? formatSeconds(value)
+												: number.format(value)
+									)
 							}
 						]
 					: [])
@@ -110,7 +139,9 @@
 			series: [
 				{ label: m.detail_label_time() },
 				...ordered.map((s, i) => {
-					const stroke = appearanceColor(s.color.slice(4, -1));
+					const stroke = s.color.startsWith('var(')
+						? appearanceColor(s.color.slice(4, -1))
+						: s.color;
 					const { formatValue } = s;
 					return {
 						label: s.unit ? `${s.label} (${s.unit})` : s.label,
@@ -157,6 +188,19 @@
 
 		plot?.destroy();
 		plot = new uPlot(opts, data, container);
+	}
+
+	function inspectTouch(event: PointerEvent) {
+		if (!plot || !onHover || !yAxis || event.pointerType === 'mouse') return;
+		const rect = plot.over.getBoundingClientRect();
+		if (
+			event.clientX < rect.left ||
+			event.clientX > rect.right ||
+			event.clientY < rect.top ||
+			event.clientY > rect.bottom
+		)
+			return;
+		plot.setCursor({ left: event.clientX - rect.left, top: event.clientY - rect.top });
 	}
 
 	function formatSeconds(s: number): string {
@@ -224,5 +268,5 @@
 			{m.ride_chart_reset()}
 		</button>
 	{/if}
-	<div bind:this={container} class="w-full"></div>
+	<div bind:this={container} class="w-full" role="presentation" onpointerdown={inspectTouch}></div>
 </div>

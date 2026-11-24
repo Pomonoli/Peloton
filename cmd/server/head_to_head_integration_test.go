@@ -80,7 +80,7 @@ func TestAPI_HeadToHead(t *testing.T) {
 		waitForPersonalPower(t, c, float64(watts))
 		return ride{domain.ActivityID(uuid.MustParse(a)), domain.SourceID(uuid.MustParse(str(raw, "source_id"))), c.userID}
 	}
-	a := upload(alice, 0, 260, "PRIVATE")
+	a := upload(alice, 0, 260, "PUBLIC")
 	bStart := start.AddDate(0, 0, 1)
 	bID := importGarminFITFixture(t, env, bob, bStart, garminTestFIT(t, bStart))
 	garmin, err := env.app.Activities.FindOwnedSourceByExternalID(ctx, bob.userID, garminProvider, nil, "garmin-fit")
@@ -88,7 +88,7 @@ func TestAPI_HeadToHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := ride{bID, garmin.ID, bob.userID}
-	setITSegmentVisibility(bob, bID.String(), "FOLLOWERS")
+	setITSegmentVisibility(bob, bID.String(), "PUBLIC")
 	waitForPersonalPower(t, bob, 225)
 	hidden := upload(bob, 2, 390, "PRIVATE")
 	admin.post("/api/admin/activities/"+hidden.activity.String()+"/hide", map[string]any{"hidden": true}, http.StatusOK)
@@ -105,13 +105,6 @@ func TestAPI_HeadToHead(t *testing.T) {
 	env.anon().do(http.MethodGet, endpoint+bob.name, nil, http.StatusUnauthorized)
 	alice.do(http.MethodGet, endpoint+alice.name, nil, http.StatusBadRequest)
 	alice.do(http.MethodGet, endpoint+"unknown-rider", nil, http.StatusNotFound)
-	override := domain.VisibilityPolicy{ByAudience: map[domain.Audience]domain.CategorySet{domain.AudiencePublic: {}}}
-	if err := env.app.Visibility.SetUserPolicy(ctx, bob.userID, override); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.app.Visibility.SetActivityOverride(ctx, b.activity, &override); err != nil {
-		t.Fatal(err)
-	}
 
 	saveEffort := func(seg domain.SegmentID, act ride, elapsed, moving float64, offset int, ref *string) {
 		t.Helper()
@@ -228,14 +221,14 @@ func TestAPI_HeadToHead(t *testing.T) {
 	if !slices.ContainsFunc(readHeadToHead(t, bob, alice).Segments, func(row comparedSegmentResponse) bool {
 		return row.ID == canal.ID && row.Opponent.ActivityID == a.activity.String() && row.Opponent.Value == 100
 	}) {
-		t.Fatal("the legacy-private upload is missing from the reverse comparison")
+		t.Fatal("the public upload is missing from the reverse comparison")
 	}
 
 	// A newly imported ride updates a record without changing the segment score.
 	newRide := bob.upload("improvement.gpx", performanceGPX(start.AddDate(0, 0, 3), time.Second, 145, 320))
 	newID := str(newRide, "activity_id")
-	setITSegmentVisibility(bob, newID, "FOLLOWERS")
-	// Wait for the new import in the community leaderboard, where Bob's restricted PR is excluded.
+
+	// Wait for the new public import; the provider-restricted PR stays excluded.
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(25 * time.Millisecond) {
 		rows := readRecordBoard(t, alice, "/api/records/leaderboards/ride/power/duration/300")
 		if len(rows) == 2 && rows[0].Result.ActivityID == newID {
@@ -285,6 +278,18 @@ func TestAPI_HeadToHead(t *testing.T) {
 		}
 	}
 	admin.do(http.MethodGet, "/api/head-to-head?first="+alice.name+"&second="+alice.name, nil, http.StatusBadRequest)
+
+	override := domain.VisibilityPolicy{ByAudience: map[domain.Audience]domain.CategorySet{domain.AudiencePublic: {}}}
+	if err := env.app.Visibility.SetUserPolicy(ctx, bob.userID, override); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.app.Visibility.SetActivityOverride(ctx, b.activity, &override); err != nil {
+		t.Fatal(err)
+	}
+
+	if comparison := readHeadToHead(t, alice, bob); comparison.SegmentScore.Comparable != 0 || comparison.RecordScore.Comparable != 0 {
+		t.Fatalf("comparison exposed a rider's explicitly hidden results: %+v", comparison)
+	}
 
 	if err := env.app.Blocks.Block(ctx, bob.userID, alice.userID); err != nil {
 		t.Fatal(err)

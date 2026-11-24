@@ -5,7 +5,7 @@
 	// Privacy & sharing controls: public-profile opt-in, the per-audience
 	// visibility policy, and privacy zones. Backs onto /api/profile/*.
 
-	let isPublic = $state(false);
+	let isPublic = $state<boolean>();
 	let username = $state('');
 	let { username: usernameProp = '' }: { username?: string } = $props();
 
@@ -29,7 +29,7 @@
 		username = usernameProp;
 		// public toggle is derived from the profile endpoint
 		try {
-			const p = await fetch(`/api/profiles/${username}`);
+			const p = await fetch(`/api/profiles/${encodeURIComponent(username)}`);
 			if (!p.ok) throw new Error(p.statusText);
 			const b = await p.json();
 			isPublic = b.is_public;
@@ -58,6 +58,7 @@
 	});
 
 	async function togglePublic() {
+		if (isPublic === undefined) return;
 		const next = !isPublic;
 		const res = await fetch('/api/profile/public', {
 			method: 'PUT',
@@ -161,6 +162,9 @@
 			</div>
 		</div>
 		<button
+			disabled={isPublic === undefined}
+			role="switch"
+			aria-checked={isPublic ?? false}
 			onclick={togglePublic}
 			aria-label="Toggle public profile"
 			class={`relative h-6 w-11 rounded-full transition max-md:shrink-0 ${isPublic ? 'bg-accent-500' : 'bg-zinc-700'}`}

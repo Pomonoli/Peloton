@@ -426,14 +426,6 @@
 <section class="space-y-4 max-md:space-y-2.5">
 	{#snippet mapControls()}
 		<div class="flex flex-wrap items-center gap-2">
-			<label class="flex items-center gap-2 text-sm">
-				{m.heatmap_layer()}
-				<select bind:value={metric} class="min-h-10 rounded border border-zinc-700 bg-panel px-2">
-					{#each heatmapMetrics as layer (layer)}
-						<option value={layer}>{heatmapMetricLabel(layer)}</option>
-					{/each}
-				</select>
-			</label>
 			{#if !original}
 				<label class="flex items-center gap-2 text-sm">
 					{m.heatmap_scale()}
@@ -548,6 +540,14 @@
 						</p>
 					{/if}
 				</div>
+				<label class="flex items-center gap-2 text-sm">
+					{m.heatmap_layer()}
+					<select bind:value={metric} class="min-h-10 rounded border border-zinc-700 bg-panel px-2">
+						{#each heatmapMetrics as layer (layer)}
+							<option value={layer}>{heatmapMetricLabel(layer)}</option>
+						{/each}
+					</select>
+				</label>
 			</header>
 		{/snippet}
 		<ActivityFilterBar
@@ -608,7 +608,7 @@
 			type="button"
 			bind:this={fullscreenButton}
 			onclick={toggleFullscreen}
-			class="absolute right-3 top-3 z-10 min-h-10 rounded-md border border-zinc-700 bg-panel px-3 text-xs font-medium shadow hover:text-accent-300"
+			class="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-10 min-h-10 rounded-md border border-zinc-700 bg-panel px-3 text-xs font-medium shadow hover:text-accent-300"
 		>
 			{fullscreen ? m.heatmap_exit_fullscreen() : m.heatmap_fullscreen()}
 		</button>
@@ -629,30 +629,33 @@
 				</p>
 			</div>
 		{/if}
+		{#if !original}
+			<div
+				class="rounded-lg border border-zinc-800 bg-panel px-3 py-2 text-sm {fullscreen
+					? 'absolute inset-x-2 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-10 mx-auto max-w-max'
+					: 'mt-2'}"
+			>
+				{#if inspected}
+					<dl class="flex flex-wrap gap-x-5 gap-y-1">
+						{#each heatmapMetrics as item (item)}
+							{@const value = inspected[item]}
+							<div>
+								<dt class="text-xs text-quiet">
+									{item === 'density' ? m.heatmap_passages() : heatmapMetricLabel(item)}
+								</dt>
+								<dd class="font-medium tabular-nums">
+									{heatmapValue(item, typeof value === 'number' ? value : null)}
+								</dd>
+							</div>
+						{/each}
+					</dl>
+				{:else}
+					<p class="text-quiet">{m.heatmap_inspect()}</p>
+				{/if}
+			</div>
+		{/if}
 	</div>
-	{#if original}
-		<p class="text-xs text-zinc-500">{m.heatmap_open_activity()}</p>
-	{:else}
-		<div class="min-h-16 rounded-lg border border-zinc-800 bg-panel px-3 py-2 text-sm">
-			{#if inspected}
-				<dl class="flex flex-wrap gap-x-5 gap-y-1">
-					{#each heatmapMetrics as item (item)}
-						{@const value = inspected[item]}
-						<div>
-							<dt class="text-xs text-quiet">
-								{item === 'density' ? m.heatmap_passages() : heatmapMetricLabel(item)}
-							</dt>
-							<dd class="font-medium tabular-nums">
-								{heatmapValue(item, typeof value === 'number' ? value : null)}
-							</dd>
-						</div>
-					{/each}
-				</dl>
-			{:else}
-				<p class="text-quiet">{m.heatmap_inspect()}</p>
-			{/if}
-		</div>
-	{/if}
+	{#if original}<p class="text-xs text-zinc-500">{m.heatmap_open_activity()}</p>{/if}
 </section>
 
 <style>

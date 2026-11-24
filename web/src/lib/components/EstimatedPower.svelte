@@ -25,8 +25,11 @@
 		onHover: (t: number | null) => void;
 	} = $props();
 
+	type PowerInputs = { weight_kg: number | null; bicycle_weight_kg: number | null };
+
 	let riderKg = $state<number | undefined>();
 	let equipmentKg = $state<number | undefined>();
+	let bicycleKg = $state<number>();
 	let crr = $state(defaultResistance.crr);
 	let cdaM2 = $state(defaultResistance.cdaM2);
 	let wind = $state<number | undefined>();
@@ -37,11 +40,26 @@
 	let controller: AbortController | undefined;
 	let result = $state<ReturnType<typeof estimatePower>>();
 	const storageKey = $derived(userId ? `cairn.estimated-power.${userId}` : null);
+	const overrideKey = $derived(storageKey ? `${storageKey}.${activityId}` : null);
 	const offsets = $derived(track?.map((p) => p.t) ?? []);
 
 	function rememberEquipment() {
 		try {
-			if (storageKey) localStorage.setItem(storageKey, JSON.stringify({ equipmentKg, crr, cdaM2 }));
+			if (storageKey) {
+				const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+				localStorage.setItem(
+					storageKey,
+					JSON.stringify({
+						equipmentKg: bicycleKg == null ? equipmentKg : saved.equipmentKg,
+						crr,
+						cdaM2
+					})
+				);
+			}
+			if (overrideKey && bicycleKg != null) {
+				if (equipmentKg === bicycleKg) localStorage.removeItem(overrideKey);
+				else localStorage.setItem(overrideKey, String(equipmentKg));
+			}
 		} catch {
 			// Calculations work without storage.
 		}
@@ -69,7 +87,7 @@
 				options
 			);
 		const weight = fetch(`/api/activities/${activityId}/power-inputs`, options)
-			.then(async (response) => (response.ok ? (await response.json()).weight_kg : null))
+			.then(async (response) => (response.ok ? ((await response.json()) as PowerInputs) : null))
 			.catch(() => null);
 		try {
 			const [primary, ...others] = await Promise.all([
@@ -83,7 +101,17 @@
 			if (!measured) {
 				const savedWeight = await weight;
 				if (request.signal.aborted) return;
-				if (typeof savedWeight === 'number') riderKg = savedWeight;
+				if (typeof savedWeight?.weight_kg === 'number') riderKg = savedWeight.weight_kg;
+				if (typeof savedWeight?.bicycle_weight_kg === 'number') {
+					bicycleKg = savedWeight.bicycle_weight_kg;
+					equipmentKg = bicycleKg;
+					try {
+						const override = Number(overrideKey && localStorage.getItem(overrideKey));
+						if (override >= 2 && override <= 100) equipmentKg = override;
+					} catch {
+						// Storage is optional.
+					}
+				}
 				track = analyzeTrack(streamToView(primary.stream)?.track ?? []);
 			}
 		} catch {
@@ -123,6 +151,24 @@
 		{:else}
 			<p class="max-w-prose text-quiet">{m.ride_estimate_accuracy()}</p>
 			<p class="max-w-prose text-quiet">{m.ride_estimate_defaults()}</p>
+			{#if bicycleKg != null}
+				<div class="flex flex-wrap items-center gap-x-3 text-xs text-quiet">
+					{#if equipmentKg === bicycleKg}
+						<span>{m.ride_assigned_bicycle({ weight: bicycleKg })}</span>
+					{:else}
+						<span>{m.ride_equipment_override()}</span>
+						<button
+							type="button"
+							class="min-h-9 text-accent-300"
+							onclick={() => {
+								equipmentKg = bicycleKg;
+								result = undefined;
+								rememberEquipment();
+							}}>{m.ride_reset_bicycle()}</button
+						>
+					{/if}
+				</div>
+			{/if}
 			<form class="grid grid-cols-2 gap-3 sm:grid-cols-3" onsubmit={calculate}>
 				<label class="flex flex-col gap-1">
 					{m.ride_rider_mass()}

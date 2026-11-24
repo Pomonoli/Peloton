@@ -191,7 +191,9 @@ func (s *ActivityServer) ListActivities(
 			}
 			sources = srcs
 		}
-		out.Activities = append(out.Activities, s.withMapImage(ctx, withGear(activityReadToProto(a, sources, !port.IsCommunityActivityRead(ctx)), a, names), a))
+		if item := sharedActivityToProto(ctx, s.Visibility, a, sources, names, s.Content, s.MapETag); item != nil {
+			out.Activities = append(out.Activities, item)
+		}
 	}
 
 	// Reverse to start-time-DESC unless the caller asked otherwise. The
@@ -216,6 +218,9 @@ func (s *ActivityServer) GetActivity(
 	if err != nil {
 		return nil, err
 	}
+	if !viewer.Cats.Has(domain.CategorySummary) {
+		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
+	}
 
 	sources, err := s.Activities.ListSourcesForActivity(ctx, activity.ID)
 	if err != nil {
@@ -223,8 +228,12 @@ func (s *ActivityServer) GetActivity(
 			fmt.Errorf("list sources: %w", err))
 	}
 
-	out := withGear(activityReadToProto(activity, sources, viewer.IsOwner), activity, s.gearNames(ctx, activity))
-	return &v1.GetActivityResponse{Activity: s.withMapImage(ctx, out, activity)}, nil
+	redacted := viewer.Redact(activity)
+	out := withGear(activityReadToProto(redacted, sources, viewer.IsOwner), redacted, s.gearNames(ctx, activity))
+	if viewer.Cats.Has(domain.CategoryMap) && len(viewer.Zones) == 0 {
+		out = s.withMapImage(ctx, out, redacted)
+	}
+	return &v1.GetActivityResponse{Activity: out}, nil
 }
 
 func activityReadToProto(a domain.Activity, sources []domain.ActivitySource, owner bool) *v1.Activity {
@@ -481,6 +490,24 @@ func (s *ActivityServer) GetActivityStream(
 		}
 	}
 
+	if !viewer.IsOwner {
+		if channels == nil {
+			channels = domain.AllStreamChannels
+		}
+		allowed := make([]domain.StreamChannel, 0, len(channels))
+		for _, channel := range channels {
+			if viewer.Cats.Has(domain.StreamCategory(channel)) {
+				allowed = append(allowed, channel)
+			}
+		}
+		channels = allowed
+		for i := range stream.Samples {
+			sample := &stream.Samples[i]
+			if sample.Latitude != nil && sample.Longitude != nil && domain.PointInAnyZone(viewer.Zones, *sample.Latitude, *sample.Longitude) {
+				sample.Latitude, sample.Longitude, sample.AltitudeM, sample.Grade = nil, nil, nil, nil
+			}
+		}
+	}
 	// The repository treats Channels as advisory; enforce the subset here.
 	return &v1.GetActivityStreamResponse{
 		Stream: streamToProto(stream.KeepChannels(channels)),
@@ -503,6 +530,9 @@ func (s *ActivityServer) ListBestEfforts(
 		return nil, err
 	}
 
+	if !viewer.Cats.Has(domain.CategoryBestEfforts) {
+		return &v1.ListBestEffortsResponse{}, nil
+	}
 	efforts, err := s.BestEfforts.ListForActivity(viewer.ActivityReadContext(ctx), activity.ID)
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal,

@@ -133,6 +133,7 @@ func (uc *CreateUser) Execute(ctx context.Context, in CreateUserInput) (CreateUs
 		Units:              units,
 		Role:               role,
 		Status:             domain.UserStatusActive,
+		ProfileIsPublic:    true,
 		MustChangePassword: in.MustChangePassword,
 		CreatedAt:          uc.now(),
 		UpdatedAt:          uc.now(),

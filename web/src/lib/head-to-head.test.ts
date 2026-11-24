@@ -20,29 +20,29 @@ describe('Head-to-Head rows', () => {
 		...shared,
 		id: 'village',
 		name: 'Village',
+		you_speed_kmh: 34,
 		time_difference_s: 0,
 		speed_difference_kmh: 0,
 		winner: 'tie' as const
 	};
 
-	it('retains both rides, elapsed times and both kinds of gap', () => {
+	it('places speed above elapsed time and retains activity links', () => {
 		const [row] = segmentRows([shared], 'Mira');
 		expect(row?.cells).toMatchObject({
 			name: { href: '/segment/canal' },
-			you: { href: '/activities/ride', text: '1:40', detail: '43.2 km/h' },
-			opponent: { href: '/activities/other', text: '2:00', detail: '36.0 km/h' },
-			difference: { text: '20 sec', detail: '7.2 km/h' }
+			you: { href: '/activities/ride', text: '43.2 km/h', detail: '1:40' },
+			opponent: { href: '/activities/other', text: '36.0 km/h', detail: '2:00' }
 		});
 	});
 
-	it('sorts absolute gaps and speeds in either direction, with stable ties', () => {
+	it('sorts numeric speeds in either direction, with stable ties', () => {
 		const rows = segmentRows([shared, forest, village], 'Mira');
-		expect(filterComparison(rows, '', '', 'difference', true).map((r) => r.id)).toEqual([
+		expect(filterComparison(rows, '', '', 'you', true).map((r) => r.id)).toEqual([
 			'canal',
 			'forest',
 			'village'
 		]);
-		expect(filterComparison(rows, '', '', 'speedGap', false).map((r) => r.id)).toEqual([
+		expect(filterComparison(rows, '', '', 'you', false).map((r) => r.id)).toEqual([
 			'village',
 			'canal',
 			'forest'
@@ -50,7 +50,7 @@ describe('Head-to-Head rows', () => {
 		expect(filterComparison(rows, '  CANAL', 'you', 'name', false).map((r) => r.id)).toEqual([
 			'canal'
 		]);
-		expect(filterComparison(rows, '', 'opponent', 'youSpeed', false).map((r) => r.id)).toEqual([
+		expect(filterComparison(rows, '', 'opponent', 'you', false).map((r) => r.id)).toEqual([
 			'forest'
 		]);
 		expect(filterComparison(rows, '', 'tie', 'winner', true).map((r) => r.id)).toEqual(['village']);
@@ -91,18 +91,21 @@ describe('Head-to-Head rows', () => {
 			],
 			'Mira'
 		);
-		expect(rows[1]?.cells).toMatchObject({
+		expect(rows[0]?.cells).toMatchObject({
 			you: { text: '8:20', detail: '36 km/h' },
-			opponent: { text: '10:25', detail: '28.8 km/h' },
-			difference: { text: '125 sec', detail: '25%' }
+			opponent: { text: '10:25', detail: '28.8 km/h' }
 		});
-		expect(rows[0]?.cells.opponent?.text).toBe('Unavailable');
+		expect(rows[1]?.cells.opponent?.text).toBe('Unavailable');
 		expect(rows[2]?.cells.winner?.text).toBe('Unscored');
-		expect(filterComparison(rows, '', '', 'percentGap', false)[0]?.id).toBe('pace:distance:5000');
-		expect(filterComparison(rows, '20 km', '', 'name', false)[0]?.id).toBe('pace:distance:20000');
+		expect(filterComparison(rows, '', '', 'category', false)[0]?.id).toBe(
+			'ride:pace:distance:5000'
+		);
+		expect(filterComparison(rows, '20 km', '', 'name', false)[0]?.id).toBe(
+			'ride:pace:distance:20000'
+		);
 	});
 
-	it('displays climbing efforts and their gap in meters while preserving comparison values', () => {
+	it('displays climbing efforts in meters while preserving comparison values', () => {
 		const [row] = recordRows(
 			[
 				{
@@ -121,9 +124,8 @@ describe('Head-to-Head rows', () => {
 		);
 		expect(row?.cells).toMatchObject({
 			you: { text: '300 m' },
-			opponent: { text: '240 m' },
-			difference: { text: '60 m', detail: '25%' }
+			opponent: { text: '240 m' }
 		});
-		expect(row?.values).toMatchObject({ you: 900, opponent: 720, difference: 180 });
+		expect(row?.values).toMatchObject({ you: 900, opponent: 720 });
 	});
 });

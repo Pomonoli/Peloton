@@ -150,11 +150,12 @@ func segmentBoard(t *testing.T, c *itestClient, segmentID string) []boardRow {
 }
 
 type catalogRow struct {
-	ID          string  `json:"id"`
-	MemberCount int     `json:"member_count"`
-	Winner      string  `json:"local_kom_holder"`
-	Elapsed     float64 `json:"best_elapsed_s"`
-	SpeedKmh    float64 `json:"average_speed_kmh"`
+	ID            string  `json:"id"`
+	MemberCount   int     `json:"member_count"`
+	TotalAttempts int     `json:"total_attempts"`
+	Winner        string  `json:"local_kom_holder"`
+	Elapsed       float64 `json:"best_elapsed_s"`
+	SpeedKmh      float64 `json:"average_speed_kmh"`
 }
 
 func catalog(t *testing.T, c *itestClient, filter string) []catalogRow {
@@ -238,6 +239,10 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 		t.Fatal("a second rider did not reuse the cached segment")
 	}
 	setITSegmentVisibility(bob, bobActivity, "PRIVATE")
+	if privateBoard := segmentBoard(t, alice, segmentID); len(privateBoard) != 1 || privateBoard[0].UserID != alice.userID.String() {
+		t.Fatalf("private effort appeared in shared standings: %+v", privateBoard)
+	}
+	setITSegmentVisibility(bob, bobActivity, "PUBLIC")
 	board := segmentBoard(t, alice, segmentID)
 	if len(board) != 2 || board[0].UserID != bob.userID.String() || board[0].Rank != 1 || board[1].Rank != 2 ||
 		board[0].StartTime.IsZero() || math.Abs(board[0].SpeedKmh-seg.DistanceM/100*3.6) > 0.000001 {
@@ -366,6 +371,16 @@ func TestAPI_SegmentCatalogSorting(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
+			if fixture.name == "Dune" && j == 0 {
+				if err := env.app.Segments.SaveSegmentEffort(ctx, domain.SegmentEffort{
+					ID: domain.SegmentEffortID(uuid.New()), SegmentID: seg.ID, ActivityID: activities[j],
+					ActivitySourceID: sources[j], UserID: riders[j].userID, StartTime: start.Add(time.Hour),
+					ElapsedS: elapsed + 10, MovingS: elapsed + 10, StartOffset: 2, EndOffset: 3,
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
 		}
 	}
 
@@ -373,7 +388,8 @@ func TestAPI_SegmentCatalogSorting(t *testing.T) {
 		query string
 		want  []string
 	}{
-		{"", []string{"alpine", "Brook", "Canal", "Dune"}},
+		{"", []string{"Dune", "Brook", "Canal", "alpine"}},
+		{"mine=true", []string{"Dune", "Brook", "Canal"}},
 		{"sort=name&direction=desc", []string{"Dune", "Canal", "Brook", "alpine"}},
 		{"sort=distance_m", []string{"alpine", "Canal", "Dune", "Brook"}},
 		{"sort=distance_m&direction=desc", []string{"Brook", "Dune", "Canal", "alpine"}},
@@ -402,6 +418,10 @@ func TestAPI_SegmentCatalogSorting(t *testing.T) {
 				got := make([]string, 0, len(page.Segments))
 				for _, row := range page.Segments {
 					got = append(got, names[row.ID])
+					attempts := map[string]int{"Dune": 3, "Brook": 2, "Canal": 1, "alpine": 1}
+					if count := attempts[names[row.ID]]; row.TotalAttempts != count {
+						t.Errorf("%s: total attempts = %d, want %d", names[row.ID], row.TotalAttempts, count)
+					}
 				}
 				want := tc.want[offset:min(offset+limit, len(tc.want))]
 				if !slices.Equal(got, want) || page.HasMore != (offset+limit < len(tc.want)) {

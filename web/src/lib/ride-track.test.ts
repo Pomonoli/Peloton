@@ -202,6 +202,20 @@ describe('Estimated Power', () => {
 		expect(estimatePower(analyzeTrack(ride(-8)), settings)?.averageW).toBe(0);
 	});
 
+	it('uses the assigned bicycle mass in the estimate while leaving recorded watts alone', () => {
+		const climb = analyzeTrack(ride(6));
+		const light = { ...settings, equipmentKg: 7 };
+		const heavy = { ...settings, equipmentKg: 15 };
+		expect(estimatePower(climb, heavy)!.averageW).toBeGreaterThan(
+			estimatePower(climb, light)!.averageW
+		);
+		const measured = analyzeTrack(ride(6, true));
+		const watts = measured.map((point) => point.power);
+		expect(estimatePower(measured, light)).toBeNull();
+		expect(estimatePower(measured, heavy)).toBeNull();
+		expect(measured.map((point) => point.power)).toEqual(watts);
+	});
+
 	it('uses modest acceleration and ignores abrupt speed changes', () => {
 		const track = analyzeTrack(ride());
 		track[100]!.speedKmh = 36.9;

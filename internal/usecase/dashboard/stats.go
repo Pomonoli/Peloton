@@ -20,11 +20,12 @@ var ErrUnavailable = port.NewActionError(port.ActionErrorUnavailable, "not avail
 // heatmap pages (StatsService / GET /api/stats, /api/analysis, /api/records,
 // /api/best-efforts/history, /api/activities/heatmap).
 type Stats struct {
-	activities  port.ActivityReader
-	metrics     port.MetricRepo
-	bestEfforts port.BestEffortRepo
-	streams     port.StreamRepo
-	now         func() time.Time
+	activities   port.ActivityReader
+	metrics      port.MetricRepo
+	bestEfforts  port.BestEffortRepo
+	streams      port.StreamRepo
+	now          func() time.Time
+	PrivacyZones port.VisibilityRepo
 }
 
 // NewStats wires the repos; metrics, bestEfforts and streams may be nil.
@@ -60,7 +61,10 @@ func (s *Stats) Get(ctx context.Context, userID domain.UserID) (StatsResult, err
 	}
 	out.ByYear, _ = s.activities.ActivityYearStats(ctx, userID)
 	out.LongestDistance = s.first(ctx, userID, "distance_desc")
-	out.LongestDuration = s.first(ctx, userID, "duration_desc")
+	out.LongestDuration = s.first(ctx, userID, "moving_duration_desc")
+	if out.LongestDuration != nil && out.LongestDuration.MovingDuration <= 0 {
+		out.LongestDuration = nil
+	}
 	return out, nil
 }
 
@@ -177,6 +181,7 @@ func (s *Stats) Heatmap(ctx context.Context, userID domain.UserID, filter port.A
 	if s.streams == nil {
 		return HeatmapResult{}, ErrUnavailable
 	}
+	filter.RequireVisibleMap = true
 	filter.Sort = "date_desc"
 	filter.Limit = HeatmapMaxActivities
 	filter.Offset = 0
@@ -198,12 +203,28 @@ func (s *Stats) Heatmap(ctx context.Context, userID domain.UserID, filter port.A
 			withStream = append(withStream, a)
 		}
 	}
+	var zones []domain.PrivacyZone
+	if port.IsCommunityActivityRead(ctx) && s.PrivacyZones != nil {
+		zones, err = s.PrivacyZones.ListPrivacyZones(ctx, userID)
+		if err != nil {
+			return out, fmt.Errorf("load activity privacy zones: %w", err)
+		}
+	}
 	for start := 0; start < len(withStream); start += HeatmapBatch {
 		tracks, err := s.trackBatch(ctx, withStream[start:min(start+HeatmapBatch, len(withStream))], res)
 		if err != nil {
 			return out, err
 		}
-		out.Tracks = append(out.Tracks, tracks...)
+		for _, track := range tracks {
+			if len(zones) > 0 {
+				track.Points = slices.DeleteFunc(slices.Clone(track.Points), func(point domain.GeoPoint) bool {
+					return domain.PointInAnyZone(zones, point.Lat, point.Lon)
+				})
+			}
+			if len(track.Points) > 1 {
+				out.Tracks = append(out.Tracks, track)
+			}
+		}
 	}
 	return out, nil
 }

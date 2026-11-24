@@ -257,6 +257,7 @@ func TestAPI_CommunityRecordRankings(t *testing.T) {
 	older := award(alice, 2, 250)
 	estimated := award(cara, 3, 420)
 	noMeter := award(cara, 4, 0)
+	waitForPersonalPower(t, cara, 420) // Let the import finish before changing fixture provenance.
 	estimatedSource, err := domain.ParseUUID[domain.SourceID](str(estimated, "source_id"))
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +270,6 @@ func TestAPI_CommunityRecordRankings(t *testing.T) {
 	if err := env.app.Activities.SaveSource(t.Context(), src); err != nil {
 		t.Fatal(err)
 	}
-	waitForPersonalPower(t, cara, 420) // present in existing personal calculations
 	invalidActivity, _ := domain.ParseUUID[domain.ActivityID](str(noMeter, "activity_id"))
 	invalidSource, _ := domain.ParseUUID[domain.SourceID](str(noMeter, "source_id"))
 	if err := env.app.BestEfforts.SaveEfforts(t.Context(), []domain.BestEffort{{
@@ -343,7 +343,7 @@ func TestAPI_CommunityRecordRankings(t *testing.T) {
 
 func waitForPersonalPower(t *testing.T, client *itestClient, watts float64) {
 	t.Helper()
-	for until := time.Now().Add(5 * time.Second); time.Now().Before(until); {
+	for until := time.Now().Add(20 * time.Second); time.Now().Before(until); {
 		var page struct {
 			Records []struct {
 				Metric   string

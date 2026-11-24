@@ -67,7 +67,8 @@
 			const response = await fetch('/api/riders', { signal: request.signal });
 			if (!response.ok) throw new Error();
 			const next = (await response.json()) as { members: Member[] };
-			if (!request.signal.aborted) members = next.members;
+			if (!request.signal.aborted)
+				members = next.members.filter((member) => member.username.trim().toLowerCase() !== 'admin');
 		} catch {
 			if (!request.signal.aborted) failed = true;
 		} finally {
@@ -85,7 +86,12 @@
 
 <section class="space-y-3">
 	<header class="flex flex-wrap items-end justify-between gap-3">
-		<h1 class="text-2xl font-semibold tracking-tight">{m.friends_title()}</h1>
+		<div>
+			<h1 class="text-2xl font-semibold tracking-tight">{m.friends_title()}</h1>
+			{#if !loading && !failed}<p class="text-xs text-quiet">
+					{m.riders_count({ count: filtered.length })}
+				</p>{/if}
+		</div>
 		<label class="w-full sm:w-64">
 			<span class="sr-only">{m.friends_search()}</span>
 			<input

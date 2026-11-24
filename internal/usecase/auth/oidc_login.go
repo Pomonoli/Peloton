@@ -321,15 +321,16 @@ func (uc *OIDCLogin) provisionUser(ctx context.Context, p domain.OIDCProvider, c
 			username = fmt.Sprintf("%s%d", base, attempt+1)
 		}
 		user := domain.User{
-			ID:            domain.UserID(uc.newUUID()),
-			Username:      username,
-			Email:         email,
-			EmailVerified: boolClaim(claims, domain.ClaimEmailVerified),
-			DisplayName:   displayName,
-			Role:          role,
-			Status:        domain.UserStatusActive,
-			CreatedAt:     uc.now(),
-			UpdatedAt:     uc.now(),
+			ID:              domain.UserID(uc.newUUID()),
+			Username:        username,
+			Email:           email,
+			EmailVerified:   boolClaim(claims, domain.ClaimEmailVerified),
+			DisplayName:     displayName,
+			Role:            role,
+			Status:          domain.UserStatusActive,
+			ProfileIsPublic: true,
+			CreatedAt:       uc.now(),
+			UpdatedAt:       uc.now(),
 		}
 		// OIDC-provisioned users have no local password.
 		err := uc.Users.CreateUser(ctx, user, domain.Credentials{UserID: user.ID})

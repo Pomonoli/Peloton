@@ -20,14 +20,12 @@
 		member,
 		excludeDownhills,
 		toolbar,
-		extraFilters,
-		resetExtra
+		afterToolbar
 	}: {
 		member: MemberView | null;
 		excludeDownhills: boolean;
 		toolbar: Snippet;
-		extraFilters: Snippet;
-		resetExtra: () => void;
+		afterToolbar: Snippet;
 	} = $props();
 	let rows = $state<CommunityRecord[]>([]);
 	let loading = $state(true);
@@ -72,16 +70,15 @@
 
 <FilterSheet
 	{toolbar}
-	active={excludeDownhills || !!sport || !!metric || showEmpty || order !== 'category'}
+	belowToolbar={afterToolbar}
+	active={!!sport || !!metric || showEmpty || order !== 'category'}
 	reset={() => {
 		sport = '';
 		metric = '';
 		showEmpty = false;
 		order = 'category';
-		resetExtra();
 	}}
 >
-	{@render extraFilters()}
 	<div class="mt-1 flex flex-wrap items-end gap-3 text-sm">
 		<label class="flex min-w-0 flex-col gap-1 max-md:w-full">
 			{m.record_sport()}

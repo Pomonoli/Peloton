@@ -108,7 +108,7 @@ func (h *ProfileHandlers) putVisibility(w http.ResponseWriter, r *http.Request) 
 	var body struct {
 		Policy map[string][]string `json:"policy"`
 	}
-	if err := decodeJSONBody(r, &body); err != nil {
+	if err := decodeJSONBody(r, &body); err != nil || body.Policy == nil {
 		http.Error(w, "bad body", http.StatusBadRequest)
 		return
 	}
@@ -117,7 +117,7 @@ func (h *ProfileHandlers) putVisibility(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "save failed", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"policy": domain.MarshalPolicy(p)})
+	writeJSON(w, http.StatusOK, map[string]any{"policy": domain.MarshalPolicy(p.Effective())})
 }
 
 func (h *ProfileHandlers) listZones(w http.ResponseWriter, r *http.Request) {

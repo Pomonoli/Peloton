@@ -112,11 +112,18 @@ try {
 		assert.equal(await picker.locator('option[value="ada"]').count(), 0);
 
 		await page.goto(origin + '/u/mira');
-		await page.getByRole('main').getByRole('link', { name: 'Head-to-Head' }).click();
-		await page.waitForURL(origin + '/head-to-head?member=mira');
+		await page.waitForURL(origin + '/?member=mira');
+		if (mobile) {
+			await page
+				.getByRole('navigation', { name: 'Main navigation' })
+				.getByRole('link', { name: 'Social' })
+				.click();
+		}
+		await page.getByRole('link', { name: 'Head-to-Head', exact: true }).click();
+		await page.waitForURL(origin + '/head-to-head?viewing=mira&second=mira');
 		const panel = page.getByRole('tabpanel', { name: 'Segments' });
 		const canal = panel.getByRole('row').filter({ hasText: 'Canal Sprint' });
-		for (const label of ['1:40', '43.2 km/h', '2:00', '36.0 km/h', '20 sec', '7.2 km/h']) {
+		for (const label of ['1:40', '43.2 km/h', '2:00', '36.0 km/h']) {
 			await canal.getByText(label, { exact: true }).waitFor();
 		}
 		assert.equal(
@@ -124,7 +131,7 @@ try {
 			'/segment/canal'
 		);
 		assert.equal(
-			await canal.getByRole('link', { name: '2:00' }).getAttribute('href'),
+			await canal.getByRole('link', { name: '36.0 km/h' }).getAttribute('href'),
 			'/activities/mira-ride'
 		);
 		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -136,7 +143,14 @@ try {
 			})
 		);
 
-		await panel.getByRole('button', { name: 'Difference' }).click();
+		assert.equal(await panel.getByRole('columnheader', { name: /Gap|Difference/ }).count(), 0);
+		assert.deepEqual(await page.getByRole('main').locator('dl dt').allTextContents(), [
+			'Ada wins',
+			'Ties',
+			'Mira wins',
+			'Total'
+		]);
+		await panel.getByRole('button', { name: 'Mira', exact: true }).click();
 		await panel.locator('tbody tr').first().getByRole('link', { name: 'Forest Climb' }).waitFor();
 		const showFilters = () => panel.getByRole('button', { name: /^Filters/ }).click();
 		const done = () => page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
@@ -151,7 +165,8 @@ try {
 		const pr = page.getByRole('tabpanel', { name: 'Personal Records' });
 		await pr.getByLabel('Search record categories').fill('5 km');
 		await pr.getByText('8:20', { exact: true }).waitFor();
-		await pr.getByText('25%', { exact: true }).waitFor();
+		await pr.getByText('36 km/h', { exact: true }).waitFor();
+		assert.equal(await pr.getByRole('columnheader', { name: /Gap|Difference/ }).count(), 0);
 		assert.equal(await pr.locator('tbody tr').count(), 1);
 		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 

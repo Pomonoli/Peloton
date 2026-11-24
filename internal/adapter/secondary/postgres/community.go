@@ -12,7 +12,8 @@ import (
 )
 
 // Keep directory totals, the recent ride link and the profile history on the same visibility rule.
-const communityActivitySQL = "a.deleted_at IS NULL AND ((NOT a.hidden_by_admin AND NOT a.provider_restricted) OR a.user_id = $1)"
+const communityActivitySQL = "a.deleted_at IS NULL AND ((NOT a.hidden_by_admin AND NOT a.provider_restricted) OR a.user_id = $1)" +
+	" AND activity_category_shared(a.user_id, a.privacy, a.visibility_override, $1, 'summary')"
 
 func (r *ActivityRepo) ListCommunityMembers(ctx context.Context, viewer domain.UserID) ([]domain.CommunityMember, error) {
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
@@ -58,7 +59,61 @@ func (r *ActivityRepo) ListCommunityMembers(ctx context.Context, viewer domain.U
 // communityReadSQL applies to a subject's activity queries after a distinct viewer was authorized.
 func communityReadSQL(ctx context.Context, prefix string) string {
 	if port.IsCommunityActivityRead(ctx) {
-		return " AND NOT " + prefix + "hidden_by_admin AND NOT " + prefix + "provider_restricted"
+		return " AND NOT " + prefix + "hidden_by_admin AND NOT " + prefix + "provider_restricted" +
+			" AND " + sharedCategorySQL(prefix, communityViewerSQL(ctx), "'summary'")
 	}
 	return ""
+}
+
+// The viewer expression contains only a UUID parsed by the auth layer.
+// A missing viewer resolves the public audience.
+func communityViewerSQL(ctx context.Context) string {
+	if viewer, ok := port.CommunityViewer(ctx); ok {
+		return "'" + viewer.String() + "'::uuid"
+	}
+	return "NULL::uuid"
+}
+
+func sharedCategorySQL(prefix, viewer, category string) string {
+	return "activity_category_shared(" + prefix + "user_id, " + prefix + "privacy, " +
+		prefix + "visibility_override, " + viewer + ", " + category + ")"
+}
+
+const recordMetricCategorySQL = `CASE b.metric
+	WHEN 'power' THEN 'power'
+	WHEN 'heart_rate' THEN 'hr'
+	WHEN 'pace' THEN 'pace_speed'
+	WHEN 'speed' THEN 'pace_speed'
+	ELSE 'best_efforts'
+END`
+
+func sharedRecordSQL(prefix, viewer string) string {
+	return " AND " + sharedCategorySQL(prefix, viewer, "'best_efforts'") +
+		" AND " + sharedCategorySQL(prefix, viewer, recordMetricCategorySQL)
+}
+
+func communityRecordSQL(ctx context.Context, prefix string) string {
+	if !port.IsCommunityActivityRead(ctx) {
+		return ""
+	}
+	return sharedRecordSQL(prefix, communityViewerSQL(ctx))
+}
+
+func communitySegmentSQL(ctx context.Context, prefix string) string {
+	if !port.IsCommunityActivityRead(ctx) {
+		return ""
+	}
+	return " AND " + sharedCategorySQL(prefix, communityViewerSQL(ctx), "'segments'")
+}
+
+// Precomputed routes contain original coordinates. Use the unmasked
+// cache only where the athlete has no privacy zones.
+func communityMapSQL(ctx context.Context, prefix string) string {
+	if !port.IsCommunityActivityRead(ctx) {
+		return ""
+	}
+	viewer := communityViewerSQL(ctx)
+	return " AND " + sharedCategorySQL(prefix, viewer, "'map'") +
+		" AND " + sharedCategorySQL(prefix, viewer, "'pace_speed'") +
+		" AND NOT EXISTS (SELECT 1 FROM privacy_zones z WHERE z.user_id = " + prefix + "user_id)"
 }

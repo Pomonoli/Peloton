@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // DashboardHandlers serve dashboards for the selected member.
@@ -23,6 +25,7 @@ type DashboardHandlers struct {
 	Searches        *dashboard.Searches
 	Stats           *dashboard.Stats
 	PerformanceMaps *dashboard.PerformanceMaps
+	Visibility      *view.Visibility
 	Log             *slog.Logger
 }
 
@@ -51,7 +54,7 @@ func (h *DashboardHandlers) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	rec := make([]dashFeedActivity, 0, len(ov.Recent))
 	for _, a := range ov.Recent {
-		rec = append(rec, dashFeedActivityOf(a, false))
+		rec = append(rec, dashFeedActivityOf(h.redactActivity(ctx, a), false))
 	}
 	weeks := make([]map[string]any, 0, len(ov.CyclingWeeks))
 	for _, week := range ov.CyclingWeeks {
@@ -105,10 +108,30 @@ func (h *DashboardHandlers) stats(w http.ResponseWriter, r *http.Request) {
 		"by_discipline": dashFacets(st.ByDiscipline),
 		"by_year":       yearOut,
 		"records": map[string]any{
-			"longest_distance": dashStatsRecordJSON(st.LongestDistance),
-			"longest_duration": dashStatsRecordJSON(st.LongestDuration),
+			"longest_distance": dashStatsRecordJSON(h.statsRecord(ctx, st.LongestDistance)),
+			"longest_duration": dashStatsRecordJSON(h.statsRecord(ctx, st.LongestDuration)),
 		},
 	})
+}
+
+func (h *DashboardHandlers) redactActivity(ctx context.Context, activity domain.Activity) domain.Activity {
+	if !port.IsCommunityActivityRead(ctx) {
+		return activity
+	}
+	id, _ := port.CommunityViewer(ctx)
+	viewer, _ := h.Visibility.Resolve(ctx, activity, &id, false)
+	return viewer.Redact(activity)
+}
+
+func (h *DashboardHandlers) statsRecord(ctx context.Context, activity *domain.Activity) *domain.Activity {
+	if activity == nil {
+		return nil
+	}
+	redacted := h.redactActivity(ctx, *activity)
+	if !port.IsCommunityActivityRead(ctx) || redacted.Summary.AvgSpeedMps != nil {
+		redacted.Summary.AvgSpeedMps = domain.ActivityAverageSpeed(redacted.Summary.DistanceM, redacted.MovingDuration)
+	}
+	return &redacted
 }
 
 // dashStatsRecordJSON renders a record-holding activity; nil when none.
@@ -162,12 +185,18 @@ func dashAnalysisJSON(series []domain.TrainingLoadDay) map[string]any {
 	atl := make([]float64, 0, len(series))
 	tsb := make([]float64, 0, len(series))
 	tss := make([]float64, 0, len(series))
+	observed := make([]*float64, 0, len(series))
 	for _, d := range series {
 		dates = append(dates, d.Date)
 		ctl = append(ctl, d.CTL)
 		atl = append(atl, d.ATL)
 		tsb = append(tsb, d.TSB)
 		tss = append(tss, d.TSS)
+		var value *float64
+		if d.HasTSS {
+			value = &d.TSS
+		}
+		observed = append(observed, value)
 	}
 	current := map[string]any{"ctl": 0.0, "atl": 0.0, "tsb": 0.0}
 	if n := len(series); n > 0 {
@@ -175,6 +204,6 @@ func dashAnalysisJSON(series []domain.TrainingLoadDay) map[string]any {
 	}
 	return map[string]any{
 		"dates": dates, "ctl": ctl, "atl": atl, "tsb": tsb, "tss": tss,
-		"current": current,
+		"current": current, "tss_observed": observed,
 	}
 }

@@ -144,10 +144,10 @@ func dailyLoad(start, end time.Time, tssByDay map[time.Time]float64) func(func(t
 	return func(yield func(time.Time, domain.TrainingLoadDay) bool) {
 		var ctl, atl float64
 		for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
-			tss := tssByDay[day]
+			tss, hasTSS := tssByDay[day]
 			ctl += (tss - ctl) / 42
 			atl += (tss - atl) / 7
-			if !yield(day, domain.TrainingLoadDay{TSS: tss, CTL: ctl, ATL: atl, TSB: ctl - atl}) {
+			if !yield(day, domain.TrainingLoadDay{TSS: tss, HasTSS: hasTSS, CTL: ctl, ATL: atl, TSB: ctl - atl}) {
 				return
 			}
 		}
@@ -173,7 +173,7 @@ func CommunitySeries(ctx context.Context, reader port.ActivityReader, userID dom
 	for day, load := range dailyLoad(warmup, endDay, tss) {
 		if !day.Before(startDay) {
 			days = append(days, domain.TrainingLoadDay{Date: day.Format("2006-01-02"), CTL: domain.Round1(load.CTL),
-				ATL: domain.Round1(load.ATL), TSB: domain.Round1(load.TSB), TSS: domain.Round1(load.TSS)})
+				ATL: domain.Round1(load.ATL), TSB: domain.Round1(load.TSB), TSS: domain.Round1(load.TSS), HasTSS: load.HasTSS})
 		}
 	}
 	return days, nil

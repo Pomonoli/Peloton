@@ -13,6 +13,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 	gearuc "github.com/opencairn-org/cairn-core/internal/usecase/gear"
+	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 // SearchActivities is the faceted list (GET /api/activities/feed).
@@ -46,7 +47,10 @@ func (s *ActivityServer) SearchActivities(ctx context.Context, req *v1.SearchAct
 	}
 	names := s.gearNames(ctx, res.Activities...)
 	for _, a := range res.Activities {
-		wire := decorateActivity(ctx, activityReadToProto(a, nil, !port.IsCommunityActivityRead(ctx)), a, names, s.Content, s.MapETag)
+		wire := sharedActivityToProto(ctx, s.Visibility, a, nil, names, s.Content, s.MapETag)
+		if wire == nil {
+			continue
+		}
 		wire.GearUnset = dashboard.GearUnset(a, res.GearPrompt && !port.IsCommunityActivityRead(ctx))
 		out.Activities = append(out.Activities, wire)
 	}
@@ -162,6 +166,29 @@ func activitySortKey(s v1.ActivitySort) string {
 	case v1.ActivitySort_ACTIVITY_SORT_UNSPECIFIED, v1.ActivitySort_ACTIVITY_SORT_START_TIME_DESC:
 	}
 	return "date_desc"
+}
+
+// sharedActivityToProto applies the same projection to overview, list and
+// stats reads as to a single activity.
+func sharedActivityToProto(ctx context.Context, visibility *view.Visibility, a domain.Activity, sources []domain.ActivitySource,
+	names map[domain.GearID]string, content port.ContentSigner, etag func(domain.Activity) string,
+) *v1.Activity {
+	owner := !port.IsCommunityActivityRead(ctx)
+	if !owner {
+		id, ok := port.CommunityViewer(ctx)
+		if !ok {
+			return nil
+		}
+		viewer, visible := visibility.Resolve(ctx, a, &id, false)
+		if !visible || !viewer.Cats.Has(domain.CategorySummary) {
+			return nil
+		}
+		a = viewer.Redact(a)
+		if !viewer.Cats.Has(domain.CategoryMap) || len(viewer.Zones) > 0 {
+			content = nil
+		}
+	}
+	return decorateActivity(ctx, activityReadToProto(a, sources, owner), a, names, content, etag)
 }
 
 // decorateActivity adds the gear name and the signed course image to a wire

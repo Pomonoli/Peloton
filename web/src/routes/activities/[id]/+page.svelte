@@ -483,7 +483,7 @@
 	{/if}
 
 	{#if data.isOwner && a.type === 'ride' && !a.isEbike && !a.isVirtual && a.primaryStreamSourceId && track.length > 1 && a.summary.avgPowerW == null && a.summary.maxPowerW == null && a.summary.normalizedPowerW == null && !stream?.power && !data.mergedStream?.power}
-		{#key a.id}
+		{#key `${a.id}/${a.gearId}`}
 			<EstimatedPower
 				sourceId={a.primaryStreamSourceId}
 				otherSourceIds={a.sources

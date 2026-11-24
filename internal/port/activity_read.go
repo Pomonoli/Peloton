@@ -1,6 +1,21 @@
 package port
 
-import "context"
+import (
+	"context"
+
+	"github.com/opencairn-org/cairn-core/internal/domain"
+)
+
+type communityViewerKey struct{}
+
+func WithCommunityViewer(ctx context.Context, viewer domain.UserID) context.Context {
+	return context.WithValue(ctx, communityViewerKey{}, viewer)
+}
+
+func CommunityViewer(ctx context.Context) (domain.UserID, bool) {
+	viewer, ok := ctx.Value(communityViewerKey{}).(domain.UserID)
+	return viewer, ok
+}
 
 type communityActivityReadKey struct{}
 

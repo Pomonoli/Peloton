@@ -11,6 +11,7 @@ export interface CatalogSegment {
 	local_kom_holder: string;
 	member_count: number;
 	my_attempts: number;
+	total_attempts?: number;
 	start: [number, number] | null;
 	polyline?: string;
 	polyline_precision?: number;
@@ -22,10 +23,12 @@ export type SortColumn = Exclude<
 >;
 export type CatalogSort = SortCriterion<SortColumn>;
 
-export function defaultCatalogSort(mySegments: boolean): CatalogSort[] {
-	return mySegments
-		? [{ column: 'my_attempts', direction: 'desc' }]
-		: [{ column: 'name', direction: 'asc' }];
+export function defaultCatalogSort(): CatalogSort[] {
+	return [
+		{ column: 'member_count', direction: 'desc' },
+		{ column: 'total_attempts', direction: 'desc' },
+		{ column: 'average_speed_kmh', direction: 'desc' }
+	];
 }
 
 export interface CatalogPage {

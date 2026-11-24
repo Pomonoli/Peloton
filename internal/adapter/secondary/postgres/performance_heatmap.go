@@ -39,7 +39,7 @@ func (r *PerformanceHeatmapRepo) HeatmapActivities(ctx context.Context, member d
 	conditions, args := activityFilterConds(member, filter, "")
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		WITH filtered AS (
-			SELECT id FROM activities WHERE `+strings.Join(conditions, " AND ")+communityReadSQL(ctx, "")+`
+			SELECT id FROM activities WHERE `+strings.Join(conditions, " AND ")+communityReadSQL(ctx, "")+communityMapSQL(ctx, "")+`
 		), candidates AS (
 			SELECT a.id, p.id AS primary_id, array_agg(src.id ORDER BY src.id) AS sources,
 				`+heatmapSignatureSQL+` AS signature
@@ -199,19 +199,26 @@ func (r *PerformanceHeatmapRepo) VisitHeatmapBins(ctx context.Context, member do
 				OR ($7 > $8 AND (t.tile_x >= $7 OR t.tile_x <= $8)))`
 		}
 	}
-	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT t.bins
+	showHR, showPower := "true", "true"
+	if port.IsCommunityActivityRead(ctx) {
+		viewer := communityViewerSQL(ctx)
+		showHR = sharedCategorySQL("a.", viewer, "'hr'")
+		showPower = sharedCategorySQL("a.", viewer, "'power'")
+	}
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT t.bins, `+showHR+`, `+showPower+`
 		FROM unnest($1::uuid[], $2::text[]) f(id,signature)
 		JOIN activities a ON a.id=f.id AND a.user_id=$3 AND a.deleted_at IS NULL AND a.type='ride'
 		JOIN performance_heatmap_cache h ON h.activity_id=f.id AND h.signature=f.signature
 		JOIN performance_heatmap_tiles t ON t.activity_id=f.id AND t.level=$4
-		WHERE TRUE`+communityReadSQL(ctx, "a.")+filter+` ORDER BY t.activity_id, t.tile_x, t.tile_y`, args...)
+		WHERE TRUE`+communityReadSQL(ctx, "a.")+communityMapSQL(ctx, "a.")+filter+` ORDER BY t.activity_id, t.tile_x, t.tile_y`, args...)
 	if err != nil {
 		return fmt.Errorf("read heatmap tiles: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var raw []byte
-		if err := rows.Scan(&raw); err != nil {
+		var hr, power bool
+		if err := rows.Scan(&raw, &hr, &power); err != nil {
 			return err
 		}
 		if len(raw)%heatmapBinSize != 0 {
@@ -222,6 +229,12 @@ func (r *PerformanceHeatmapRepo) VisitHeatmapBins(ctx context.Context, member do
 			return err
 		}
 		for _, bin := range bins {
+			if !hr {
+				bin.HeartRate = heatmap.Weighted{}
+			}
+			if !power {
+				bin.Power = heatmap.Weighted{}
+			}
 			visit(bin)
 		}
 	}

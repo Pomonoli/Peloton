@@ -1,21 +1,26 @@
 <script lang="ts">
 	import '../app.css';
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { APP_NAME } from '$app/env/public';
 	import { m } from '#lib/paraglide/messages.js';
 	import { setPrefs } from '#lib/prefs.svelte.js';
-	import { formatDate } from '#lib/format.js';
 	import LoadingBar from '#lib/components/LoadingBar.svelte';
-	import MemberNav from '#lib/components/MemberNav.svelte';
-	import { memberProfile, memberURL } from '#lib/member.js';
+	import { personalDataURL, memberURL, type MemberView } from '#lib/member.js';
 	import BrandMark from '#lib/components/BrandMark.svelte';
 
 	let { children, data } = $props();
 
-	const viewedMember = $derived(typeof page.data.member === 'object' ? page.data.member : null);
-	const member = $derived(viewedMember ?? page.data.activityOwner);
+	const viewedMember = $derived.by<MemberView | null>(() => {
+		if (page.data.viewedMember) return page.data.viewedMember;
+		if (!page.url.searchParams.has('member')) return null;
+		return typeof page.data.member === 'object' ? page.data.member : null;
+	});
+	const member = $derived(
+		['/riders', '/head-to-head'].includes(page.url.pathname)
+			? null
+			: (viewedMember ?? page.data.activityOwner)
+	);
 
 	// Email-verification banner (logged-in users with an unverified email).
 	let resendState = $state<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -40,27 +45,6 @@
 			});
 		}
 	});
-
-	let build = $state<{ version: string; commit: string; build_time: string } | null>(null);
-	onMount(async () => {
-		try {
-			const res = await fetch('/api/version');
-			if (res.ok) build = await res.json();
-		} catch {
-			/* ignore */
-		}
-	});
-	const buildLabel = $derived(
-		build
-			? [
-					build.version && `v${build.version}`,
-					build.commit,
-					build.build_time && `built ${formatDate(build.build_time)}`
-				]
-					.filter(Boolean)
-					.join(' · ')
-			: ''
-	);
 
 	// Icons are single multi-subpath `d` strings (24×24, stroked).
 	const icons = {
@@ -96,7 +80,7 @@
 
 	const isAdmin = $derived(data.permissions?.includes('admin') ?? false);
 	const accountItems = $derived<NavItem[]>([
-		{ href: '/health', label: 'Health', icon: icons.health },
+		{ href: '/health', label: m.health_athlete_settings(), icon: icons.health },
 		{ href: '/gear', label: m.nav_gear(), icon: icons.gear },
 		{ href: '/connections', label: m.nav_connections(), icon: icons.connections },
 		{ href: '/settings', label: m.nav_settings(), icon: icons.settings }
@@ -190,7 +174,28 @@
 	});
 
 	function subsectionURL(href: string) {
-		if (href === '/routes/waasland' || href === '/riders') return href;
+		if (href === '/head-to-head' && viewedMember) {
+			const query = new URLSearchParams({
+				viewing: viewedMember.username,
+				second: viewedMember.username
+			});
+			return href + '?' + query;
+		}
+		if (
+			![
+				'/',
+				'/activities',
+				'/heatmap',
+				'/segments',
+				'/analysis',
+				'/stats',
+				'/records',
+				'/head-to-head',
+				'/gear',
+				'/riders'
+			].includes(href)
+		)
+			return href;
 		return memberURL(href, viewedMember);
 	}
 
@@ -206,10 +211,32 @@
 </script>
 
 {#snippet brand()}
-	<a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
+	<a
+		href={subsectionURL('/')}
+		class="flex shrink-0 items-center gap-2 font-semibold tracking-tight"
+	>
 		<BrandMark />
 		<span class="text-accent-300">{APP_NAME}</span>
 	</a>
+{/snippet}
+
+{#snippet memberIndicator()}
+	{#if viewedMember}
+		<div
+			class="flex min-w-0 max-w-full items-center rounded-lg border border-zinc-800 bg-panel pl-2 text-xs"
+		>
+			<span class="truncate text-accent-300">
+				{m.member_header({ name: viewedMember.display_name || viewedMember.username })}
+			</span>
+			<button
+				type="button"
+				onclick={() => goto(personalDataURL(page.url, !!page.data.activityOwner), { reset: false })}
+				aria-label={m.member_close()}
+				class="grid size-10 shrink-0 place-items-center rounded-lg text-base text-quiet hover:text-accent-300"
+				>×</button
+			>
+		</div>
+	{/if}
 {/snippet}
 
 {#snippet navList()}
@@ -222,7 +249,7 @@
 		{#each group.items as item (item.href)}
 			{@const active = isActive(item.href)}
 			<a
-				href={item.href}
+				href={subsectionURL(item.href)}
 				aria-current={active ? 'page' : undefined}
 				class="flex items-center gap-2.5 rounded px-3 py-1.5 text-sm transition-colors {active
 					? 'bg-accent-500/14 text-accent-300'
@@ -317,13 +344,19 @@
 
 	<div class="flex min-w-0 flex-1 flex-col">
 		{#if data.user}
+			{#if viewedMember}
+				<header class="hidden justify-end border-b border-zinc-800 px-6 py-1.5 md:flex">
+					{@render memberIndicator()}
+				</header>
+			{/if}
 			<header
-				class="mobile-topbar flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 md:hidden"
+				class="mobile-topbar flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900 px-4 md:hidden"
 			>
 				{@render brand()}
+				{@render memberIndicator()}
 				<button
 					type="button"
-					class="grid size-11 place-items-center rounded-full"
+					class="grid size-11 shrink-0 place-items-center rounded-full"
 					popovertarget="mobile-profile"
 					aria-label={m.nav_profile()}
 				>
@@ -441,42 +474,10 @@
 		{/if}
 
 		<main class="mx-auto w-full min-w-0 max-w-6xl flex-1 px-6 py-8 max-md:px-3.5 max-md:py-3">
-			{#if member}
-				<div class="mb-4 rounded-xl border border-zinc-800 bg-panel px-3 py-2">
-					<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
-						<div>
-							<span class="text-quiet">{m.member_viewing()}</span>
-							<a
-								href={memberProfile(member)}
-								class="ml-1 font-semibold text-accent-400 hover:underline"
-							>
-								{member.display_name || member.username}
-							</a>
-						</div>
-						<a href="/riders" class="text-accent-400 hover:underline">{m.member_switch()}</a>
-					</div>
-					{#if viewedMember}<MemberNav {member} />{/if}
-				</div>
-			{/if}
 			{#key member?.id}
 				{@render children()}
 			{/key}
 		</main>
-		<footer
-			class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 px-6 py-4 text-xs text-zinc-500 max-md:px-3.5 max-md:py-2.5"
-		>
-			<span>
-				{APP_NAME} — {m.footer_tagline()} ·
-				<a href="https://github.com/Pomonoli/Peloton/blob/main/LICENSE" class="hover:underline"
-					>AGPL-3.0</a
-				>
-				· Based on
-				<a href="https://github.com/opencairn-org/cairn-core" class="hover:underline">Cairn</a>
-			</span>
-			{#if buildLabel}
-				<span class="font-mono text-[10px] text-quiet" title="Build info">{buildLabel}</span>
-			{/if}
-		</footer>
 	</div>
 </div>
 

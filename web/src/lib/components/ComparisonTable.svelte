@@ -12,7 +12,8 @@
 	let {
 		rows,
 		columns,
-		extraSort,
+		defaultSort = 'name',
+		descendingResults = false,
 		first,
 		opponent,
 		searchLabel,
@@ -20,7 +21,8 @@
 	}: {
 		rows: ComparisonRow[];
 		columns: Column[];
-		extraSort: { key: SortKey; label: string }[];
+		defaultSort?: SortKey;
+		descendingResults?: boolean;
 		first: string;
 		opponent: string;
 		searchLabel: string;
@@ -29,22 +31,24 @@
 
 	let query = $state('');
 	let winner = $state<Winner | ''>('');
-	let sort = $state<SortKey>('name');
+	let selectedSort = $state<SortKey>();
+	const sort = $derived(selectedSort ?? defaultSort);
 	let descending = $state(false);
 	const shown = $derived(filterComparison(rows, query, winner, sort, descending));
 
 	function sortBy(key: SortKey) {
-		descending = key === sort ? !descending : key === 'difference';
-		sort = key;
+		descending =
+			key === sort ? !descending : descendingResults && (key === 'you' || key === 'opponent');
+		selectedSort = key;
 	}
 </script>
 
 <div class="mb-2">
 	<FilterSheet
-		active={!!winner || sort !== 'name' || descending}
+		active={!!winner || sort !== defaultSort || descending}
 		reset={() => {
 			winner = '';
-			sort = 'name';
+			selectedSort = undefined;
 			descending = false;
 		}}
 	>
@@ -73,10 +77,14 @@
 			<div class="flex min-w-0 gap-1">
 				<select
 					aria-label={m.comparison_sort_by()}
-					bind:value={sort}
+					value={sort}
+					onchange={(event) => sortBy(event.currentTarget.value as SortKey)}
 					class="min-h-10 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-panel px-2 text-sm"
 				>
-					{#each [...columns, ...extraSort] as col (col.key)}
+					{#if defaultSort === 'category'}
+						<option value="category">{m.comparison_record_order()}</option>
+					{/if}
+					{#each columns as col (col.key)}
 						<option value={col.key}>{m.comparison_sort_option({ column: col.label })}</option>
 					{/each}
 				</select>
@@ -116,13 +124,7 @@
 								onclick={() => sortBy(col.key)}
 								class="min-h-10 text-left font-semibold hover:text-accent-300"
 							>
-								{#if col.key === 'difference'}
-									<span class="lg:hidden">{m.comparison_gap()}</span><span class="hidden lg:inline"
-										>{col.label}</span
-									>
-								{:else}
-									{col.label}
-								{/if}
+								{col.label}
 								{sort === col.key ? (descending ? ' ↓' : ' ↑') : ''}
 							</button>
 						</th>
@@ -151,7 +153,7 @@
 									<a
 										href={cell.href}
 										class="text-accent-300 hover:underline"
-										class:font-bold={won || col.key === 'name'}>{cell.text}</a
+										class:font-bold={won || col.key === 'name' || descendingResults}>{cell.text}</a
 									>
 								{:else}
 									<span class:font-semibold={col.key === 'name'}>{cell?.text}</span>

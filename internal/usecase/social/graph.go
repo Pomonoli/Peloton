@@ -63,10 +63,7 @@ func (p *Privacy) Policy(ctx context.Context, me domain.UserID) (domain.Visibili
 	if err != nil {
 		return domain.VisibilityPolicy{}, err
 	}
-	if pol.ByAudience == nil {
-		pol = domain.DefaultVisibilityPolicy()
-	}
-	return pol, nil
+	return pol.Effective(), nil
 }
 
 // SetPolicy replaces the caller's default policy.

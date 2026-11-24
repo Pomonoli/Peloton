@@ -421,6 +421,7 @@ type CatalogSegment struct {
 	LocalKOMHolder    string
 	MemberCount       int
 	MyAttempts        int
+	TotalAttempts     int
 	Start             *GeoPoint
 	Polyline          string // populated for viewport queries
 	PolylinePrecision int
@@ -430,18 +431,19 @@ type CatalogSegment struct {
 type CatalogSegmentSort string
 
 const (
-	CatalogSortName         CatalogSegmentSort = "name"
-	CatalogSortDistance     CatalogSegmentSort = "distance_m"
-	CatalogSortBestTime     CatalogSegmentSort = "best_elapsed_s"
-	CatalogSortAverageSpeed CatalogSegmentSort = "average_speed_kmh"
-	CatalogSortLocalKOM     CatalogSegmentSort = "local_kom_holder"
-	CatalogSortMembers      CatalogSegmentSort = "member_count"
-	CatalogSortMyAttempts   CatalogSegmentSort = "my_attempts"
+	CatalogSortName          CatalogSegmentSort = "name"
+	CatalogSortDistance      CatalogSegmentSort = "distance_m"
+	CatalogSortBestTime      CatalogSegmentSort = "best_elapsed_s"
+	CatalogSortAverageSpeed  CatalogSegmentSort = "average_speed_kmh"
+	CatalogSortLocalKOM      CatalogSegmentSort = "local_kom_holder"
+	CatalogSortMembers       CatalogSegmentSort = "member_count"
+	CatalogSortMyAttempts    CatalogSegmentSort = "my_attempts"
+	CatalogSortTotalAttempts CatalogSegmentSort = "total_attempts"
 )
 
 func (s CatalogSegmentSort) Valid() bool {
 	switch s {
-	case CatalogSortName, CatalogSortDistance, CatalogSortBestTime, CatalogSortAverageSpeed, CatalogSortLocalKOM, CatalogSortMembers, CatalogSortMyAttempts:
+	case CatalogSortName, CatalogSortDistance, CatalogSortBestTime, CatalogSortAverageSpeed, CatalogSortLocalKOM, CatalogSortMembers, CatalogSortMyAttempts, CatalogSortTotalAttempts:
 		return true
 	}
 	return false

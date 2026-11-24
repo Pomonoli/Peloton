@@ -53,7 +53,6 @@
 	const performanceColumns = $derived<Column[]>([
 		{ key: 'you', label: firstName },
 		{ key: 'opponent', label: opponentName },
-		{ key: 'difference', label: m.comparison_difference() },
 		{ key: 'winner', label: m.comparison_winner() }
 	]);
 	const segmentColumns = $derived<Column[]>([
@@ -152,6 +151,7 @@
 		const query = new SvelteURLSearchParams();
 		if (first && first !== self.username) query.set('first', first);
 		if (second) query.set('member', second);
+		if (data.viewedMember) query.set('viewing', data.viewedMember.username);
 		void goto(query.size ? `/head-to-head?${query}` : '/head-to-head', { reset: false });
 	}
 
@@ -278,10 +278,16 @@
 			class="grid grid-cols-4 divide-x divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-panel"
 			aria-live="polite"
 		>
-			{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses }, { label: m.comparison_ties(), value: score.ties }, { label: m.comparison_comparable(), value: score.comparable }] as stat (stat.label)}
+			{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins, accent: 'text-accent-300' }, { label: m.comparison_ties(), value: score.ties, accent: '' }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses, accent: 'text-violet-400' }, { label: m.comparison_total(), value: score.comparable, accent: 'text-quiet' }] as stat, index (index)}
 				<div class="min-w-0 px-2 py-2.5 text-center sm:px-4">
 					<dt class="break-words text-[11px] leading-4 text-quiet sm:text-xs">{stat.label}</dt>
-					<dd class="text-lg font-bold tabular-nums">{number.format(stat.value)}</dd>
+					<dd
+						class="font-bold tabular-nums {index === 0 || index === 2
+							? 'text-xl'
+							: 'text-base'} {stat.accent}"
+					>
+						{number.format(stat.value)}
+					</dd>
 				</div>
 			{/each}
 		</dl>
@@ -299,11 +305,7 @@
 				first={firstName}
 				searchLabel={m.comparison_search_segments()}
 				empty={m.comparison_no_segments()}
-				extraSort={[
-					{ key: 'youSpeed', label: m.comparison_rider_speed({ rider: firstName }) },
-					{ key: 'opponentSpeed', label: m.comparison_rider_speed({ rider: opponentName }) },
-					{ key: 'speedGap', label: m.comparison_speed_difference() }
-				]}
+				descendingResults
 			/>
 		</div>
 		<div
@@ -322,7 +324,7 @@
 				first={firstName}
 				searchLabel={m.comparison_search_records()}
 				empty={m.comparison_no_records()}
-				extraSort={[{ key: 'percentGap', label: m.comparison_percent_difference() }]}
+				defaultSort="category"
 			/>
 		</div>
 	{/if}

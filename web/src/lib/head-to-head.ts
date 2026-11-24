@@ -2,6 +2,7 @@ import { formatMetricDistance, formatSpeedKmh, intlLocale } from '#lib/format.js
 import { m } from '#lib/paraglide/messages.js';
 import {
 	bestEffortValue,
+	compareRecordCategories,
 	isCyclingDistanceRecord,
 	recordSpeed,
 	recordLabel,
@@ -15,8 +16,8 @@ type Segment = {
 	id: string;
 	name: string;
 	distance_m: number;
-	you: Effort;
-	opponent: Effort;
+	you: Effort | null;
+	opponent: Effort | null;
 	you_speed_kmh: number;
 	opponent_speed_kmh: number;
 	time_difference_s: number;
@@ -40,8 +41,8 @@ export type Comparison = {
 	record_score: Score;
 };
 
-export type ColumnKey = 'name' | 'distance' | 'you' | 'opponent' | 'difference' | 'winner';
-export type SortKey = ColumnKey | 'youSpeed' | 'opponentSpeed' | 'speedGap' | 'percentGap';
+export type ColumnKey = 'name' | 'distance' | 'you' | 'opponent' | 'winner';
+export type SortKey = ColumnKey | 'category';
 export type Column = { key: ColumnKey; label: string };
 type Cell = { text: string; detail?: string | undefined; href?: string };
 type SortValue = number | string | null;
@@ -84,23 +85,6 @@ function effortTime(seconds: number) {
 		: `${minuteText}:${sec}`;
 }
 
-function gapSeconds(s: number) {
-	return new Intl.NumberFormat(intlLocale(), {
-		style: 'unit',
-		unit: 'second',
-		maximumFractionDigits: 2
-	}).format(s);
-}
-
-function speedGap(kmh: number) {
-	return new Intl.NumberFormat(intlLocale(), {
-		style: 'unit',
-		unit: 'kilometer-per-hour',
-		minimumFractionDigits: 1,
-		maximumFractionDigits: 1
-	}).format(kmh);
-}
-
 function effortCell(effort: Effort | null, text: string, detail?: string): Cell {
 	return effort
 		? { text, detail, href: `/activities/${encodeURIComponent(effort.activity_id)}` }
@@ -119,27 +103,27 @@ export function segmentRows(
 		cells: {
 			name: { text: s.name, href: `/segment/${encodeURIComponent(s.id)}` },
 			distance: { text: formatMetricDistance(s.distance_m) },
-			you: effortCell(s.you, effortTime(s.you.value), formatSpeedKmh(s.you_speed_kmh)),
+			you: effortCell(
+				s.you,
+				formatSpeedKmh(s.you_speed_kmh),
+				s.you ? effortTime(s.you.value) : undefined
+			),
 			opponent: effortCell(
 				s.opponent,
-				effortTime(s.opponent.value),
-				formatSpeedKmh(s.opponent_speed_kmh)
+				formatSpeedKmh(s.opponent_speed_kmh),
+				s.opponent ? effortTime(s.opponent.value) : undefined
 			),
-			difference: {
-				text: gapSeconds(s.time_difference_s),
-				detail: speedGap(s.speed_difference_kmh)
-			},
 			winner: { text: winnerLabel(s.winner, opponent, first) }
 		},
 		values: {
 			name: s.name,
 			distance: s.distance_m,
-			you: s.you.value,
-			opponent: s.opponent.value,
-			youSpeed: s.you_speed_kmh,
-			opponentSpeed: s.opponent_speed_kmh,
-			difference: s.time_difference_s,
-			speedGap: s.speed_difference_kmh,
+			you:
+				s.you && Number.isFinite(s.you_speed_kmh) && s.you_speed_kmh > 0 ? s.you_speed_kmh : null,
+			opponent:
+				s.opponent && Number.isFinite(s.opponent_speed_kmh) && s.opponent_speed_kmh > 0
+					? s.opponent_speed_kmh
+					: null,
 			winner: winnerLabel(s.winner, opponent, first)
 		}
 	}));
@@ -150,11 +134,7 @@ export function recordRows(
 	opponent: string,
 	first: string = m.comparison_you()
 ): ComparisonRow[] {
-	const percent = new Intl.NumberFormat(intlLocale(), {
-		style: 'percent',
-		maximumFractionDigits: 2
-	});
-	return records.map((r) => {
+	return [...records].sort(compareRecordCategories).map((r, category) => {
 		const name = recordLabel(r);
 		const distance = isCyclingDistanceRecord(r);
 		const value = (effort: Effort | null) =>
@@ -171,24 +151,13 @@ export function recordRows(
 		};
 		const winner = r.winner ? winnerLabel(r.winner, opponent, first) : null;
 		return {
-			id: `${r.metric}:${r.window_kind}:${r.window_value}`,
+			id: `${r.activity_type}:${r.metric}:${r.window_kind}:${r.window_value}`,
 			name,
 			winner: r.winner,
 			cells: {
 				name: { text: name },
 				you: cell(r.you),
 				opponent: cell(r.opponent),
-				difference:
-					r.difference === null || r.difference_percent === null
-						? { text: m.placeholder_dash() }
-						: {
-								text: distance
-									? gapSeconds(r.difference)
-									: r.metric === 'speed'
-										? speedGap(r.difference * 3.6)
-										: bestEffortValue(r, r.difference),
-								detail: percent.format(r.difference_percent / 100)
-							},
 				winner: {
 					text:
 						winner ?? (r.metric === 'heart_rate' ? m.comparison_unscored() : m.placeholder_dash())
@@ -198,11 +167,7 @@ export function recordRows(
 				name,
 				you: value(r.you),
 				opponent: value(r.opponent),
-				difference:
-					distance || r.metric !== 'speed' || r.difference === null
-						? r.difference
-						: r.difference * 3.6,
-				percentGap: r.difference_percent,
+				category,
 				winner
 			}
 		};

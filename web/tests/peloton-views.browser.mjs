@@ -96,8 +96,29 @@ try {
 		let activityQuery;
 		page.on('pageerror', (error) => errors.push(error.message));
 		let catalogSort = [];
+		let weatherRequests = 0;
+		let weatherLocation;
+		await page.addInitScript((allow) => {
+			Object.defineProperty(navigator, 'geolocation', {
+				value: {
+					getCurrentPosition: (success, failure) =>
+						allow
+							? success({ coords: { latitude: 50.8466, longitude: 4.3528 } })
+							: failure({ code: 1 })
+				}
+			});
+		}, width === 390);
 		await page.route('**/*', async (route) => {
 			const url = new URL(route.request().url());
+			if (url.hostname === 'api.open-meteo.com') {
+				weatherRequests++;
+				weatherLocation = url.searchParams.get('latitude');
+				return width === 430
+					? route.fulfill({ status: 503 })
+					: route.fulfill({
+							json: { current: { temperature_2m: 9, wind_speed_10m: 14, wind_direction_10m: 225 } }
+						});
+			}
 			if (url.origin !== origin) return route.abort();
 			const path = url.pathname;
 			if (path === '/api/activities/feed') {
@@ -143,7 +164,12 @@ try {
 					}
 				},
 				'/api/members/mira': mira,
-				'/api/riders': { members: [mira] },
+				'/api/riders': {
+					members: [
+						mira,
+						{ ...mira, id: 'admin', username: 'admin', display_name: 'Dedicated Admin' }
+					]
+				},
 				'/api/overview': {
 					totals,
 					recent: [recent],
@@ -243,11 +269,21 @@ try {
 			await page.locator('html').getAttribute('data-theme'),
 			width === 360 || width === 430 ? 'dark' : 'light'
 		);
-		await main.getByRole('button', { name: 'Last week' }).click();
-		assert.match(
-			await main.getByRole('link', { name: '1 activity', exact: true }).getAttribute('href'),
-			/from=.*to=/
+		assert.equal(await main.getByRole('button', { name: 'Last week' }).count(), 0);
+		assert.equal(await page.getByRole('contentinfo').count(), 0);
+		await main
+			.getByText(width === 430 ? 'Weather unavailable' : 'Wind from SW at 14 km/h')
+			.waitFor();
+		assert.equal(weatherRequests, 1);
+		assert.equal(weatherLocation, width === 390 ? '50.85' : '51.165');
+		assert.equal(
+			await main.getByText('Sint-Niklaas, Belgium (default)').count(),
+			width === 390 || width === 430 ? 0 : 1
 		);
+		assert.deepEqual(await main.locator('h2').allTextContents(), [
+			'Weekly cycling distance',
+			'Recent activities'
+		]);
 		if (mobile) {
 			const tabbar = page.getByRole('navigation', { name: 'Main navigation' });
 			assert.deepEqual(
@@ -260,8 +296,8 @@ try {
 			assert.deepEqual(
 				(await menu.getByRole('link').allTextContents()).map((label) => label.trim()),
 				width === 390
-					? ['Health', 'Gear', 'Connections', 'Settings', 'Admin']
-					: ['Health', 'Gear', 'Connections', 'Settings']
+					? ['My body', 'Gear', 'Connections', 'Settings', 'Admin']
+					: ['My body', 'Gear', 'Connections', 'Settings']
 			);
 			await page.keyboard.press('Escape');
 			await menu.waitFor({ state: 'hidden' });
@@ -274,6 +310,7 @@ try {
 			await tabbar.getByRole('link', { name: 'Social' }).click();
 			await main.getByRole('button', { name: 'Cycling data for Mira' }).click();
 			await main.getByRole('link', { name: 'Activity history' }).waitFor();
+			assert.equal(await main.getByText('@admin', { exact: true }).count(), 0);
 			await noPageOverflow('/riders');
 			await tabbar.getByRole('link', { name: 'Insights' }).click();
 			await page.waitForURL(origin + '/analysis');
@@ -313,13 +350,7 @@ try {
 			assert.equal(activityQuery?.get('sort'), 'date_desc');
 			await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
 			assert(await tabbar.evaluate((bar) => bar.getBoundingClientRect().bottom <= innerHeight));
-			assert(
-				await tabbar.evaluate(
-					(bar) =>
-						document.querySelector('footer').getBoundingClientRect().bottom <=
-						bar.getBoundingClientRect().top
-				)
-			);
+
 			await noPageOverflow('/activities');
 		} else {
 			assert.equal(await page.getByRole('navigation', { name: 'Main navigation' }).count(), 0);
@@ -331,6 +362,7 @@ try {
 					.getAttribute('aria-sort'),
 				'descending'
 			);
+			assert.equal(await main.getByText('@admin', { exact: true }).count(), 0);
 			await noPageOverflow('/riders');
 		}
 		await open('/u/mira');
@@ -350,7 +382,8 @@ try {
 		);
 
 		await page.getByRole('link', { name: 'Canal ride' }).click();
-		await page.waitForURL(origin + '/activities/mira-ride');
+		await page.waitForURL(origin + '/activities/mira-ride?member=mira');
+		await page.getByText('Viewing Mira', { exact: true }).filter({ visible: true }).waitFor();
 		const headline = main.locator('dl').first();
 		await headline.getByText('36.00 km/h', { exact: true }).waitFor();
 		await headline.getByText('1:15:00', { exact: true }).waitFor();
@@ -393,35 +426,39 @@ try {
 			await done();
 			await main.getByRole('link', { name: 'Hill Climb' }).waitFor();
 		} else {
-			await main.getByRole('button', { name: /Avg speed/ }).click();
+			await main.getByRole('button', { name: /Top speed/ }).click();
 			await main.getByRole('button', { name: /Local KOM/ }).click();
 			await page.waitForFunction(() =>
 				document.querySelector('th[aria-sort="ascending"]')?.textContent.includes('Local KOM')
 			);
 		}
 		await noPageOverflow('/segments');
-		assert.deepEqual(catalogSort.slice(0, 2), ['local_kom_holder:asc', 'average_speed_kmh:asc']);
+		assert.deepEqual(catalogSort.slice(0, 2), ['local_kom_holder:asc', 'average_speed_kmh:desc']);
 		await open('/stats?member=mira');
 		await page.getByRole('heading', { name: 'By sport' }).waitFor();
 		await page.getByRole('cell', { name: '36.00 km/h' }).waitFor();
 		await main.getByText('Moving time 1:15:00 · 36.00 km/h', { exact: true }).waitFor();
 		await noPageOverflow('/stats');
 		await open('/analysis?member=mira');
+		await page.getByRole('button', { name: 'About Fitness (CTL)' }).click();
 		await page.getByText('Your long-term training load', { exact: false }).waitFor();
+		await page.keyboard.press('Escape');
+		await page.getByRole('heading', { name: 'Training Stress Score (TSS)' }).waitFor();
 		await page.getByText('Duration-only estimates', { exact: true }).waitFor();
 		await noPageOverflow('/analysis');
-		await open('/records');
+		await open('/records?member=mira');
+		await page.getByText('Viewing Mira', { exact: true }).filter({ visible: true }).waitFor();
 		await page.getByText('54 km/h', { exact: true }).waitFor();
-		if (mobile) await main.getByRole('button', { name: /^Filters/ }).click();
 		await page.getByLabel('Exclude downhills').check();
-		if (mobile) await done();
+		await page.getByRole('button', { name: 'Return to my data' }).click();
+		await page.waitForURL(origin + '/records?exclude_downhills=true');
 		await page.getByText('28.8 km/h', { exact: true }).waitFor();
 		await page.reload();
 		await page.getByText('28.8 km/h', { exact: true }).waitFor();
 		await noPageOverflow('/records');
 		await open('/athlete');
 		await page.waitForURL(origin + '/health');
-		await page.getByRole('heading', { name: 'Athlete settings' }).waitFor();
+		await page.getByRole('heading', { name: 'My body' }).waitFor();
 		await noPageOverflow('/health');
 		for (const [path, heading] of [
 			['/gear', 'Gear'],

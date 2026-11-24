@@ -4,11 +4,12 @@ import "math"
 
 // TrainingLoadDay is one day of the training-load curves.
 type TrainingLoadDay struct {
-	Date string // YYYY-MM-DD, UTC
-	CTL  float64
-	ATL  float64
-	TSB  float64
-	TSS  float64
+	Date   string // YYYY-MM-DD, UTC
+	CTL    float64
+	ATL    float64
+	TSB    float64
+	TSS    float64
+	HasTSS bool
 }
 
 // TrainingLoadSeries buckets training-load metrics per UTC day, in the
@@ -38,11 +39,13 @@ func TrainingLoadSeries(metrics []Metric) []TrainingLoadDay {
 			p.TSB = v
 		case MetricKeyTrainingLoadTSS:
 			p.TSS = v
+			// Older computed rows use zero for days without a stress sample.
+			p.HasTSS = m.ValueNumeric != nil && (v != 0 || m.Provider != MetricProviderComputed)
 		}
 	}
 	days := make([]TrainingLoadDay, 0, len(out))
 	for _, p := range out {
-		days = append(days, TrainingLoadDay{Date: p.Date, CTL: Round1(p.CTL), ATL: Round1(p.ATL), TSB: Round1(p.TSB), TSS: Round1(p.TSS)})
+		days = append(days, TrainingLoadDay{Date: p.Date, CTL: Round1(p.CTL), ATL: Round1(p.ATL), TSB: Round1(p.TSB), TSS: Round1(p.TSS), HasTSS: p.HasTSS})
 	}
 	return days
 }

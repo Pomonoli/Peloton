@@ -50,12 +50,29 @@ export function formatTimeAndSpeed(time: string, speedKmh: number | null | undef
 	return speed === DASH ? time : `${time} · ${speed}`;
 }
 
+export function segmentSpeedKmh(
+	distanceM: number | null | undefined,
+	elapsedS: number | null | undefined
+): number | null {
+	if (
+		distanceM == null ||
+		elapsedS == null ||
+		!Number.isFinite(distanceM) ||
+		!Number.isFinite(elapsedS) ||
+		distanceM <= 0 ||
+		elapsedS <= 0
+	)
+		return null;
+	const speed = (distanceM / elapsedS) * 3.6;
+	return Number.isFinite(speed) && speed > 0 ? speed : null;
+}
+
 export function formatDistanceEffort(
 	distanceM: number | null | undefined,
 	elapsedS: number | null | undefined
 ): string {
 	if (elapsedS == null || !Number.isFinite(elapsedS) || elapsedS <= 0) return DASH;
-	const speedKmh = distanceM == null ? null : (distanceM / elapsedS) * 3.6;
+	const speedKmh = segmentSpeedKmh(distanceM, elapsedS);
 	return formatTimeAndSpeed(formatDuration(elapsedS), speedKmh);
 }
 

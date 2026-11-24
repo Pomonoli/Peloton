@@ -431,8 +431,11 @@ func (r *ActivityRepo) ListActivitiesFiltered(ctx context.Context, userID domain
 			hits = append(hits, a)
 		}
 	}
-	if f.Sort == "date_asc" {
+	switch f.Sort {
+	case "date_asc":
 		sort.Slice(hits, func(i, j int) bool { return hits[i].StartTime.Before(hits[j].StartTime) })
+	case "moving_duration_desc":
+		sort.SliceStable(hits, func(i, j int) bool { return hits[i].MovingDuration > hits[j].MovingDuration })
 	}
 	matched := len(hits)
 	if f.Offset > 0 {

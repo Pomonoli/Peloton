@@ -46,8 +46,7 @@ type User struct {
 	// sign-in (the user opts in; needs at least one passkey).
 	PasskeySecondFactor bool
 
-	// ProfileIsPublic opts the user's athlete profile into session-less
-	// rendering at /u/{username} (multi-user v1, see docs/visibility-model.md).
+	// ProfileIsPublic makes the athlete profile visible to other members.
 	ProfileIsPublic bool
 
 	CreatedAt   time.Time

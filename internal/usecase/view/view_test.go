@@ -42,7 +42,7 @@ func TestFeedsHomeMergesSources(t *testing.T) {
 		me: {ID: me, Username: "me", DisplayName: "Me"}, friend: {ID: friend, Username: "friend", DisplayName: "Friend"},
 	}}
 	own := addActivity(repo, me, domain.ActivityTypeRide, vNow.Add(-2*time.Hour), domain.PrivacyPrivate)
-	theirs := addActivity(repo, friend, domain.ActivityTypeRide, vNow.Add(-time.Hour), domain.PrivacyPrivate)
+	theirs := addActivity(repo, friend, domain.ActivityTypeRide, vNow.Add(-time.Hour), domain.PrivacyPublic)
 	hidden := addActivity(repo, friend, domain.ActivityTypeRide, vNow, domain.PrivacyPublic)
 	act := repo.Activities[hidden]
 	act.HiddenByAdmin = true

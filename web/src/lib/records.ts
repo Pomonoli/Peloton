@@ -144,6 +144,24 @@ export function recordSport(type: string) {
 	);
 }
 
+function recordCategory(bucket: RecordBucket): number {
+	if (bucket.window_kind === 'distance' && bucket.metric === 'pace') return 0;
+	if (bucket.metric === 'speed' || bucket.metric === 'pace') return 1;
+	if (['vam', 'elevation_gain', 'elevation'].includes(bucket.metric)) return 2;
+	if (bucket.metric === 'power') return 3;
+	if (bucket.metric === 'heart_rate') return 4;
+	return 5;
+}
+
+export function compareRecordCategories(a: RecordBucket, b: RecordBucket): number {
+	return (
+		recordCategory(a) - recordCategory(b) ||
+		a.window_kind.localeCompare(b.window_kind) ||
+		a.window_value - b.window_value ||
+		a.metric.localeCompare(b.metric)
+	);
+}
+
 export type RecordOrder = 'category' | 'members' | 'holder';
 
 export function filterCommunityRecords(
@@ -162,10 +180,7 @@ export function filterCommunityRecords(
 		)
 		.sort((a, b) => {
 			const category =
-				a.activity_type.localeCompare(b.activity_type) ||
-				a.metric.localeCompare(b.metric) ||
-				a.window_kind.localeCompare(b.window_kind) ||
-				a.window_value - b.window_value;
+				a.activity_type.localeCompare(b.activity_type) || compareRecordCategories(a, b);
 			switch (order) {
 				case 'members':
 					return b.member_count - a.member_count || category;

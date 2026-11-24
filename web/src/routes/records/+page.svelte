@@ -1,5 +1,4 @@
 <script lang="ts">
-	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { memberURL } from '#lib/member.js';
 	import { APP_NAME } from '$app/env/public';
@@ -7,7 +6,13 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { goto } from '$app/navigation';
 	import RecordLeaderboards from '#lib/components/RecordLeaderboards.svelte';
-	import { recordLabel, recordSport, recordValue, type PersonalRecord } from '#lib/records.js';
+	import {
+		compareRecordCategories,
+		recordLabel,
+		recordSport,
+		recordValue,
+		type PersonalRecord
+	} from '#lib/records.js';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { formatDateOnly } from '#lib/format.js';
 
@@ -67,12 +72,7 @@
 			if (!m.has(r.activity_type)) m.set(r.activity_type, []);
 			m.get(r.activity_type)!.push(r);
 		}
-		// sort each group by metric then window.
-		for (const list of m.values()) {
-			list.sort((a, b) =>
-				a.metric === b.metric ? a.window_value - b.window_value : a.metric.localeCompare(b.metric)
-			);
-		}
+		for (const list of m.values()) list.sort(compareRecordCategories);
 		return [...m.entries()].sort(
 			(a, b) => typeRank(a[0]) - typeRank(b[0]) || a[0].localeCompare(b[0])
 		);
@@ -123,19 +123,15 @@
 			</a>
 		</nav>
 	{/snippet}
-	{#if !boards}
-		<FilterSheet toolbar={recordTabs} active={excludeDownhills} reset={() => setDownhill(false)}>
-			{@render downhillFilter()}
-		</FilterSheet>
-	{/if}
+	{#if !boards}{@render recordTabs()}{/if}
+	{#if !boards}{@render downhillFilter()}{/if}
 
 	{#if boards}
 		<RecordLeaderboards
 			member={data.member}
 			{excludeDownhills}
 			toolbar={recordTabs}
-			extraFilters={downhillFilter}
-			resetExtra={() => setDownhill(false)}
+			afterToolbar={downhillFilter}
 		/>
 	{:else if !loaded}
 		<p class="text-sm text-quiet">Loading…</p>
@@ -160,7 +156,10 @@
 					>
 						{#each list as r (r.metric + r.window_kind + r.window_value)}
 							<a
-								href={`/activities/${r.activity_id}${excludeDownhills ? '?exclude_downhills=true' : ''}`}
+								href={memberURL(
+									`/activities/${r.activity_id}${excludeDownhills ? '?exclude_downhills=true' : ''}`,
+									data.member
+								)}
 								class="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-zinc-950 sm:gap-4 sm:px-4"
 							>
 								<div class="text-xs font-semibold text-zinc-300 sm:text-sm">

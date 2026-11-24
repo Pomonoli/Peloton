@@ -113,6 +113,7 @@ type CreateInput struct {
 	Model        string
 	Notes        string
 	PurchaseDate *time.Time
+	WeightKg     *float64
 }
 
 // Create persists new user-managed gear.
@@ -127,6 +128,7 @@ func (s *Service) Create(ctx context.Context, userID domain.UserID, in CreateInp
 		Model:        strings.TrimSpace(in.Model),
 		Notes:        in.Notes,
 		PurchaseDate: in.PurchaseDate,
+		WeightKg:     in.WeightKg,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}

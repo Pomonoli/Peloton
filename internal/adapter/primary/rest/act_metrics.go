@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
+	gearuc "github.com/opencairn-org/cairn-core/internal/usecase/gear"
 	"github.com/opencairn-org/cairn-core/internal/usecase/instance"
 	metricsuc "github.com/opencairn-org/cairn-core/internal/usecase/metrics"
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
@@ -26,6 +27,7 @@ type MetricHandlers struct {
 	Auth   *Auth
 	Store  *metricsuc.Store
 	Access *view.ActivityAccess
+	Gear   *gearuc.Service
 	// Policies adds the merge policies to /context (nil → omitted).
 	Policies *instance.MergePolicies
 }
@@ -347,5 +349,14 @@ func (h *MetricHandlers) powerInputs(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err, "Unable to load power inputs")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"weight_kg": metrics["weight_kg"].ValueNumeric})
+	var bikeWeight *float64
+	if h.Gear != nil && act.GearID != nil {
+		bike, err := h.Gear.Get(r.Context(), act.UserID, *act.GearID)
+		if err == nil && bike.Kind == domain.GearKindBike {
+			bikeWeight = bike.WeightKg
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"weight_kg": metrics["weight_kg"].ValueNumeric, "bicycle_weight_kg": bikeWeight,
+	})
 }

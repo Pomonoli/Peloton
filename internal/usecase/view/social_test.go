@@ -144,14 +144,14 @@ func TestProjectedAndShared(t *testing.T) {
 	if _, _, isOwner, err := feeds.Projected(context.Background(), private, &owner, false); err != nil || !isOwner {
 		t.Fatalf("owner on private: %v %v", isOwner, err)
 	}
-	if _, _, _, err := feeds.Projected(context.Background(), private, &viewer, false); err != nil {
+	if _, _, _, err := feeds.Projected(context.Background(), private, &viewer, false); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("stranger on private: %v", err)
 	}
 	if _, _, _, err := feeds.Projected(context.Background(), domain.ActivityID(uuid.New()), nil, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("unknown: %v", err)
 	}
 	links := &fakeLinks{links: map[string]domain.ShareLink{"tok": {Token: "tok", ActivityID: private}}}
-	if p, u, err := feeds.Shared(context.Background(), links, "tok", &viewer); err != nil || p.ID != private || u.Username != "owner" {
+	if p, u, err := feeds.Shared(context.Background(), links, "tok", nil); err != nil || p.ID != private || u.Username != "owner" {
 		t.Fatalf("shared %+v %v %v", p, u, err)
 	}
 	if _, _, err := feeds.Shared(context.Background(), links, "nope", nil); !errors.Is(err, domain.ErrNotFound) {
@@ -171,14 +171,14 @@ func TestProfilesGet(t *testing.T) {
 	follows := &fakeFollows{following: map[domain.UserID]map[domain.UserID]bool{follower: {owner: true}}}
 	p := NewProfiles(usersByName{users}, repo, follows, nil, NewVisibility())
 
-	// Members see the same history regardless of follow status.
+	// A private profile is visible to its owner and followers.
 	if v, err := p.Get(context.Background(), "Owner ", &owner); err != nil || !v.IsOwner || len(v.Activities) != 2 || v.Counts.Followers != 2 {
 		t.Fatalf("owner %+v %v", v, err)
 	}
-	if v, err := p.Get(context.Background(), "owner", &follower); err != nil || !v.IsFollowing || len(v.Activities) != 2 {
+	if v, err := p.Get(context.Background(), "owner", &follower); err != nil || !v.IsFollowing || len(v.Activities) != 1 {
 		t.Fatalf("follower %+v %v", v, err)
 	}
-	if v, err := p.Get(context.Background(), "owner", &stranger); err != nil || len(v.Activities) != 2 {
+	if _, err := p.Get(context.Background(), "owner", &stranger); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("stranger: %v", err)
 	}
 	if _, err := p.Get(context.Background(), "nobody", &stranger); !errors.Is(err, domain.ErrNotFound) {

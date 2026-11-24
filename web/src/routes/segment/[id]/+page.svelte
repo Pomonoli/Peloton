@@ -6,10 +6,11 @@
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
 	import SportIcon from '#lib/components/SportIcon.svelte';
 	import { decodePolylineLonLat } from '#lib/polyline.js';
+	import { segmentSpeedRange } from '#lib/segment-rivalries.js';
 	import {
 		formatMetricDistance,
 		formatDistanceEffort,
-		formatDuration,
+		segmentSpeedKmh,
 		formatDate,
 		formatElevation
 	} from '#lib/format.js';
@@ -74,6 +75,7 @@
 		failure = null;
 		segment = null;
 		efforts = [];
+		activeEffort = undefined;
 		const controller = new AbortController();
 		void loadSegment(url, controller.signal);
 		return () => controller.abort();
@@ -84,13 +86,30 @@
 	);
 
 	// Efforts oldest→newest for the trend chart.
-	const chrono = $derived([...efforts].sort((a, b) => a.start_time.localeCompare(b.start_time)));
-	const best = $derived(efforts.reduce((m, e) => Math.min(m, e.elapsed_s), Infinity));
+	const chrono = $derived(
+		efforts
+			.flatMap((effort) => {
+				const speed = segmentSpeedKmh(segment?.distance_m, effort.elapsed_s);
+				return speed === null || !Number.isFinite(Date.parse(effort.start_time))
+					? []
+					: [{ ...effort, speed }];
+			})
+			.sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))
+	);
+	const best = $derived(chrono.reduce((speed, effort) => Math.max(speed, effort.speed), 0));
+	let activeEffort = $state<number>();
+	function inspectEffort(event: PointerEvent) {
+		const rect = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
+		const i = Math.round(
+			((((event.clientX - rect.left) / rect.width) * W - PAD.l) / plotW) * (chrono.length - 1)
+		);
+		activeEffort = Math.min(chrono.length - 1, Math.max(0, i));
+	}
 
-	// ---- inline SVG trend chart (elapsed time per effort over time) ----------
+	// ---- inline SVG trend chart (speed per effort) ----------
 	const W = 760;
 	const H = 200;
-	const PAD = { t: 12, r: 12, b: 22, l: 44 };
+	const PAD = { t: 12, r: 12, b: 22, l: 59 };
 	const plotW = W - PAD.l - PAD.r;
 	const plotH = H - PAD.t - PAD.b;
 	const bounds = $derived.by(() => {
@@ -98,11 +117,11 @@
 		let min = Infinity,
 			max = -Infinity;
 		for (const e of chrono) {
-			min = Math.min(min, e.elapsed_s);
-			max = Math.max(max, e.elapsed_s);
+			min = Math.min(min, e.speed);
+			max = Math.max(max, e.speed);
 		}
-		const span = max - min || 1;
-		return { min: min - span * 0.1, max: max + span * 0.1 };
+		const [lower, upper] = segmentSpeedRange(min, max);
+		return { min: lower, max: upper };
 	});
 	function x(i: number): number {
 		const n = chrono.length;
@@ -114,7 +133,7 @@
 	}
 	const linePath = $derived(
 		chrono
-			.map((e, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(e.elapsed_s).toFixed(1)}`)
+			.map((e, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(e.speed).toFixed(1)}`)
 			.join(' ')
 	);
 </script>
@@ -158,11 +177,28 @@
 
 		<SegmentRivalries id={segment.id} distanceM={segment.distance_m} member={data.member} />
 
-		{#if chrono.length > 1}
+		{#if chrono.length}
 			<section>
-				<h2 class="mb-2 text-sm font-medium text-zinc-300">Time trend</h2>
+				<h2 class="mb-2 text-sm font-medium text-zinc-300">{m.segment_performance_trend()}</h2>
 				<div class="rounded-xl border border-zinc-800 bg-panel p-3">
-					<svg viewBox={`0 0 ${W} ${H}`} class="w-full" role="img" aria-label="Effort time trend">
+					<svg
+						viewBox={`0 0 ${W} ${H}`}
+						class="w-full"
+						role="img"
+						aria-label={m.segment_speed_trend_label()}
+						onpointermove={inspectEffort}
+						onpointerdown={inspectEffort}
+						onpointerleave={(event) => {
+							if (event.pointerType === 'mouse') activeEffort = undefined;
+						}}
+					>
+						<text
+							x="13"
+							y={H / 2}
+							transform={`rotate(-90 13 ${H / 2})`}
+							text-anchor="middle"
+							class="fill-quiet text-xs">{m.segment_speed_axis()}</text
+						>
 						{#each [0, 0.5, 1] as t (t)}
 							{@const gy = PAD.t + plotH * t}
 							{@const val = bounds.max - (bounds.max - bounds.min) * t}
@@ -175,28 +211,37 @@
 								stroke-width="1"
 							/>
 							<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-quiet text-[10px]">
-								{formatDuration(Math.round(val))}
+								{val.toFixed(2)}
 							</text>
 						{/each}
 						<path d={linePath} fill="none" stroke="var(--plot-speed)" stroke-width="1.8" />
 						{#each chrono as e, i (e.id)}
 							<circle
 								cx={x(i)}
-								cy={y(e.elapsed_s)}
-								r={e.elapsed_s === best ? 4 : 2.5}
-								fill={e.elapsed_s === best ? 'var(--plot-cadence)' : 'var(--plot-speed)'}
+								cy={y(e.speed)}
+								r={e.speed === best || activeEffort === i ? 5 : 3}
+								fill={e.speed === best ? 'var(--plot-cadence)' : 'var(--plot-speed)'}
 							>
 								<title
 									>{formatDate(e.start_time)} · {formatDistanceEffort(
 										segment.distance_m,
 										e.elapsed_s
-									)}{e.elapsed_s === best ? ' (PR)' : ''}</title
+									)}{e.speed === best ? ' (PR)' : ''}</title
 								>
 							</circle>
 						{/each}
 					</svg>
 					<p class="mt-1 text-center text-[10px] text-quiet">
-						Each point is one effort, oldest → newest. Green marks the personal best.
+						{m.segment_speed_trend_caption()}
+						{#if activeEffort !== undefined && chrono[activeEffort]}
+							{@const effort = chrono[activeEffort]!}
+							<span class="block text-xs"
+								>{formatDate(effort.start_time)} · {formatDistanceEffort(
+									segment.distance_m,
+									effort.elapsed_s
+								)}</span
+							>
+						{/if}
 					</p>
 				</div>
 			</section>
@@ -227,7 +272,7 @@
 								<tr class="border-t border-zinc-800/70 hover:bg-panel">
 									<td class="px-4 py-2">
 										<a
-											href={`/activities/${e.activity_id}`}
+											href={memberURL(`/activities/${e.activity_id}`, data.member)}
 											class="text-accent-400 hover:text-accent-300 hover:underline"
 										>
 											{formatDate(e.start_time)}

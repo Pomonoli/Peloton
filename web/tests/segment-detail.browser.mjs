@@ -12,7 +12,9 @@ const browser = await chromium.launch({
 const riders = [
 	{ id: 'ada', username: 'ada', display_name: 'Ada' },
 	{ id: 'sam', username: 'sam', display_name: 'Sam' },
-	{ id: 'mira', username: 'mira', display_name: 'Mira' }
+	{ id: 'mira', username: 'mira', display_name: 'Mira' },
+	{ id: 'chris', username: 'chris', display_name: 'Chris' },
+	{ id: 'eve', username: 'eve', display_name: 'Eve' }
 ];
 const segments = [
 	{ id: 'canal', name: 'Canal Sprint' },
@@ -135,7 +137,7 @@ try {
 		const main = page.getByRole('main');
 		const indicator = page.getByRole('progressbar', { includeHidden: true });
 		const chart = main.locator('.uplot');
-		const defaultRiders = member ? ['ada', 'mira'] : ['ada', 'sam'];
+		const defaultRiders = riders.map(({ id }) => id).sort();
 		const clickSegment = async (id, name) => {
 			await main.getByRole('link', { name, exact: true }).click();
 			await page.waitForURL(origin + '/segment/' + id + memberQuery);
@@ -146,7 +148,9 @@ try {
 			await main
 				.getByRole('heading', { name: member ? 'Member’s efforts' : 'Your efforts' })
 				.waitFor();
-			await main.locator(`a[href="/activities/${id}-${member ?? 'ada'}-ride"]`).waitFor();
+			await main
+				.locator(`a[href="/activities/${id}-${member ?? 'ada'}-ride${memberQuery}"]`)
+				.waitFor();
 			await main.getByText('PR', { exact: true }).waitFor();
 			await main.locator('.maplibregl-canvas').waitFor();
 			await chart.waitFor();
@@ -197,16 +201,19 @@ try {
 			]);
 			assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
-			const third = member ? riders[1] : riders[2];
-			const compare = main.getByRole('checkbox', { name: `Compare ${third.display_name}` });
-			const legend = chart.getByText(third.display_name, { exact: true });
-			await compare.check();
-			await legend.waitFor();
-			await assertRequests('canal', [third.id]);
-			await compare.uncheck();
-			await legend.waitFor({ state: 'hidden' });
-			await chart.waitFor();
+			const legend = main.getByRole('group', { name: 'Riders in effort history' });
+			assert.equal(await legend.getByRole('button', { pressed: true }).count(), 5);
+			const rider = legend.getByRole('button', { name: 'Eve' });
+			await rider.click();
+			assert.equal(await rider.getAttribute('aria-pressed'), 'false');
+			await rider.click();
+			assert.equal(await rider.getAttribute('aria-pressed'), 'true');
 			await assertRequests('canal', []);
+			assert.deepEqual(
+				await main.locator('table').first().getByRole('columnheader').allTextContents(),
+				['Rank', 'Rider', 'Time', 'Speed', 'Attempts', 'Date']
+			);
+			await main.getByRole('heading', { name: 'Performance trend' }).waitFor();
 
 			const period = main.getByLabel('Period');
 			const cutoff = await page.evaluate(() =>
@@ -234,6 +241,7 @@ try {
 			failure = { id: 'forest', resource: 'efforts', status: 500 };
 			await main.getByRole('button', { name: 'Try again' }).click();
 			await main.getByRole('status').getByText('Unable to load effort history.').waitFor();
+			await main.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' });
 			await assertRequests('forest', defaultRiders, { board: true, cutoff });
 
 			await page.goBack();

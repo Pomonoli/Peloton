@@ -146,3 +146,17 @@ func TestHealthSeries(t *testing.T) {
 		t.Fatal("no repo must be unavailable")
 	}
 }
+
+func TestStatsLongestMovingTimeIgnoresElapsedDuration(t *testing.T) {
+	repo := inmem.NewActivityRepo()
+	user := domain.UserID(uuid.New())
+	moving := addActivity(repo, user, domain.ActivityTypeRide, vNow, 1000)
+	elapsed := addActivity(repo, user, domain.ActivityTypeRide, vNow.Add(time.Hour), 1000)
+	shorter := repo.Activities[elapsed]
+	shorter.ElapsedDuration, shorter.MovingDuration = 4*time.Hour, time.Minute
+	repo.Activities[elapsed] = shorter
+	stats, err := NewStats(repo, nil, nil, nil, nil).Get(t.Context(), user)
+	if err != nil || stats.LongestDuration == nil || stats.LongestDuration.ID != moving {
+		t.Fatalf("longest moving time = %+v, err = %v", stats.LongestDuration, err)
+	}
+}

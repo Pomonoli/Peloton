@@ -70,8 +70,12 @@ func (h *MapImageHandlers) Mount(mux *http.ServeMux) {
 }
 
 func (h *MapImageHandlers) serve(w http.ResponseWriter, r *http.Request) {
-	act, _, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad id")
 	if !ok {
+		return
+	}
+	if len(viewer.Zones) > 0 {
+		http.NotFound(w, r)
 		return
 	}
 	data, ok := h.Images.Load(r.Context(), act, false)
@@ -360,14 +364,14 @@ func (h *ContentHandlers) serveBlob(w http.ResponseWriter, r *http.Request, cl c
 }
 
 // signedActivity checks that the member can still access the token's activity.
-func (h *ContentHandlers) signedActivity(w http.ResponseWriter, r *http.Request, cl content.Claims, me domain.UserID) (domain.Activity, bool) {
+func (h *ContentHandlers) signedActivity(w http.ResponseWriter, r *http.Request, cl content.Claims, me domain.UserID, export bool) (domain.Activity, bool) {
 	id, err := domain.ParseUUID[domain.ActivityID](cl.ActivityID)
 	if err != nil {
 		http.NotFound(w, r)
 		return domain.Activity{}, false
 	}
-	act, _, err := h.Access.Visible(r.Context(), id, &me, false, domain.CategoryMap)
-	if err != nil {
+	act, viewer, err := h.Access.Visible(r.Context(), id, &me, false, domain.CategoryMap)
+	if err != nil || len(viewer.Zones) > 0 || (export && !viewer.CanExport()) {
 		http.NotFound(w, r)
 		return domain.Activity{}, false
 	}
@@ -375,7 +379,7 @@ func (h *ContentHandlers) signedActivity(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *ContentHandlers) serveMap(w http.ResponseWriter, r *http.Request, cl content.Claims, me domain.UserID) {
-	act, ok := h.signedActivity(w, r, cl, me)
+	act, ok := h.signedActivity(w, r, cl, me, false)
 	if !ok {
 		return
 	}
@@ -388,7 +392,7 @@ func (h *ContentHandlers) serveMap(w http.ResponseWriter, r *http.Request, cl co
 }
 
 func (h *ContentHandlers) serveExport(w http.ResponseWriter, r *http.Request, cl content.Claims, me domain.UserID) {
-	act, ok := h.signedActivity(w, r, cl, me)
+	act, ok := h.signedActivity(w, r, cl, me, true)
 	if !ok {
 		return
 	}

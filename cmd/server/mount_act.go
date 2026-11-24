@@ -53,7 +53,7 @@ func mountAct(mux *http.ServeMux, app *App, logger *slog.Logger) {
 		(&rest.AthleteHandlers{Auth: auth, Profile: profile}).Mount(mux)
 	}
 	if app.MetricStore != nil {
-		(&rest.MetricHandlers{Auth: auth, Store: app.MetricStore, Policies: policies, Access: detailAccess(app)}).Mount(mux)
+		(&rest.MetricHandlers{Auth: auth, Store: app.MetricStore, Policies: policies, Access: detailAccess(app), Gear: app.Gear}).Mount(mux)
 	}
 	logger.Info("activity write endpoints mounted")
 }

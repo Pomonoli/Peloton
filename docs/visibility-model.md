@@ -1,6 +1,8 @@
 # Activity visibility
 
-Peloton gives signed-in members access to each other’s activity history, routes, statistics, and matched Strava segment results. This applies to existing records regardless of their stored Cairn privacy fields. Administrative hides and soft deletes still apply. The owner retains control over changes to activities, source files, and account settings. Profile, activity and share-link reads require a signed-in account.
+New Peloton accounts have public profiles and new activities are public. Accounts with no saved category policy share every supported category with the public, follower and link audiences. Account management, raw source data and editing still require the appropriate authorization. Profile and activity pages that already require sign-in continue to do so.
+
+Migration 87 updates schema defaults while retaining stored profile and activity privacy values. Historical false and private values do not record whether they were chosen or assigned automatically. A saved empty category policy grants nothing. Existing partial policies retain the previous defaults for omitted audiences. Activity overrides, provider restrictions, moderation, blocks and privacy zones take precedence where applicable.
 
 ## Upstream Cairn model (reference)
 

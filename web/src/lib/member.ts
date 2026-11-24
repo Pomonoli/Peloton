@@ -13,6 +13,18 @@ export function memberURL(path: string, member?: MemberView | null) {
 	return `${path}${separator}member=${encodeURIComponent(member.username)}`;
 }
 
+export function personalDataURL(
+	url: Pick<URL, 'pathname' | 'search' | 'hash'>,
+	otherActivity = false
+) {
+	const params = new URLSearchParams(url.search);
+	params.delete(url.pathname === '/head-to-head' ? 'viewing' : 'member');
+	const path =
+		otherActivity && url.pathname.startsWith('/activities/') ? '/activities' : url.pathname;
+	const query = params.toString();
+	return path + (query ? '?' + query : '') + url.hash;
+}
+
 export function memberLinks(member?: MemberView | null) {
 	return [
 		{ href: '/', label: m.nav_overview() },

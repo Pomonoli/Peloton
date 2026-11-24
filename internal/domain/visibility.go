@@ -74,47 +74,52 @@ func (s CategorySet) Slice() []Category {
 	return out
 }
 
-// CommunityActivityCategories grants a signed-in member access to a live
-// activity. Administrative hides still apply to viewers other than its owner.
-func CommunityActivityCategories(act *Activity, viewer *UserID) CategorySet {
-	if viewer == nil || act.IsDeleted() || ((act.HiddenByAdmin || act.ProviderRestricted) && *viewer != act.UserID) {
-		return nil
-	}
-	return categorySetOf(AllCategories...)
-}
-
 // VisibilityPolicy maps each non-owner audience to the categories it may see.
 // The owner audience is implicit (everything) and never stored.
 type VisibilityPolicy struct {
 	ByAudience map[Audience]CategorySet
 }
 
-// DefaultVisibilityPolicy is the privacy-leaning fallback when a user hasn't
-// customised their visibility settings (see docs/visibility-model.md):
-//   - public:    summary only
-//   - followers: the workout, minus HR/power unless opted in
-//   - link:      same as followers (an explicit share is a trust signal)
+// DefaultVisibilityPolicy grants all supported categories to each audience
+// when the owner has never saved a policy.
 func DefaultVisibilityPolicy() VisibilityPolicy {
-	followers := categorySetOf(
-		CategorySummary, CategoryMap, CategoryPhotos, CategoryLocation, CategoryPaceSpeed,
-		CategorySegments, CategoryBestEfforts, CategoryZones, CategorySocial,
-	)
 	return VisibilityPolicy{ByAudience: map[Audience]CategorySet{
-		AudiencePublic:    categorySetOf(CategorySummary),
-		AudienceFollowers: followers,
-		AudienceLink:      followers,
+		AudiencePublic:    categorySetOf(AllCategories...),
+		AudienceFollowers: categorySetOf(AllCategories...),
+		AudienceLink:      categorySetOf(AllCategories...),
 	}}
 }
 
-// allowedFor returns the category set this policy grants the audience, falling
-// back to the default policy for any audience the policy doesn't define.
-func (p VisibilityPolicy) allowedFor(a Audience) CategorySet {
-	if p.ByAudience != nil {
-		if s, ok := p.ByAudience[a]; ok {
-			return s
-		}
+// Effective expands a stored policy for the settings editor and read resolver.
+// A saved partial policy keeps the fallback that applied when it was written.
+func (p VisibilityPolicy) Effective() VisibilityPolicy {
+	if p.ByAudience == nil {
+		return DefaultVisibilityPolicy()
 	}
-	return DefaultVisibilityPolicy().ByAudience[a]
+	out := VisibilityPolicy{ByAudience: make(map[Audience]CategorySet, 3)}
+	for _, audience := range []Audience{AudiencePublic, AudienceFollowers, AudienceLink} {
+		out.ByAudience[audience] = p.allowedFor(audience)
+	}
+	return out
+}
+
+func (p VisibilityPolicy) allowedFor(audience Audience) CategorySet {
+	if p.ByAudience == nil {
+		return categorySetOf(AllCategories...)
+	}
+	if cats, ok := p.ByAudience[audience]; ok {
+		return cats
+	}
+	if len(p.ByAudience) == 0 {
+		return categorySetOf()
+	}
+	if audience == AudiencePublic {
+		return categorySetOf(CategorySummary)
+	}
+	return categorySetOf(
+		CategorySummary, CategoryMap, CategoryPhotos, CategoryLocation, CategoryPaceSpeed,
+		CategorySegments, CategoryBestEfforts, CategoryZones, CategorySocial,
+	)
 }
 
 // VisibilityInput is the relationship context for resolving what a viewer sees.
@@ -163,6 +168,9 @@ func ResolveVisibility(in VisibilityInput) CategorySet {
 		return CategorySet{}
 	}
 	if in.ActivityPolicy != nil {
+		if in.ActivityPolicy.ByAudience != nil && len(in.ActivityPolicy.ByAudience) == 0 {
+			return CategorySet{}
+		}
 		if s, ok := in.ActivityPolicy.ByAudience[aud]; ok {
 			return s
 		}
@@ -248,10 +256,9 @@ func MarshalPolicy(p VisibilityPolicy) map[string][]string {
 	return out
 }
 
-// UnmarshalPolicy builds a VisibilityPolicy from its jsonb shape. An empty map
-// yields an empty policy (callers fall back to DefaultVisibilityPolicy).
+// UnmarshalPolicy retains the distinction between a missing policy and a stored empty object.
 func UnmarshalPolicy(raw map[string][]string) VisibilityPolicy {
-	if len(raw) == 0 {
+	if raw == nil {
 		return VisibilityPolicy{}
 	}
 	by := map[Audience]CategorySet{}

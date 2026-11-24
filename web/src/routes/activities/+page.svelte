@@ -183,6 +183,22 @@
 </script>
 
 <section class="space-y-4 max-md:space-y-3">
+	<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
+		<div>
+			<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">
+				{m.activities_title()}
+			</h1>
+			{#if feed}
+				<p class="mt-1 text-sm text-zinc-400">
+					{#if filter.active}
+						<span class="font-medium text-zinc-200">{feed.matched}</span> of {feed.total} activities
+					{:else}
+						<span class="font-medium text-zinc-200">{feed.total}</span> activities
+					{/if}
+				</p>
+			{/if}
+		</div>
+	</header>
 	<FilterSheet
 		active={filter.active || filter.sort !== 'date_desc'}
 		reset={() => {
@@ -191,49 +207,33 @@
 		}}
 	>
 		{#snippet toolbar()}
-			<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
-				<div>
-					<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">
-						{m.activities_title()}
-					</h1>
-					{#if feed}
-						<p class="mt-1 text-sm text-zinc-400">
-							{#if filter.active}
-								<span class="font-medium text-zinc-200">{feed.matched}</span> of {feed.total} activities
-							{:else}
-								<span class="font-medium text-zinc-200">{feed.total}</span> activities
-							{/if}
-						</p>
-					{/if}
+			{#if !data.member}
+				<div class="flex flex-wrap items-center gap-2">
+					<a
+						href="/activities/new"
+						class="inline-flex min-h-10 items-center rounded-lg border border-zinc-800 bg-panel px-3 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
+					>
+						New activity
+					</a>
+					<button
+						type="button"
+						disabled={uploading}
+						onclick={() => fileInput?.click()}
+						class="min-h-10 rounded-lg bg-accent-500 px-3 text-xs font-semibold text-on-accent hover:bg-accent-600 disabled:opacity-50"
+					>
+						{uploading ? 'Uploading…' : 'Upload files'}
+					</button>
+					<a
+						href="/review"
+						class="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-accent-300 hover:underline"
+						>Review queue</a
+					>
 				</div>
-			</header>
+			{/if}
 		{/snippet}
 		<ActivityFilterBar {filter} facets={feed?.facets ?? null} member={data.member?.username} />
 	</FilterSheet>
 
-	{#if !data.member}
-		<div class="flex flex-wrap items-center gap-2">
-			<a
-				href="/activities/new"
-				class="inline-flex min-h-10 items-center rounded-lg border border-zinc-800 bg-panel px-3 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
-			>
-				New activity
-			</a>
-			<button
-				type="button"
-				disabled={uploading}
-				onclick={() => fileInput?.click()}
-				class="min-h-10 rounded-lg bg-accent-500 px-3 text-xs font-semibold text-on-accent hover:bg-accent-600 disabled:opacity-50"
-			>
-				{uploading ? 'Uploading…' : 'Upload files'}
-			</button>
-			<a
-				href="/review"
-				class="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-accent-300 hover:underline"
-				>Review queue</a
-			>
-		</div>
-	{/if}
 	{#if !data.member}
 		<div
 			role="button"
@@ -290,7 +290,7 @@
 			{#each items as activity (activity.id)}
 				<li>
 					<a
-						href={`/activities/${activity.id}`}
+						href={memberURL(`/activities/${activity.id}`, data.member)}
 						class="flex flex-wrap items-center gap-5 rounded-lg border border-zinc-800 bg-panel px-5 py-4 max-md:gap-x-2.5 max-md:gap-y-1.5 max-md:rounded-none max-md:border-0 max-md:px-2.5 max-md:py-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
 					>
 						<div

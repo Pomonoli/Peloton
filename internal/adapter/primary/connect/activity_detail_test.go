@@ -63,6 +63,7 @@ func detailFixture(t *testing.T) (*actFixture, domain.ActivityID, domain.SourceI
 	f := newActFixture(t)
 	sid, aid := seedActivity(f.repo, f.user, "garmin", actNow, 10000)
 	act := f.repo.Activities[aid]
+	act.Privacy = domain.PrivacyPublic
 	act.PrimaryStreamSourceID = &sid
 	act.MergeProvenance = domain.MergeProvenance{domain.FieldGroupTitle: sid}
 	f.repo.Activities[aid] = act

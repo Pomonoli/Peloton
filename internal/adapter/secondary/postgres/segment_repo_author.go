@@ -142,6 +142,10 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 		order = fastestOrder
 	}
 	columns := prefixedColumns(segmentEffortColumns, "e.") + ", COALESCE(NULLIF(u.display_name, ''), u.username::text) AS display_name, COALESCE(u.avatar_url, '') AS avatar_url"
+	actualViewer := "$2"
+	if _, ok := port.CommunityViewer(ctx); ok {
+		actualViewer = communityViewerSQL(ctx)
+	}
 	from := ` FROM segment_efforts e
 		   JOIN activities a ON a.id = e.activity_id
 		   JOIN segments s ON s.id = e.segment_id
@@ -152,7 +156,8 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 		    AND (a.hidden_by_admin = false OR (s.source <> 'strava_catalog' AND e.user_id = $2))
 		    AND ($3::uuid IS NULL OR e.user_id = $3)
 		    AND ($4::timestamptz IS NULL OR e.start_time >= $4)
-		    AND ($5::timestamptz IS NULL OR e.start_time < $5)` + communityReadSQL(ctx, "a.")
+		    AND ($5::timestamptz IS NULL OR e.start_time < $5)` + communityReadSQL(ctx, "a.") +
+		" AND " + sharedCategorySQL("a.", actualViewer, "'segments'")
 	if q.ValidOnly || q.BestPerUser {
 		from += " AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8"
 	}
@@ -194,7 +199,19 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 		where += catalogViewportSQL(b, &args)
 	}
 
-	const visibleActivity = "NOT a.hidden_by_admin AND NOT a.provider_restricted"
+	viewer := "$4"
+	if _, ok := port.CommunityViewer(ctx); ok {
+		viewer = communityViewerSQL(ctx)
+	}
+	visibleActivity := "a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted AND " +
+		sharedCategorySQL("a.", viewer, "'segments'")
+	if len(q.Order) == 0 {
+		q.Order = []domain.CatalogSegmentOrder{
+			{Column: domain.CatalogSortMembers, Descending: true},
+			{Column: domain.CatalogSortTotalAttempts, Descending: true},
+			{Column: domain.CatalogSortAverageSpeed, Descending: true},
+		}
+	}
 	order := catalogSegmentOrder(q.Order)
 	page, pageJoin := "", ""
 	pagination := " LIMIT $2 OFFSET $3"
@@ -258,6 +275,8 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 		), personal AS (
 			SELECT segment_id, sum(attempts)::bigint AS attempts
 			FROM personal_sources GROUP BY segment_id
+		), community AS (
+			SELECT segment_id, count(*) AS attempts FROM traversals GROUP BY segment_id
 		), winner AS (
 			SELECT DISTINCT ON (segment_id) segment_id, elapsed_s, user_id,
 				count(*) OVER segment AS members, bool_or(user_id = $1::uuid) OVER segment AS has_member
@@ -265,11 +284,12 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 			WINDOW segment AS (PARTITION BY segment_id)
 			ORDER BY segment_id, elapsed_s, start_time, id
 		)
-		SELECT s.id, s.name, CASE WHEN s.distance_m > 0 AND s.distance_m < 'Infinity'::float8 THEN s.distance_m ELSE 0 END, winner.elapsed_s, `+catalogHolderNameSQL+`, winner.members, COALESCE(personal.attempts, 0),
+		SELECT s.id, s.name, CASE WHEN s.distance_m > 0 AND s.distance_m < 'Infinity'::float8 THEN s.distance_m ELSE 0 END, winner.elapsed_s, `+catalogHolderNameSQL+`, winner.members, COALESCE(personal.attempts, 0), community.attempts,
 		       ST_X(ST_StartPoint(s.geom::geometry)), ST_Y(ST_StartPoint(s.geom::geometry))`+geometry+`
 		FROM winner
 		JOIN segments s ON s.id = winner.segment_id
 		LEFT JOIN personal ON personal.segment_id = s.id
+		JOIN community ON community.segment_id = s.id
 		JOIN users u ON u.id = winner.user_id
 		WHERE $1::uuid IS NULL OR winner.has_member
 		ORDER BY `+order+pagination, args...)
@@ -280,7 +300,7 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 		var item domain.CatalogSegment
 		var id uuid.UUID
 		var lon, lat *float64
-		dest := []any{&id, &item.Name, &item.DistanceM, &item.BestElapsedS, &item.LocalKOMHolder, &item.MemberCount, &item.MyAttempts,
+		dest := []any{&id, &item.Name, &item.DistanceM, &item.BestElapsedS, &item.LocalKOMHolder, &item.MemberCount, &item.MyAttempts, &item.TotalAttempts,
 			&lon, &lat}
 		if q.Bounds != nil {
 			dest = append(dest, &item.Polyline, &item.PolylinePrecision)
@@ -336,10 +356,11 @@ func catalogSegmentOrder(criteria []domain.CatalogSegmentOrder) string {
 		domain.CatalogSortDistance: validDistance,
 		domain.CatalogSortBestTime: "winner.elapsed_s",
 		// Eligible times are positive and finite.
-		domain.CatalogSortAverageSpeed: "(" + validDistance + ") / winner.elapsed_s * 3.6",
-		domain.CatalogSortLocalKOM:     "lower(NULLIF(btrim(" + catalogHolderNameSQL + "), ''))",
-		domain.CatalogSortMembers:      "winner.members",
-		domain.CatalogSortMyAttempts:   "COALESCE(personal.attempts, 0)",
+		domain.CatalogSortAverageSpeed:  "(" + validDistance + ") / winner.elapsed_s * 3.6",
+		domain.CatalogSortLocalKOM:      "lower(NULLIF(btrim(" + catalogHolderNameSQL + "), ''))",
+		domain.CatalogSortMembers:       "winner.members",
+		domain.CatalogSortMyAttempts:    "COALESCE(personal.attempts, 0)",
+		domain.CatalogSortTotalAttempts: "community.attempts",
 	}
 	order := make([]string, 0, len(criteria)+2)
 	hasName := false

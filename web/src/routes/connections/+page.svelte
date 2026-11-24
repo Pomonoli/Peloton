@@ -5,9 +5,6 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import AccountsSync from '#lib/components/AccountsSync.svelte';
 	import GarminConnection from '#lib/components/GarminConnection.svelte';
-	import type { PageData } from './$types';
-
-	let { data }: { data: PageData } = $props();
 
 	type Conn = {
 		id: string;
@@ -230,15 +227,6 @@
 	</header>
 
 	<GarminConnection />
-
-	<div class="rounded-lg border border-zinc-800 bg-panel p-3 text-xs text-zinc-400">
-		Connecting needs a connector (worker) for the provider onboarded on this instance.
-		{#if data.isAdmin}
-			<a href="/admin" class="text-accent-400 hover:text-accent-300">Onboard connectors →</a>
-		{:else}
-			Your platform admin manages connectors.
-		{/if}
-	</div>
 
 	{#if connected}
 		<div

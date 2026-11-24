@@ -31,7 +31,6 @@
 		type: string;
 		discipline: string;
 		distance_m: number;
-		elapsed_duration_s: number;
 		moving_duration_s: number;
 		avg_speed_mps: number | null;
 	} | null;
@@ -123,7 +122,7 @@
 		<section>
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Records</h2>
 			<div class="grid gap-2 sm:grid-cols-2">
-				{#each [{ label: 'Longest distance', r: s.records.longest_distance, distanceRecord: true }, { label: 'Longest duration', r: s.records.longest_duration, distanceRecord: false }] as card (card.label)}
+				{#each [{ label: 'Longest distance', r: s.records.longest_distance, distanceRecord: true }, { label: m.stats_longest_moving(), r: s.records.longest_duration, distanceRecord: false }] as card (card.label)}
 					<div class="rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4">
 						<div class="text-xs uppercase tracking-wide text-zinc-500">{card.label}</div>
 						{#if card.r}
@@ -145,12 +144,14 @@
 									<div class="text-lg font-semibold text-zinc-100">
 										{card.distanceRecord
 											? formatDistance(card.r.distance_m)
-											: formatDuration(card.r.elapsed_duration_s)}
+											: formatDuration(card.r.moving_duration_s)}
 									</div>
 									{#if card.distanceRecord && card.r.type === 'ride'}
 										<div class="text-sm text-quiet">
 											{m.col_moving()}
-											{formatDuration(card.r.moving_duration_s)}
+											{formatDuration(
+												card.r.moving_duration_s > 0 ? card.r.moving_duration_s : null
+											)}
 											{#if card.r.avg_speed_mps != null}
 												· {formatSpeed(card.r.avg_speed_mps)}
 											{/if}

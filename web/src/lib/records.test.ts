@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import {
 	bestEffortValue,
+	compareRecordCategories,
 	filterCommunityRecords,
 	recordLabel,
 	recordMetric,
@@ -115,10 +116,10 @@ it('filters exact categories and sorts by member count or holder with stable fal
 		initial
 	]);
 	expect(filterCommunityRecords(rows, 'ride', '', true, 'category')).toEqual([
-		empty,
 		other,
 		popular,
-		initial
+		initial,
+		empty
 	]);
 	expect(filterCommunityRecords(rows, '', 'power', false, 'category')).toContain(run);
 	expect(filterCommunityRecords(rows, '', 'heart_rate', false, 'category')).toEqual([]);
@@ -127,4 +128,29 @@ it('filters exact categories and sorts by member count or holder with stable fal
 it('formats record values with at most two decimals', () => {
 	expect(recordValue(initial, 504.333333333)).toBe('504.33 W');
 	expect(recordValue({ ...initial, metric: 'speed' }, 28.75645 / 3.6)).toBe('28.76 km/h');
+});
+
+it('orders distance and duration within record categories before unknown metrics', () => {
+	const buckets = [
+		{ ...initial, metric: 'future' },
+		{ ...initial, metric: 'heart_rate' },
+		initial,
+		{ ...initial, metric: 'elevation_gain' },
+		{ ...initial, metric: 'vam', window_value: 300 },
+		{ ...initial, metric: 'speed' },
+		{ ...initial, metric: 'speed', window_value: 300 },
+		cyclingDistance,
+		{ ...cyclingDistance, window_value: 400 }
+	];
+	expect(buckets.sort(compareRecordCategories).map((r) => [r.metric, r.window_value])).toEqual([
+		['pace', 400],
+		['pace', 1000],
+		['speed', 300],
+		['speed', 1200],
+		['vam', 300],
+		['elevation_gain', 1200],
+		['power', 1200],
+		['heart_rate', 1200],
+		['future', 1200]
+	]);
 });

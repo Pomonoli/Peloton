@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
+	import PrivacySharingSettings from '#lib/components/PrivacySharingSettings.svelte';
 	import ComparisonSharing from '#lib/components/ComparisonSharing.svelte';
 	import LocaleSwitcher from '#lib/components/LocaleSwitcher.svelte';
 	import { locales } from '#lib/paraglide/runtime.js';
@@ -91,6 +92,8 @@
 	</header>
 
 	<ComparisonSharing />
+
+	<PrivacySharingSettings username={data.user.username} />
 
 	<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
 		<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_account_section()}</h2>
@@ -210,6 +213,11 @@
 	{/if}
 
 	<MergePolicyEditor />
+	<a
+		href="https://github.com/Pomonoli/Peloton"
+		class="inline-flex min-h-10 items-center text-sm text-accent-300 hover:underline"
+		>{m.settings_source_code()}</a
+	>
 
 	<PasskeyManager />
 

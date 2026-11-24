@@ -86,6 +86,7 @@
 		model: string;
 		purchaseDate: string;
 		notes: string;
+		weightKg?: number | undefined;
 	};
 	const emptyForm = (): GearForm => ({
 		kind: 'bike',
@@ -109,7 +110,8 @@
 			brand: g.brand,
 			model: g.model,
 			purchaseDate: g.purchaseDate,
-			notes: g.notes
+			notes: g.notes,
+			weightKg: g.weightKg
 		};
 		editingId = g.id;
 	}
@@ -123,13 +125,14 @@
 			brand: form.brand.trim(),
 			model: form.model.trim(),
 			purchaseDate: form.purchaseDate,
-			notes: form.notes
+			notes: form.notes,
+			weightKg: form.kind === 'bike' ? form.weightKg : undefined
 		};
 		return run(async () => {
 			if (editingId) {
 				await clients.gear.updateGear({
 					id: editingId,
-					fieldMask: ['name', 'brand', 'model', 'notes', 'purchase_date', 'kind'],
+					fieldMask: ['name', 'brand', 'model', 'notes', 'purchase_date', 'kind', 'weight_kg'],
 					...fields
 				});
 			} else {
@@ -223,6 +226,19 @@
 				>
 				<input id="g-notes" bind:value={form.notes} maxlength="10000" class={field} />
 			</div>
+			{#if form.kind === 'bike'}
+				<label class="block text-xs uppercase tracking-wide text-zinc-500">
+					{m.gear_bicycle_weight()}
+					<input
+						type="number"
+						min="2"
+						max="100"
+						step="any"
+						bind:value={form.weightKg}
+						class={field}
+					/>
+				</label>
+			{/if}
 		</div>
 		<div class="flex gap-2">
 			<button type="submit" disabled={busy || form.name.trim() === ''} class={btnPrimary}
@@ -357,6 +373,9 @@
 												date: formatDateOnly(g.purchaseDate)
 											})}{/if}
 									</p>
+									{#if g.weightKg != null}<p class="mt-1 text-xs text-quiet">
+											{m.gear_bicycle_weight_value({ weight: g.weightKg })}
+										</p>{/if}
 									{#if g.notes}<p class="mt-1 text-xs text-zinc-500">{g.notes}</p>{/if}
 								</div>
 								{#if !data.member}

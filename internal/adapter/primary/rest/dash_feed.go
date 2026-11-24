@@ -220,7 +220,7 @@ func (h *DashboardHandlers) feed(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]dashFeedActivity, 0, len(res.Activities))
 	for _, a := range res.Activities {
-		out = append(out, dashFeedActivityOf(a, res.GearPrompt && !port.IsCommunityActivityRead(ctx)))
+		out = append(out, dashFeedActivityOf(h.redactActivity(ctx, a), res.GearPrompt && !port.IsCommunityActivityRead(ctx)))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"total":   res.Total,

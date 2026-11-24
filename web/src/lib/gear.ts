@@ -64,6 +64,7 @@ export interface GearView {
 	brand: string;
 	model: string;
 	notes: string;
+	weightKg?: number | undefined;
 	purchaseDate: string;
 	retired: boolean;
 	retiredAt: string;
@@ -97,6 +98,7 @@ export function gearToView(g: Gear): GearView {
 		brand: g.brand,
 		model: g.model,
 		notes: g.notes,
+		weightKg: g.weightKg,
 		purchaseDate: g.purchaseDate,
 		retired: g.retired,
 		retiredAt: g.retiredAt ? protoTimestampToISO(g.retiredAt) : '',

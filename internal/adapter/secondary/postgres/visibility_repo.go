@@ -62,11 +62,14 @@ func (r *VisibilityRepo) GetActivityOverride(ctx context.Context, activityID dom
 	err := db.QueryRow(ctx,
 		`SELECT visibility_override FROM activities WHERE id = $1`, activityID.UUID(),
 	).Scan(&raw)
-	if errors.Is(err, pgx.ErrNoRows) || len(raw) == 0 {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get activity override: %w", err)
+	}
+	if len(raw) == 0 {
+		return nil, nil
 	}
 	p, err := decodePolicy(raw)
 	if err != nil {

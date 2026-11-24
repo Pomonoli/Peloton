@@ -21,8 +21,8 @@ func (f *Feeds) Project(ctx context.Context, acts []domain.Activity, viewer *dom
 	for i := range acts {
 		a := acts[i]
 		isOwner := viewer != nil && *viewer == a.UserID
-		cats := f.visibility.For(ctx, &a, viewer, false)
-		if len(cats) == 0 {
+		resolved, visible := f.visibility.Resolve(ctx, a, viewer, false)
+		if !visible {
 			continue
 		}
 		if _, cached := owners[a.UserID]; !cached {
@@ -32,7 +32,7 @@ func (f *Feeds) Project(ctx context.Context, acts []domain.Activity, viewer *dom
 		if isOwner {
 			item.Source, item.Own = FeedSelf, &a
 		} else {
-			p := domain.ProjectActivity(a, cats, nil)
+			p := domain.ProjectActivity(a, resolved.Cats, resolved.Zones)
 			item.Projected = &p
 		}
 		out = append(out, item)
@@ -248,6 +248,12 @@ func (p *Profiles) GetPage(ctx context.Context, username string, viewer *domain.
 	if err != nil {
 		return ProfileView{}, domain.ErrNotFound
 	}
+	if *viewer != u.ID && p.blocks != nil {
+		blocked, err := p.blocks.IsBlockedEitherWay(ctx, *viewer, u.ID)
+		if err != nil || blocked {
+			return ProfileView{}, domain.ErrNotFound
+		}
+	}
 	v := ProfileView{User: u, IsOwner: *viewer == u.ID}
 	if p.follows != nil {
 		if !v.IsOwner {
@@ -255,14 +261,19 @@ func (p *Profiles) GetPage(ctx context.Context, username string, viewer *domain.
 		}
 		v.Counts, _ = p.follows.Counts(ctx, u.ID)
 	}
+	if !v.IsOwner && !v.IsFollowing && !u.ProfileIsPublic {
+		return ProfileView{}, ErrForbidden
+	}
 	activities, err := p.activities.ListCommunityActivities(ctx, *viewer, &u.ID, profileRecent+1, max(0, offset))
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("list member activities: %w", err)
 	}
 	v.HasMore = len(activities) > profileRecent
 	for _, act := range activities[:min(len(activities), profileRecent)] {
-		cats := p.visibility.For(ctx, &act, viewer, false)
-		v.Activities = append(v.Activities, domain.ProjectActivity(act, cats, nil))
+		resolved, visible := p.visibility.Resolve(ctx, act, viewer, false)
+		if visible {
+			v.Activities = append(v.Activities, domain.ProjectActivity(act, resolved.Cats, resolved.Zones))
+		}
 	}
 	return v, nil
 }

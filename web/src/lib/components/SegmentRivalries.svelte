@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		formatDateOnly,
 		formatDistanceEffort,
+		formatDuration,
 		formatSpeedKmh,
-		formatTimeAndSpeed,
 		intlLocale
 	} from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
@@ -12,6 +12,7 @@
 	import {
 		alignEffortHistory,
 		rivalryFrom,
+		segmentSpeedRange,
 		type HistoryEffort,
 		type RivalryPeriod
 	} from '#lib/segment-rivalries.js';
@@ -27,173 +28,140 @@
 		elapsed_s: number;
 		average_speed_kmh: number | null;
 		effort_count: number;
-		all_efforts_speed_kmh: number | null;
 		start_time: string;
 		activity_id: string;
 	}
 
 	const pageSize = 20;
+	const boardFetchSize = 200;
 	const historySize = 200;
-	const colors = [
-		'var(--plot-speed)',
-		'var(--plot-power)',
-		'var(--plot-cadence)',
-		'var(--plot-heart-rate)'
-	];
 	let period = $state<RivalryPeriod>('all');
-	let board = $state<Entry[]>([]);
+	let board = $state.raw<Entry[]>([]);
+	let visibleCount = $state(pageSize);
 	let loading = $state(true);
 	let boardError = $state(false);
-	let more = $state(false);
-	let selected = $state.raw<string[]>([]);
-	let histories = $state<HistoryEffort[][]>([]);
+	let boardRetry = $state(0);
+	let historyRetry = $state(0);
+	let histories = $state.raw<HistoryEffort[][]>([]);
 	let historyError = $state(false);
 	let historyLoading = $state(false);
-	let boardRequest: AbortController | undefined;
+	let hidden = $state.raw<string[]>([]);
+	let hovered = $state<number | null>(null);
 
 	const from = $derived(rivalryFrom(period, new Date()));
-	const boardURL = $derived(memberURL(`/api/segments/${id}/leaderboard?limit=${pageSize}`, member));
-	const memberId = $derived(member?.id);
-	const compared = $derived(
-		selected
-			.map((uid) => board.find((entry) => entry.user_id === uid))
-			.filter((entry): entry is Entry => !!entry)
+	const boardURL = $derived(
+		memberURL(`/api/segments/${id}/leaderboard?limit=${boardFetchSize}`, member)
 	);
-	const chart = $derived(alignEffortHistory(histories));
-	const series = $derived(
-		compared.map((entry, i) => ({
-			values: chart.values[i] ?? [],
-			label: entry.display_name,
-			color: colors[i]!,
-			formatValue: (elapsedS: number | null) => formatDistanceEffort(distanceM, elapsedS)
+	const chart = $derived(alignEffortHistory(histories, distanceM));
+	const number = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 }));
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- stable color allocation is independent of effects
+	const colorsByRider = new Map<string, string>();
+	function riderColor(uid: string) {
+		const existing = colorsByRider.get(uid);
+		if (existing) return existing;
+		const hue = (colorsByRider.size * 137.508 + 205) % 360;
+		const color = `hsl(${hue} 72% 52%)`;
+		colorsByRider.set(uid, color);
+		return color;
+	}
+	const riders = $derived(
+		board.map((entry, index) => ({
+			entry,
+			color: riderColor(entry.user_id),
+			values: chart.values[index] ?? [],
+			times: chart.times[index] ?? []
 		}))
 	);
+	const visible = $derived(riders.filter(({ entry }) => !hidden.includes(entry.user_id)));
+	const series = $derived(
+		visible.map(({ entry, color, values }) => ({ label: entry.display_name, color, values }))
+	);
+	const hoverIndex = $derived(hovered === null ? -1 : chart.offsets.indexOf(hovered));
 
-	async function loadBoard(
-		url: string,
-		riderId: string | undefined,
-		cutoff: string | null,
-		offset: number
-	) {
-		boardRequest?.abort();
-		const request = new AbortController();
-		boardRequest = request;
+	$effect(() => {
+		const url = boardURL;
+		const cutoff = from;
+		void boardRetry;
+		const controller = new AbortController();
 		loading = true;
 		boardError = false;
-		const params = new URLSearchParams({
-			offset: String(offset),
-			...(cutoff ? { from: cutoff } : {})
-		});
-		try {
-			const response = await fetch(`${url}&${params}`, { signal: request.signal });
-			if (!response.ok) throw new Error();
-			const { entries }: { entries: Entry[] } = await response.json();
-			if (request.signal.aborted) return;
-			board = offset ? [...board, ...entries] : entries;
-			more = entries.length === pageSize;
-			if (!offset) {
-				const contender = entries.find((entry) => entry.user_id !== riderId);
-				const preferred = riderId
-					? [riderId, contender?.user_id].filter(
-							(id): id is string => !!id && entries.some((entry) => entry.user_id === id)
-						)
-					: [];
-				selected = preferred.length ? preferred : entries.slice(0, 2).map((entry) => entry.user_id);
-			}
-		} catch {
-			if (!request.signal.aborted) boardError = true;
-		} finally {
-			if (!request.signal.aborted) loading = false;
-		}
-	}
-
-	$effect(() => {
+		visibleCount = pageSize;
 		board = [];
-		selected = [];
-		more = false;
-		void loadBoard(boardURL, memberId, from, 0);
-		return () => boardRequest?.abort();
+		hidden = [];
+		hovered = null;
+		void (async () => {
+			try {
+				const entries: Entry[] = [];
+				for (let offset = 0; ; offset += boardFetchSize) {
+					const params = new SvelteURLSearchParams({ offset: String(offset) });
+					if (cutoff) params.set('from', cutoff);
+					const response = await fetch(`${url}&${params}`, { signal: controller.signal });
+					if (!response.ok) throw new Error();
+					const page: { entries: Entry[] } = await response.json();
+					if (controller.signal.aborted) return;
+					entries.push(...page.entries);
+					if (page.entries.length < boardFetchSize) break;
+				}
+				board = entries;
+			} catch {
+				if (!controller.signal.aborted) boardError = true;
+			} finally {
+				if (!controller.signal.aborted) loading = false;
+			}
+		})();
+		return () => controller.abort();
 	});
 
-	let historyRetry = $state(0);
-	const historyScope = $derived({ id, from, historyRetry });
-	let previousHistoryScope: typeof historyScope | undefined;
-	let historyRequests: {
-		uid: string;
-		controller: AbortController;
-		result: Promise<HistoryEffort[]>;
-	}[] = [];
-
-	async function loadHistory(
-		segmentId: string,
-		cutoff: string | null,
-		uid: string,
-		signal: AbortSignal
-	) {
-		const params = new URLSearchParams({
-			user_id: uid,
-			limit: String(historySize),
-			valid_only: 'true',
-			...(cutoff ? { from: cutoff } : {})
-		});
-		const response = await fetch(`/api/segments/${segmentId}/efforts?${params}`, { signal });
-		if (!response.ok) throw new Error();
-		return (await response.json()).efforts as HistoryEffort[];
-	}
-
+	let cachedScope = '';
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- results are published together after the workers settle
+	const cache = new Map<string, HistoryEffort[]>();
 	$effect(() => {
-		const scope = historyScope;
-		const ids = selected;
-		// Keep in-flight and completed histories for riders still in the comparison.
-		historyRequests = historyRequests.filter(({ uid, controller }) => {
-			if (scope === previousHistoryScope && ids.includes(uid)) return true;
-			controller.abort();
-			return false;
-		});
-		previousHistoryScope = scope;
+		const entries = board;
+		const segmentId = id;
+		const cutoff = from;
+		void historyRetry;
+		const scope = `${segmentId}/${cutoff ?? ''}`;
+		if (scope !== cachedScope) cache.clear();
+		cachedScope = scope;
 		histories = [];
 		historyError = false;
-		historyLoading = ids.length > 0;
-		if (!ids.length) return;
-		const rows = ids.map((uid) => {
-			const cached = historyRequests.find((request) => request.uid === uid);
-			if (cached) return cached.result;
-			const controller = new AbortController();
-			const result = loadHistory(scope.id, scope.from, uid, controller.signal);
-			historyRequests.push({ uid, controller, result });
-			return result;
+		historyLoading = entries.length > 0;
+		if (!entries.length) return;
+		const controller = new AbortController();
+		let next = 0;
+		async function worker() {
+			while (!controller.signal.aborted && next < entries.length) {
+				const uid = entries[next++]!.user_id;
+				if (cache.has(uid)) continue;
+				const params = new SvelteURLSearchParams({
+					user_id: uid,
+					limit: String(historySize),
+					valid_only: 'true'
+				});
+				if (cutoff) params.set('from', cutoff);
+				try {
+					const response = await fetch(`/api/segments/${segmentId}/efforts?${params}`, {
+						signal: controller.signal
+					});
+					if (!response.ok) throw new Error();
+					const { efforts } = (await response.json()) as { efforts: HistoryEffort[] };
+					if (!controller.signal.aborted) cache.set(uid, efforts);
+				} catch {
+					if (!controller.signal.aborted) historyError = true;
+				}
+			}
+		}
+		void Promise.all(Array.from({ length: Math.min(4, entries.length) }, worker)).then(() => {
+			if (!controller.signal.aborted) {
+				histories = entries.map(({ user_id }) => cache.get(user_id) ?? []);
+				historyLoading = false;
+			}
 		});
-		let active = true;
-		void Promise.all(rows)
-			.then((efforts) => {
-				if (active) histories = efforts;
-			})
-			.catch(() => {
-				if (active) historyError = true;
-			})
-			.finally(() => {
-				if (active) historyLoading = false;
-			});
-		return () => {
-			active = false;
-		};
+		return () => controller.abort();
 	});
-
-	onDestroy(() => {
-		for (const request of historyRequests) request.controller.abort();
-	});
-
-	function seconds(value: number) {
-		return new Intl.NumberFormat(intlLocale(), {
-			style: 'unit',
-			unit: 'second',
-			maximumFractionDigits: 2
-		}).format(value);
-	}
 
 	function toggle(uid: string) {
-		if (selected.includes(uid)) selected = selected.filter((value) => value !== uid);
-		else if (selected.length < colors.length) selected = [...selected, uid];
+		hidden = hidden.includes(uid) ? hidden.filter((id) => id !== uid) : [...hidden, uid];
 	}
 </script>
 
@@ -214,58 +182,45 @@
 	</div>
 
 	{#if board.length}
-		<p class="text-sm text-accent-300">{m.segment_winner({ name: board[0]!.display_name })}</p>
 		<div class="overflow-x-auto rounded-xl border border-zinc-800">
-			<table class="w-full text-sm whitespace-nowrap">
+			<table class="w-full text-xs sm:text-sm">
 				<thead class="bg-panel text-xs text-quiet">
 					<tr>
-						<th scope="col" class="px-3 py-2 text-left">{m.segment_rivalry_compare()}</th>
-						<th scope="col" class="px-3 py-2 text-left">{m.segment_leaderboard_rank()}</th>
-						<th scope="col" class="px-3 py-2 text-left">{m.segment_leaderboard_rider()}</th>
-						<th scope="col" class="px-3 py-2 text-right"
-							>{period === 'all'
-								? m.segment_rivalry_personal_best()
-								: m.segment_rivalry_period_best()}</th
+						<th scope="col" class="px-1.5 py-2 text-left sm:px-3">{m.segment_leaderboard_rank()}</th
 						>
-						<th scope="col" class="px-3 py-2 text-right">{m.segment_rivalry_gap()}</th>
-						<th scope="col" class="px-3 py-2 text-right">{m.segment_rivalry_avg_speed()}</th>
-						<th scope="col" class="px-3 py-2 text-right">{m.segment_rivalry_efforts()}</th>
-						<th scope="col" class="px-3 py-2 text-right">{m.segment_leaderboard_date()}</th>
+						<th scope="col" class="px-1.5 py-2 text-left sm:px-3"
+							>{m.segment_leaderboard_rider()}</th
+						>
+						<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.detail_label_time()}</th>
+						<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.segment_speed_column()}</th>
+						<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.segment_attempts()}</th>
+						<th scope="col" class="px-1.5 py-2 text-right sm:px-3"
+							>{m.segment_leaderboard_date()}</th
+						>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-zinc-800">
-					{#each board as entry (entry.user_id)}
-						{@const gap = entry.elapsed_s - board[0]!.elapsed_s}
+					{#each board.slice(0, visibleCount) as entry (entry.user_id)}
 						<tr>
-							<td class="px-3 py-2">
-								<label class="inline-flex min-h-8 min-w-10 items-center justify-center">
-									<input
-										type="checkbox"
-										checked={selected.includes(entry.user_id)}
-										disabled={selected.length >= colors.length && !selected.includes(entry.user_id)}
-										aria-label={m.segment_rivalry_compare_rider({ name: entry.display_name })}
-										onchange={() => toggle(entry.user_id)}
-										class="accent-accent-500"
-									/>
-								</label>
-							</td>
-							<td class="px-3 py-2 tabular-nums">#{entry.rank}</td>
-							<td class="px-3 py-2" class:font-semibold={gap === 0}>{entry.display_name}</td>
-							<td class="px-3 py-2 text-right tabular-nums">
-								{formatTimeAndSpeed(seconds(entry.elapsed_s), entry.average_speed_kmh)}
-							</td>
-							<td class="px-3 py-2 text-right tabular-nums"
-								>{gap === 0 ? m.segment_rivalry_fastest() : `+${seconds(gap)}`}</td
+							<td class="px-1.5 py-2 tabular-nums sm:px-3">#{entry.rank}</td>
+							<td
+								class="px-1.5 py-2 sm:px-3"
+								class:font-semibold={entry.elapsed_s === board[0]?.elapsed_s}
+								>{entry.display_name}</td
 							>
-							<td class="px-3 py-2 text-right tabular-nums"
-								>{formatSpeedKmh(entry.all_efforts_speed_kmh)}</td
+							<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
+								>{formatDuration(entry.elapsed_s)}</td
 							>
-							<td class="px-3 py-2 text-right tabular-nums"
-								>{new Intl.NumberFormat(intlLocale()).format(entry.effort_count)}</td
+							<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
+								>{formatSpeedKmh(entry.average_speed_kmh)}</td
 							>
-							<td class="px-3 py-2 text-right">
-								<a href={`/activities/${entry.activity_id}`} class="text-accent-300 hover:underline"
-									>{formatDateOnly(entry.start_time)}</a
+							<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
+								>{number.format(entry.effort_count)}</td
+							>
+							<td class="px-1.5 py-2 text-right sm:px-3">
+								<a
+									href={memberURL(`/activities/${entry.activity_id}`, member)}
+									class="text-accent-300 hover:underline">{formatDateOnly(entry.start_time)}</a
 								>
 							</td>
 						</tr>
@@ -273,21 +228,24 @@
 				</tbody>
 			</table>
 		</div>
-	{:else if !loading && !boardError}
-		<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
-	{/if}
-	{#if boardError}<p role="status" class="text-sm text-quiet">
-			{m.segment_leaderboard_failed()}
-		</p>{/if}
-	{#if more || boardError}
+		{#if visibleCount < board.length}
+			<button
+				type="button"
+				class="min-h-10 text-sm text-accent-300 hover:underline"
+				onclick={() => (visibleCount += pageSize)}>{m.segment_leaderboard_next()}</button
+			>
+		{/if}
+	{:else if loading}
+		<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
+	{:else if boardError}
+		<p role="status" class="text-sm text-quiet">{m.segment_leaderboard_failed()}</p>
 		<button
 			type="button"
-			disabled={loading}
-			class="min-h-10 text-sm text-accent-300 hover:underline disabled:opacity-50"
-			onclick={() => loadBoard(boardURL, memberId, from, board.length)}
+			class="min-h-10 text-sm text-accent-300 hover:underline"
+			onclick={() => (boardRetry += 1)}>{m.community_retry()}</button
 		>
-			{boardError ? m.community_retry() : m.segment_leaderboard_next()}
-		</button>
+	{:else}
+		<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
 	{/if}
 
 	{#if board.length}
@@ -300,20 +258,56 @@
 					onclick={() => (historyRetry += 1)}
 					class="min-h-10 text-sm text-accent-300 hover:underline">{m.community_retry()}</button
 				>
-			{:else if historyLoading || loading}
+			{/if}
+			{#if historyLoading}
 				<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
 			{:else if chart.offsets.length}
-				{#if compared.some((entry) => entry.effort_count > historySize)}
+				{#if board.some((entry) => entry.effort_count > historySize)}
 					<p class="text-xs text-quiet">
 						{m.segment_rivalry_history_limit({ count: historySize })}
 					</p>
 				{/if}
-				<StreamChart offsets={chart.offsets} {series} height={210} calendar />
-			{:else}
-				<p class="text-sm text-quiet">{m.segment_rivalry_history_select()}</p>
+				{#if series.length}
+					<StreamChart
+						offsets={chart.offsets}
+						{series}
+						height={220}
+						calendar
+						legend={false}
+						yAxis={{
+							label: m.segment_speed_axis(),
+							format: (value) => number.format(value),
+							range: segmentSpeedRange
+						}}
+						onHover={(time) => (hovered = time)}
+					/>
+				{/if}
+				{#if hovered !== null && visible.some(({ times }) => times[hoverIndex] != null)}
+					<p class="text-xs text-quiet">{formatDateOnly(new Date(hovered * 1000).toISOString())}</p>
+				{/if}
+				<div
+					role="group"
+					aria-label={m.segment_history_legend()}
+					class="flex max-h-36 flex-wrap gap-x-2 overflow-y-auto"
+				>
+					{#each riders as { entry, color, times } (entry.user_id)}
+						<button
+							type="button"
+							aria-pressed={!hidden.includes(entry.user_id)}
+							onclick={() => toggle(entry.user_id)}
+							class="flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs aria-pressed:bg-zinc-800"
+						>
+							<span class="size-2 shrink-0 rounded-full" style:background={color}></span>
+							{entry.display_name}
+							{#if !hidden.includes(entry.user_id) && times[hoverIndex] != null}<span
+									>{formatDistanceEffort(distanceM, times[hoverIndex])}</span
+								>{/if}
+						</button>
+					{/each}
+				</div>
+			{:else if !historyError}
+				<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
 			{/if}
 		</div>
-	{:else if loading}
-		<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
 	{/if}
 </section>

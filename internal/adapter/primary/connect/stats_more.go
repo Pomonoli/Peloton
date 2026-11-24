@@ -10,7 +10,6 @@ import (
 
 	v1 "github.com/opencairn-org/cairn-core/gen/proto/cairn/v1"
 	"github.com/opencairn-org/cairn-core/internal/domain"
-	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
 )
 
@@ -40,11 +39,11 @@ func (s *StatsServer) GetStats(ctx context.Context, req *v1.GetStatsRequest) (*v
 	}
 	if a := res.LongestDistance; a != nil {
 		names := gearNamesOf(ctx, s.Gear, *a)
-		out.LongestDistance = decorateActivity(ctx, activityReadToProto(*a, nil, !port.IsCommunityActivityRead(ctx)), *a, names, s.Content, s.MapETag)
+		out.LongestDistance = sharedActivityToProto(ctx, s.Visibility, *a, nil, names, s.Content, s.MapETag)
 	}
 	if a := res.LongestDuration; a != nil {
 		names := gearNamesOf(ctx, s.Gear, *a)
-		out.LongestDuration = decorateActivity(ctx, activityReadToProto(*a, nil, !port.IsCommunityActivityRead(ctx)), *a, names, s.Content, s.MapETag)
+		out.LongestDuration = sharedActivityToProto(ctx, s.Visibility, *a, nil, names, s.Content, s.MapETag)
 	}
 	return out, nil
 }

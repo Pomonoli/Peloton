@@ -25,7 +25,7 @@ func NewGearRepo(pool *pgxpool.Pool) *GearRepo {
 
 const gearIdentityColumns = `
 	id, user_id, kind, name, COALESCE(brand, ''), COALESCE(model, ''), COALESCE(notes, ''),
-	purchase_date, retired, retired_at, `
+	purchase_date, weight_kg, retired, retired_at, `
 
 func gearReadFrom(ctx context.Context) string {
 	if !port.IsCommunityActivityRead(ctx) {
@@ -36,7 +36,7 @@ func gearReadFrom(ctx context.Context) string {
 			SELECT COALESCE(sum(a.distance_m), 0) AS distance_m,
 			       COALESCE(sum(a.moving_duration_s), 0) AS moving_s, count(*) AS n
 			FROM activities a WHERE a.user_id = gear.user_id AND a.gear_id = gear.id
-			  AND a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted
+			  AND a.deleted_at IS NULL` + communityReadSQL(ctx, "a.") + `
 		) stats`
 }
 
@@ -111,14 +111,14 @@ func (r *GearRepo) Save(ctx context.Context, g domain.Gear) error {
 		retiredAt = *g.RetiredAt
 	}
 	_, err := db.Exec(ctx,
-		`INSERT INTO gear (id, user_id, kind, name, brand, model, notes, purchase_date, retired, retired_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`INSERT INTO gear (id, user_id, kind, name, brand, model, notes, purchase_date, weight_kg, retired, retired_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 ON CONFLICT (id) DO UPDATE SET
 		   kind = EXCLUDED.kind, name = EXCLUDED.name, brand = EXCLUDED.brand,
 		   model = EXCLUDED.model, notes = EXCLUDED.notes, purchase_date = EXCLUDED.purchase_date,
-		   retired = EXCLUDED.retired, retired_at = EXCLUDED.retired_at, updated_at = now()`,
+		   weight_kg = EXCLUDED.weight_kg, retired = EXCLUDED.retired, retired_at = EXCLUDED.retired_at, updated_at = now()`,
 		g.ID.UUID(), g.UserID.UUID(), string(g.Kind), g.Name, g.Brand, g.Model, g.Notes,
-		purchase, g.Retired, retiredAt)
+		purchase, g.WeightKg, g.Retired, retiredAt)
 	if err != nil {
 		return fmt.Errorf("save gear %s: %w", g.ID, err)
 	}
@@ -568,7 +568,7 @@ func scanGear(row rowScanner) (domain.Gear, error) {
 	)
 	err := row.Scan(
 		&id, &userID, &kind, &g.Name, &g.Brand, &g.Model, &g.Notes,
-		&purchase, &g.Retired, &g.RetiredAt,
+		&purchase, &g.WeightKg, &g.Retired, &g.RetiredAt,
 		&g.TotalDistanceM, &totalMovingS, &g.ActivityCount,
 		&g.CreatedAt, &g.UpdatedAt,
 	)

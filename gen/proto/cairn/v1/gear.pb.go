@@ -107,6 +107,7 @@ type Gear struct {
 	ExternalRefs   []*GearExternalRef     `protobuf:"bytes,13,rep,name=external_refs,json=externalRefs,proto3" json:"external_refs,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	WeightKg       *float64               `protobuf:"fixed64,16,opt,name=weight_kg,json=weightKg,proto3,oneof" json:"weight_kg,omitempty"` // bicycle weight; absent when unknown
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -244,6 +245,13 @@ func (x *Gear) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Gear) GetWeightKg() float64 {
+	if x != nil && x.WeightKg != nil {
+		return *x.WeightKg
+	}
+	return 0
 }
 
 // GearExternalRef is a provider's gear record. Mapped onto a Gear it is an
@@ -659,6 +667,7 @@ type CreateGearRequest struct {
 	Model         string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
 	Notes         string                 `protobuf:"bytes,5,opt,name=notes,proto3" json:"notes,omitempty"`
 	PurchaseDate  string                 `protobuf:"bytes,6,opt,name=purchase_date,json=purchaseDate,proto3" json:"purchase_date,omitempty"`
+	WeightKg      *float64               `protobuf:"fixed64,7,opt,name=weight_kg,json=weightKg,proto3,oneof" json:"weight_kg,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -735,6 +744,13 @@ func (x *CreateGearRequest) GetPurchaseDate() string {
 	return ""
 }
 
+func (x *CreateGearRequest) GetWeightKg() float64 {
+	if x != nil && x.WeightKg != nil {
+		return *x.WeightKg
+	}
+	return 0
+}
+
 type CreateGearResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Gear          *Gear                  `protobuf:"bytes,1,opt,name=gear,proto3" json:"gear,omitempty"`
@@ -783,7 +799,7 @@ type UpdateGearRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Proto-style field names: name, brand, model, notes, purchase_date,
-	// kind, retired.
+	// kind, retired, weight_kg. Omit weight_kg while masking it to clear it.
 	FieldMask     []string  `protobuf:"bytes,2,rep,name=field_mask,json=fieldMask,proto3" json:"field_mask,omitempty"`
 	Name          *string   `protobuf:"bytes,3,opt,name=name,proto3,oneof" json:"name,omitempty"`
 	Brand         *string   `protobuf:"bytes,4,opt,name=brand,proto3,oneof" json:"brand,omitempty"`
@@ -792,6 +808,7 @@ type UpdateGearRequest struct {
 	PurchaseDate  *string   `protobuf:"bytes,7,opt,name=purchase_date,json=purchaseDate,proto3,oneof" json:"purchase_date,omitempty"`
 	Kind          *GearKind `protobuf:"varint,8,opt,name=kind,proto3,enum=cairn.v1.GearKind,oneof" json:"kind,omitempty"`
 	Retired       *bool     `protobuf:"varint,9,opt,name=retired,proto3,oneof" json:"retired,omitempty"`
+	WeightKg      *float64  `protobuf:"fixed64,10,opt,name=weight_kg,json=weightKg,proto3,oneof" json:"weight_kg,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -887,6 +904,13 @@ func (x *UpdateGearRequest) GetRetired() bool {
 		return *x.Retired
 	}
 	return false
+}
+
+func (x *UpdateGearRequest) GetWeightKg() float64 {
+	if x != nil && x.WeightKg != nil {
+		return *x.WeightKg
+	}
+	return 0
 }
 
 type UpdateGearResponse struct {
@@ -1668,7 +1692,7 @@ var File_cairn_v1_gear_proto protoreflect.FileDescriptor
 
 const file_cairn_v1_gear_proto_rawDesc = "" +
 	"\n" +
-	"\x13cairn/v1/gear.proto\x12\bcairn.v1\x1a\x17cairn/v1/activity.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcf\x04\n" +
+	"\x13cairn/v1/gear.proto\x12\bcairn.v1\x1a\x17cairn/v1/activity.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xff\x04\n" +
 	"\x04Gear\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x12.cairn.v1.GearKindR\x04kind\x12\x12\n" +
@@ -1688,8 +1712,11 @@ const file_cairn_v1_gear_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\r\n" +
-	"\v_retired_at\"\xaa\x04\n" +
+	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12 \n" +
+	"\tweight_kg\x18\x10 \x01(\x01H\x01R\bweightKg\x88\x01\x01B\r\n" +
+	"\v_retired_atB\f\n" +
+	"\n" +
+	"_weight_kg\"\xaa\x04\n" +
 	"\x0fGearExternalRef\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12.\n" +
 	"\x13external_account_id\x18\x02 \x01(\tR\x11externalAccountId\x12\x1f\n" +
@@ -1722,16 +1749,19 @@ const file_cairn_v1_gear_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06member\x18\x02 \x01(\tR\x06member\"5\n" +
 	"\x0fGetGearResponse\x12\"\n" +
-	"\x04gear\x18\x01 \x01(\v2\x0e.cairn.v1.GearR\x04gear\"\xb6\x01\n" +
+	"\x04gear\x18\x01 \x01(\v2\x0e.cairn.v1.GearR\x04gear\"\xe6\x01\n" +
 	"\x11CreateGearRequest\x12&\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x12.cairn.v1.GearKindR\x04kind\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
 	"\x05brand\x18\x03 \x01(\tR\x05brand\x12\x14\n" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12\x14\n" +
 	"\x05notes\x18\x05 \x01(\tR\x05notes\x12#\n" +
-	"\rpurchase_date\x18\x06 \x01(\tR\fpurchaseDate\"8\n" +
+	"\rpurchase_date\x18\x06 \x01(\tR\fpurchaseDate\x12 \n" +
+	"\tweight_kg\x18\a \x01(\x01H\x00R\bweightKg\x88\x01\x01B\f\n" +
+	"\n" +
+	"_weight_kg\"8\n" +
 	"\x12CreateGearResponse\x12\"\n" +
-	"\x04gear\x18\x01 \x01(\v2\x0e.cairn.v1.GearR\x04gear\"\xf0\x02\n" +
+	"\x04gear\x18\x01 \x01(\v2\x0e.cairn.v1.GearR\x04gear\"\xa0\x03\n" +
 	"\x11UpdateGearRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1742,7 +1772,9 @@ const file_cairn_v1_gear_proto_rawDesc = "" +
 	"\x05notes\x18\x06 \x01(\tH\x03R\x05notes\x88\x01\x01\x12(\n" +
 	"\rpurchase_date\x18\a \x01(\tH\x04R\fpurchaseDate\x88\x01\x01\x12+\n" +
 	"\x04kind\x18\b \x01(\x0e2\x12.cairn.v1.GearKindH\x05R\x04kind\x88\x01\x01\x12\x1d\n" +
-	"\aretired\x18\t \x01(\bH\x06R\aretired\x88\x01\x01B\a\n" +
+	"\aretired\x18\t \x01(\bH\x06R\aretired\x88\x01\x01\x12 \n" +
+	"\tweight_kg\x18\n" +
+	" \x01(\x01H\aR\bweightKg\x88\x01\x01B\a\n" +
 	"\x05_nameB\b\n" +
 	"\x06_brandB\b\n" +
 	"\x06_modelB\b\n" +
@@ -1750,7 +1782,9 @@ const file_cairn_v1_gear_proto_rawDesc = "" +
 	"\x0e_purchase_dateB\a\n" +
 	"\x05_kindB\n" +
 	"\n" +
-	"\b_retired\"8\n" +
+	"\b_retiredB\f\n" +
+	"\n" +
+	"_weight_kg\"8\n" +
 	"\x12UpdateGearResponse\x12\"\n" +
 	"\x04gear\x18\x01 \x01(\v2\x0e.cairn.v1.GearR\x04gear\"#\n" +
 	"\x11DeleteGearRequest\x12\x0e\n" +
@@ -1920,6 +1954,7 @@ func file_cairn_v1_gear_proto_init() {
 	file_cairn_v1_activity_proto_init()
 	file_cairn_v1_gear_proto_msgTypes[0].OneofWrappers = []any{}
 	file_cairn_v1_gear_proto_msgTypes[1].OneofWrappers = []any{}
+	file_cairn_v1_gear_proto_msgTypes[7].OneofWrappers = []any{}
 	file_cairn_v1_gear_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

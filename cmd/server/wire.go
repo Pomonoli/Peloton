@@ -862,7 +862,7 @@ func wireAppGeocoder(app *App, cfg *config.Config, logger *slog.Logger) {
 
 // wireAppViews builds the read-side use cases REST and Connect both render from.
 func wireAppViews(app *App, logger *slog.Logger) {
-	app.Visibility2 = view.NewVisibility()
+	app.Visibility2 = &view.Visibility{Policies: app.Visibility, Follows: app.Follows, Blocks: app.Blocks}
 	app.Exports = activityexport.NewExports(app.Streams)
 	app.Overviews = dashboard.NewOverviews(app.Activities, nil)
 	app.Searches = dashboard.NewSearches(app.Activities, app.Gear)
@@ -880,6 +880,9 @@ func wireAppViews(app *App, logger *slog.Logger) {
 		bestEfforts = app.BestEfforts
 	}
 	app.Stats = dashboard.NewStats(app.Activities, metrics, bestEfforts, app.Streams, nil)
+	if app.Visibility != nil {
+		app.Stats.PrivacyZones = app.Visibility
+	}
 	app.SegmentViews = segmentview.NewSegments(nilIfNilSegments(app))
 	app.HealthViews = dashboard.NewHealth(app.Health, nil)
 	if app.Metrics != nil {

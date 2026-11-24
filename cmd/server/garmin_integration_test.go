@@ -302,11 +302,31 @@ func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestCl
 	alice.rpc(activityRPC+"UpdateActivity", map[string]any{
 		"id": old.ActivityID.String(), "field_mask": []string{"privacy"}, "privacy": "PRIVACY_PRIVATE",
 	}, http.StatusOK)
-	bike := alice.post(gearRPC+"CreateGear", map[string]any{"kind": "GEAR_KIND_BIKE", "name": "Garmin Test Bike"}, http.StatusOK)["gear"].(map[string]any)
+	bob.do(http.MethodGet, activity+"/zones", nil, http.StatusNotFound)
+	setITSegmentVisibility(alice, old.ActivityID.String(), "PUBLIC")
+	bike := alice.post(gearRPC+"CreateGear", map[string]any{"kind": "GEAR_KIND_BIKE", "name": "Garmin Test Bike", "weightKg": 8.5}, http.StatusOK)["gear"].(map[string]any)
 	gearID := str(bike, "id")
 	alice.rpc(activityRPC+"UpdateActivity", map[string]any{
 		"id": recent.ActivityID.String(), "field_mask": []string{"gear_id"}, "gear_id": gearID,
 	}, http.StatusOK)
+	assigned := "/api/activities/" + recent.ActivityID.String() + "/power-inputs"
+	if body := alice.do(http.MethodGet, assigned, nil, http.StatusOK); !bytes.Contains(body, []byte(`"bicycle_weight_kg":8.5`)) {
+		t.Fatalf("assigned bicycle weight missing: %s", body)
+	}
+	bob.do(http.MethodGet, assigned, nil, http.StatusNotFound)
+	before, err := env.app.Activities.GetActivity(t.Context(), recent.ActivityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alice.rpc(gearRPC+"UpdateGear", map[string]any{"id": gearID, "field_mask": []string{"weight_kg"}, "weight_kg": 12}, http.StatusOK)
+	if body := alice.do(http.MethodGet, assigned, nil, http.StatusOK); !bytes.Contains(body, []byte(`"bicycle_weight_kg":12`)) {
+		t.Fatalf("edited bicycle weight missing: %s", body)
+	}
+	after, err := env.app.Activities.GetActivity(t.Context(), recent.ActivityID)
+	if err != nil || before.Summary.AvgPowerW == nil || after.Summary.AvgPowerW == nil || *before.Summary.AvgPowerW != *after.Summary.AvgPowerW {
+		t.Fatalf("gear weight changed measured power: before=%v after=%v err=%v", before.Summary.AvgPowerW, after.Summary.AvgPowerW, err)
+	}
+
 	if err := env.app.Health.SaveSamples(t.Context(), alice.userID, nil, []health.Sample{{
 		DataType: capability.DataTypeHRV, Timestamp: time.Now().Add(-time.Hour), Value: new(57.5), Unit: "ms", Provider: "garmin",
 	}}); err != nil {

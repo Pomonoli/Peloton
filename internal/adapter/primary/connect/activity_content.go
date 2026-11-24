@@ -124,7 +124,7 @@ func (s *ActivityServer) GetActivityMapImage(ctx context.Context, req *v1.GetAct
 	if err != nil {
 		return nil, err
 	}
-	if !vw.IsOwner && !vw.Cats.Has(domain.CategoryMap) {
+	if !vw.Cats.Has(domain.CategoryMap) || len(vw.Zones) > 0 {
 		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 	if act.PrimaryStreamSourceID == nil {
@@ -163,9 +163,12 @@ func (s *ActivityServer) ExportActivity(ctx context.Context, req *v1.ExportActiv
 	if s.Exports == nil || s.Content == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeUnavailable, "export is not available on this instance")
 	}
-	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
+	act, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
+	}
+	if !viewer.CanExport() {
+		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 	format := exportFormatFromProto(req.GetFormat())
 	if format == "" {

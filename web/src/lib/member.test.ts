@@ -1,5 +1,12 @@
 import { expect, it, vi } from 'vitest';
-import { findMember, loadMemberPage, memberLinks, memberProfile, memberURL } from './member';
+import {
+	findMember,
+	loadMemberPage,
+	memberLinks,
+	memberProfile,
+	memberURL,
+	personalDataURL
+} from './member';
 
 const member = { id: 'member-id', username: 'a rider', display_name: 'A Rider' };
 
@@ -50,4 +57,17 @@ it('requires a current user and handles unavailable member cards', async () => {
 		fetch.mockResolvedValueOnce(new Response(null, { status: httpStatus }));
 		await expect(findMember(fetch, 'unknown')).rejects.toMatchObject({ status });
 	}
+});
+
+it('closes an explicit member view in place and preserves filters', () => {
+	const url = new URL(
+		'https://peloton.test/records?member=mira&tab=leaderboards&exclude_downhills=true#records'
+	);
+	expect(personalDataURL(url)).toBe('/records?tab=leaderboards&exclude_downhills=true#records');
+	expect(
+		personalDataURL(
+			new URL('https://peloton.test/activities/foreign-id?member=mira&from=2026-11-01'),
+			true
+		)
+	).toBe('/activities?from=2026-11-01');
 });

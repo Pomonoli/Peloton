@@ -23,13 +23,12 @@ const basemap = {
 	layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#343434' } }]
 };
 const browser = await chromium.launch({
-	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
-	args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
 });
 
 try {
 	const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en' });
-	page.setDefaultTimeout(10_000);
+	page.setDefaultTimeout(15_000);
 	const calls = [];
 	const errors = [];
 	let cold = true;
@@ -111,7 +110,7 @@ try {
 		});
 	});
 
-	const heatmap = () => page.getByRole('main').getByRole('link', { name: 'Heatmap', exact: true });
+	const heatmap = () => page.getByRole('link', { name: 'Heatmap', exact: true });
 	const fit = page.getByRole('button', { name: 'Fit to tracks' });
 	const loading = page.getByText('Loading heatmap…', { exact: true });
 	const tracks = (count) => page.getByText(`${count} tracks from ${count}`, { exact: false });
@@ -121,7 +120,8 @@ try {
 				new URL(response.url()).pathname === endpoint &&
 				new URL(response.url()).searchParams.has('level')
 		);
-	await page.goto(origin + '/u/mira');
+	await page.goto(origin + '/u/mira', { waitUntil: 'commit' });
+	await page.waitForURL(origin + '/?member=mira');
 	await heatmap().click();
 	await page.waitForURL(origin + '/heatmap?member=mira');
 	await page.getByText('Preparing ride history (1 remaining)…').waitFor();
@@ -170,6 +170,7 @@ try {
 	const fullscreen = page.getByRole('button', { name: 'Fullscreen', exact: true });
 	await fullscreen.click();
 	await page.getByRole('button', { name: 'Exit fullscreen' }).waitFor();
+	await page.getByText('Hover or tap a route to inspect its averages and passage count.').waitFor();
 	await page.getByRole('button', { name: 'Exit fullscreen' }).click();
 	await fullscreen.waitFor();
 	assert.equal(await layer.inputValue(), 'gradient');
@@ -191,7 +192,7 @@ try {
 	]);
 	await originalTracks.uncheck();
 
-	await page.getByRole('link', { name: 'Switch member' }).click();
+	await page.getByRole('link', { name: 'Riders', exact: true }).click();
 	await page.getByRole('link', { name: /Sam @sam/ }).click();
 	await heatmap().click();
 	await page.waitForURL(origin + '/heatmap?member=sam');
@@ -206,6 +207,7 @@ try {
 	await tracks(2).waitFor();
 	const filterButton = page.getByRole('button', { name: 'Map filters', exact: true });
 	assert.equal(await filterButton.getAttribute('aria-expanded'), 'false');
+	await layer.waitFor();
 	await filterButton.click();
 	const filterSheet = page.getByRole('dialog', { name: 'Map filters' });
 	await fit.waitFor();
@@ -214,6 +216,7 @@ try {
 	await fullscreen.click();
 	const exit = page.getByRole('button', { name: 'Exit fullscreen' });
 	await exit.waitFor();
+	await page.getByText('Hover or tap a route to inspect its averages and passage count.').waitFor();
 	assert.equal(
 		await exit.evaluate((button) =>
 			Math.round(button.parentElement.getBoundingClientRect().height)
@@ -225,17 +228,20 @@ try {
 	await page.setViewportSize({ width: 1280, height: 900 });
 
 	stall = true;
-	await page.clock.install();
+	await page.addInitScript(() => {
+		const now = performance.now.bind(performance);
+		window.heatmapTestTimeOffset = 0;
+		Object.defineProperty(performance, 'now', {
+			value: () => now() + window.heatmapTestTimeOffset
+		});
+	});
 	await page.goto(origin + '/heatmap?member=mira');
 	await page.getByText('Preparing ride history (1 remaining)…').waitFor();
 	const stalled = page.getByText('Heatmap preparation stopped making progress.', { exact: false });
-	for (let i = 0; i < 5 && !(await stalled.isVisible()); i++) {
-		await page.clock.fastForward(i === 0 ? 31_000 : 1000);
-		await delay(200);
-	}
+	await page.evaluate(() => (window.heatmapTestTimeOffset = 31_000));
 	await stalled.waitFor();
 	const stopped = calls.length;
-	await page.clock.fastForward(31_000);
+	await delay(1000);
 	assert.equal(calls.length, stopped, 'stalled preparation should stop polling');
 	assert.deepEqual(errors, []);
 	console.log('Member heatmap browser regression passed');

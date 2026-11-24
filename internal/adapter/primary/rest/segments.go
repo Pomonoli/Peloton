@@ -180,7 +180,7 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 		}
 		q.Bounds = &bounds
 	}
-	items, hasMore, err := h.Views.Catalog(r.Context(), q)
+	items, hasMore, err := h.Views.Catalog(port.WithCommunityViewer(r.Context(), me), q)
 	if err != nil {
 		h.Log.Error("load segment catalog", "error", err)
 		writeActionError(w, err, "load failed")
@@ -192,6 +192,7 @@ func (h *SegmentHandlers) catalog(w http.ResponseWriter, r *http.Request) {
 			"id": item.ID.String(), "name": item.Name, "distance_m": item.DistanceM,
 			"best_elapsed_s": item.BestElapsedS, "local_kom_holder": item.LocalKOMHolder, "member_count": item.MemberCount,
 			"my_attempts":       item.MyAttempts,
+			"total_attempts":    item.TotalAttempts,
 			"average_speed_kmh": domain.SegmentAverageSpeedKmh(item.DistanceM, item.BestElapsedS),
 			"start":             nil,
 		}
@@ -263,6 +264,7 @@ func (h *SegmentHandlers) activityEfforts(w http.ResponseWriter, r *http.Request
 	out := make([]map[string]any, 0, len(rows))
 	records := make(map[domain.SegmentID]*domain.LeaderboardEntry)
 	for _, row := range rows {
+		row.Effort = viewer.RedactEffort(row.Effort)
 		item := segEffortRowJSON(row)
 		if row.Segment.Source == domain.SegmentSourceStravaCatalog {
 			record, ok := records[row.Segment.ID]

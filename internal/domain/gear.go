@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -72,6 +73,7 @@ type Gear struct {
 	Model        string
 	Notes        string
 	PurchaseDate *time.Time
+	WeightKg     *float64
 	Retired      bool
 	RetiredAt    *time.Time
 
@@ -92,6 +94,8 @@ const (
 	GearNotesMaxLen = 10000
 )
 
+var ErrGearWeight = errors.New("bicycle weight must be between 2 and 100 kg")
+
 // Validate enforces the gear invariants before persisting.
 func (g *Gear) Validate() error {
 	if g.ID == (GearID{}) {
@@ -102,6 +106,9 @@ func (g *Gear) Validate() error {
 	}
 	if !g.Kind.Valid() {
 		return ErrGearInvalidKind
+	}
+	if g.WeightKg != nil && (g.Kind != GearKindBike || !(*g.WeightKg >= 2 && *g.WeightKg <= 100)) {
+		return ErrGearWeight
 	}
 	if strings.TrimSpace(g.Name) == "" {
 		return ErrGearMissingName

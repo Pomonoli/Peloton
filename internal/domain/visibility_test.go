@@ -28,26 +28,35 @@ func TestResolveVisibility_OwnerSeesAll(t *testing.T) {
 	}
 }
 
-func TestResolveVisibility_PublicDefaultsToSummaryOnly(t *testing.T) {
-	got := ResolveVisibility(VisibilityInput{Privacy: PrivacyPublic, OwnerPolicy: DefaultVisibilityPolicy()})
-	if !got.Has(CategorySummary) {
-		t.Error("public must see summary")
-	}
-	for _, c := range []Category{CategoryHR, CategoryPower, CategoryMap, CategoryLocation} {
-		if got.Has(c) {
-			t.Errorf("public must NOT see %s by default", c)
+func TestResolveVisibility_OpenDefaultsForEveryAudience(t *testing.T) {
+	for _, in := range []VisibilityInput{
+		{Privacy: PrivacyPublic}, {Privacy: PrivacyFollowers, IsFollower: true},
+		{Privacy: PrivacyPrivate, HasValidLink: true},
+	} {
+		got := ResolveVisibility(in)
+		for _, c := range AllCategories {
+			if !got.Has(c) {
+				t.Errorf("%s: missing %s", ResolveAudience(in), c)
+			}
 		}
 	}
 }
 
-func TestResolveVisibility_FollowerSeesMoreThanPublic(t *testing.T) {
-	fol := ResolveVisibility(VisibilityInput{IsFollower: true, Privacy: PrivacyPublic, OwnerPolicy: DefaultVisibilityPolicy()})
-	if !fol.Has(CategoryMap) || !fol.Has(CategorySegments) {
-		t.Error("follower should see map + segments by default")
+func TestResolveVisibility_StoredEmptyAndLegacyPartialPolicies(t *testing.T) {
+	in := VisibilityInput{Privacy: PrivacyPublic}
+	in.OwnerPolicy = UnmarshalPolicy(map[string][]string{})
+	if len(ResolveVisibility(in)) != 0 {
+		t.Fatal("an explicitly empty policy should grant nothing")
 	}
-	// HR/power still hidden from followers by default.
-	if fol.Has(CategoryHR) || fol.Has(CategoryPower) {
-		t.Error("follower must not see HR/power by default")
+	in.OwnerPolicy = UnmarshalPolicy(map[string][]string{"followers": {"summary"}})
+	if got := ResolveVisibility(in); len(got) != 1 || !got.Has(CategorySummary) {
+		t.Fatalf("legacy fallback = %v", got)
+	}
+	in.OwnerPolicy = VisibilityPolicy{}
+	empty := UnmarshalPolicy(map[string][]string{})
+	in.ActivityPolicy = &empty
+	if len(ResolveVisibility(in)) != 0 {
+		t.Fatal("an explicitly empty override should grant nothing")
 	}
 }
 

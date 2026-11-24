@@ -47,6 +47,7 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 	// Streams and best-efforts are independent — run them in parallel.
 	const a = activity;
 	const isOwner = a.userId === user.id;
+	const memberKey = url.searchParams.get('member')?.trim();
 	const [streamResult, bestEfforts, gear, activityOwner] = await Promise.all([
 		loadStream(clients, a),
 		clients.activity
@@ -66,6 +67,13 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 		isOwner ? null : findMember(fetch, a.userId)
 	]);
 
+	const selectedMember =
+		!memberKey || memberKey === user.username || memberKey === user.id
+			? null
+			: memberKey === activityOwner?.username || memberKey === activityOwner?.id
+				? activityOwner
+				: await findMember(fetch, memberKey);
+
 	// Per-channel merged stream (best field from best source) — only worth
 	// fetching when the activity has more than one source. Used by the charts;
 	// the map keeps the primary GPS route.
@@ -77,6 +85,7 @@ export const load: LayoutLoad = async ({ fetch, url, params, parent }) => {
 	return {
 		activity: activityToView(a),
 		activityOwner,
+		member: selectedMember?.id === user.id ? null : selectedMember,
 		viewerId: user.id,
 		isOwner,
 		stream: streamResult.stream,

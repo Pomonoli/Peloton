@@ -82,6 +82,7 @@ func (s *GearServer) CreateGear(ctx context.Context, req *v1.CreateGearRequest) 
 		Model:        req.GetModel(),
 		Notes:        req.GetNotes(),
 		PurchaseDate: purchase,
+		WeightKg:     req.WeightKg,
 	})
 	if err != nil {
 		return nil, gearErr(err)
@@ -118,6 +119,8 @@ func (s *GearServer) UpdateGear(ctx context.Context, req *v1.UpdateGearRequest) 
 				g.PurchaseDate, maskErr = purchaseDateFromString(req.GetPurchaseDate())
 			case "kind":
 				g.Kind = protoconv.GearKindFromProto(req.GetKind())
+			case "weight_kg":
+				g.WeightKg = req.WeightKg
 			case "retired":
 				g.Retired = req.GetRetired()
 			default:
@@ -317,7 +320,7 @@ func gearErr(err error) error {
 	case errors.Is(err, domain.ErrNotFound), errors.Is(err, gearuc.ErrNotOwner):
 		return connectError(connectrpc.CodeNotFound, domain.ErrNotFound)
 	case errors.Is(err, domain.ErrGearMissingName), errors.Is(err, domain.ErrGearInvalidKind),
-		errors.Is(err, domain.ErrGearFieldTooLong), errors.Is(err, domain.ErrGearSelfMerge),
+		errors.Is(err, domain.ErrGearFieldTooLong), errors.Is(err, domain.ErrGearWeight), errors.Is(err, domain.ErrGearSelfMerge),
 		errors.Is(err, domain.ErrActivityInvalidType):
 		return connectError(connectrpc.CodeInvalidArgument, err)
 	case errors.Is(err, domain.ErrGearRefMapped):
@@ -335,6 +338,7 @@ func gearToProto(g domain.Gear) *v1.Gear {
 		Brand:          g.Brand,
 		Model:          g.Model,
 		Notes:          g.Notes,
+		WeightKg:       g.WeightKg,
 		Retired:        g.Retired,
 		TotalDistanceM: g.TotalDistanceM,
 		TotalMovingS:   int64(g.TotalMoving / time.Second),

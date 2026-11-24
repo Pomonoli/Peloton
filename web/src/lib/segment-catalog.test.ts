@@ -97,7 +97,10 @@ it('sends the criteria literally and passes cancellation through to the catalog 
 	await expect(fetchSegmentCatalog({ q: 'missing' }, [], signal)).rejects.toThrow();
 });
 
-it('defaults My Segments to attempts descending', () => {
-	expect(defaultCatalogSort(true)).toEqual([{ column: 'my_attempts', direction: 'desc' }]);
-	expect(defaultCatalogSort(false)).toEqual([{ column: 'name', direction: 'asc' }]);
+it('orders the catalog by riders, community attempts and speed', () => {
+	expect(defaultCatalogSort()).toEqual([
+		{ column: 'member_count', direction: 'desc' },
+		{ column: 'total_attempts', direction: 'desc' },
+		{ column: 'average_speed_kmh', direction: 'desc' }
+	]);
 });

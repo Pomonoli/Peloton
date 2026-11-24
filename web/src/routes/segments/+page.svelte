@@ -22,7 +22,7 @@
 		{ key: 'name', label: m.segment_column_name(), align: 'text-left' },
 		{ key: 'distance_m', label: m.detail_stat_distance(), align: 'text-right' },
 		{ key: 'best_elapsed_s', label: m.segment_leaderboard_time(), align: 'text-right' },
-		{ key: 'average_speed_kmh', label: m.segment_avg_speed(), align: 'text-right' },
+		{ key: 'average_speed_kmh', label: m.segment_top_speed(), align: 'text-right' },
 		{ key: 'local_kom_holder', label: m.segment_local_kom(), align: 'text-left' },
 		{ key: 'member_count', label: m.segment_column_members(), align: 'text-right' },
 		{
@@ -35,7 +35,7 @@
 	let segments = $state<CatalogSegment[]>([]);
 	let mine = $state(untrack(() => !!data.member));
 	let selectedOrder = $state<CatalogSort[] | null>(null);
-	const order = $derived(selectedOrder ?? defaultCatalogSort(mine));
+	const order = $derived(selectedOrder ?? defaultCatalogSort());
 	let sorting = $state(false);
 	let hasMore = $state(false);
 	let loading = $state(true);

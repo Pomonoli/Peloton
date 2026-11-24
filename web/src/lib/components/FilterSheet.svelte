@@ -7,6 +7,7 @@
 	let {
 		children,
 		toolbar,
+		belowToolbar,
 		label = m.mobile_filters(),
 		active = false,
 		collapsible = false,
@@ -14,6 +15,7 @@
 	}: {
 		children: Snippet;
 		toolbar?: Snippet;
+		belowToolbar?: Snippet;
 		label?: string;
 		active?: boolean;
 		collapsible?: boolean;
@@ -74,6 +76,8 @@
 		{/if}
 	</div>
 {/if}
+
+{@render belowToolbar?.()}
 
 {#if mobile.current}
 	<dialog

@@ -170,6 +170,7 @@ func newAuthServer(app *App, logger *slog.Logger) *connectadapter.AuthServer {
 func registerReadServices(server *connectrpc.Server, app *App, logger *slog.Logger) {
 	statsSvc := connectadapter.NewStatsServer(app.Overviews, app.Content, app.Gear, mapImageETag)
 	statsSvc.Stats = app.Stats
+	statsSvc.Visibility = app.Visibility2
 	statsSvc.Members = communityMembers(app)
 	cairnv1connect.RegisterStatsServiceHandler(server, statsSvc)
 	segmentSvc := connectadapter.NewSegmentServer(app.SegmentViews)

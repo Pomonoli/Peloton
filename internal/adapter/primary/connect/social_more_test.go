@@ -89,7 +89,7 @@ func TestSocialServerReads(t *testing.T) {
 	anon := t.Context()
 
 	ff, err := s.ListFollowingFeed(ctx, &v1.ListFollowingFeedRequest{})
-	if err != nil || len(ff.GetItems()) != 2 || ff.GetItems()[0].GetProjected().GetId() != pub.String() {
+	if err != nil || len(ff.GetItems()) != 1 || ff.GetItems()[0].GetProjected().GetId() != pub.String() {
 		t.Fatalf("following %v %v", ff, err)
 	}
 	cl, err := s.ListClubs(ctx, &v1.ListClubsRequest{})
@@ -114,16 +114,15 @@ func TestSocialServerReads(t *testing.T) {
 	_, err = s.GetProfile(anon, &v1.GetProfileRequest{Username: "owner"})
 	wantCode(t, err, connectrpc.CodeUnauthenticated)
 	pr, err := s.GetProfile(ctx, &v1.GetProfileRequest{Username: "owner"})
-	if err != nil || !pr.GetIsPublic() || len(pr.GetActivities()) != 2 || pr.GetUser().GetUsername() != "owner" {
+	if err != nil || !pr.GetIsPublic() || len(pr.GetActivities()) != 1 || pr.GetUser().GetUsername() != "owner" {
 		t.Fatalf("profile %v %v", pr, err)
 	}
 	pa, err := s.GetProjectedActivity(ctx, &v1.GetProjectedActivityRequest{ActivityId: pub.String()})
 	if err != nil || pa.GetIsOwner() || pa.GetOwner().GetUsername() != "owner" || pa.GetActivity().GetId() != pub.String() {
 		t.Fatalf("projected %v %v", pa, err)
 	}
-	if _, err = s.GetProjectedActivity(ctx, &v1.GetProjectedActivityRequest{ActivityId: priv.String()}); err != nil {
-		t.Fatal(err)
-	}
+	_, err = s.GetProjectedActivity(ctx, &v1.GetProjectedActivityRequest{ActivityId: priv.String()})
+	wantCode(t, err, connectrpc.CodePermissionDenied)
 	_, err = s.GetSharedActivity(anon, &v1.GetSharedActivityRequest{Token: "tok"})
 	wantCode(t, err, connectrpc.CodeUnauthenticated)
 	sh, err := s.GetSharedActivity(ctx, &v1.GetSharedActivityRequest{Token: "tok"})

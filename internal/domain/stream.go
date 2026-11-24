@@ -223,3 +223,22 @@ type StreamQuery struct {
 	EndTime          time.Time
 	Resolution       StreamResolution
 }
+
+// StreamCategory is the visibility category owning a recorded channel.
+func StreamCategory(channel StreamChannel) Category {
+	switch channel {
+	case StreamChannelLatitude, StreamChannelLongitude, StreamChannelAltitude, StreamChannelGrade:
+		return CategoryMap
+	case StreamChannelSpeed, StreamChannelStrideLength, StreamChannelVerticalOscillation, StreamChannelGroundContactTime:
+		return CategoryPaceSpeed
+	case StreamChannelHeartRate, StreamChannelRespirationRate:
+		return CategoryHR
+	case StreamChannelPower, StreamChannelLeftRightBalance, StreamChannelLeftTorqueEffectiveness,
+		StreamChannelRightTorqueEffectiveness, StreamChannelLeftPedalSmoothness, StreamChannelRightPedalSmoothness:
+		return CategoryPower
+	case StreamChannelCadence:
+		return CategoryCadence
+	default:
+		return CategorySummary
+	}
+}

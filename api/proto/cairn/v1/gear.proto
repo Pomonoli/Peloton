@@ -45,6 +45,7 @@ message Gear {
   repeated GearExternalRef external_refs = 13;
   google.protobuf.Timestamp created_at = 14;
   google.protobuf.Timestamp updated_at = 15;
+  optional double weight_kg = 16; // bicycle weight; absent when unknown
 }
 
 // GearExternalRef is a provider's gear record. Mapped onto a Gear it is an
@@ -105,6 +106,7 @@ message CreateGearRequest {
   string model = 4;
   string notes = 5;
   string purchase_date = 6;
+  optional double weight_kg = 7;
 }
 message CreateGearResponse {
   Gear gear = 1;
@@ -113,7 +115,7 @@ message CreateGearResponse {
 message UpdateGearRequest {
   string id = 1;
   // Proto-style field names: name, brand, model, notes, purchase_date,
-  // kind, retired.
+  // kind, retired, weight_kg. Omit weight_kg while masking it to clear it.
   repeated string field_mask = 2;
   optional string name = 3;
   optional string brand = 4;
@@ -122,6 +124,7 @@ message UpdateGearRequest {
   optional string purchase_date = 7;
   optional GearKind kind = 8;
   optional bool retired = 9;
+  optional double weight_kg = 10;
 }
 message UpdateGearResponse {
   Gear gear = 1;

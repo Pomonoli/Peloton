@@ -40,7 +40,7 @@ func TestActivityAccess(t *testing.T) {
 	if _, vw, err := a.Visible(ctx, private, &owner, false, domain.CategoryMap); err != nil || !vw.IsOwner {
 		t.Fatalf("owner visible: %v %+v", err, vw)
 	}
-	if _, vw, err := a.Visible(ctx, private, &other, false, domain.CategoryMap); err != nil || vw.IsOwner {
+	if _, _, err := a.Visible(ctx, private, &other, false, domain.CategoryMap); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("private to other: %v", err)
 	}
 	if _, _, err := a.Visible(ctx, private, nil, false, domain.CategoryPhotos); !errors.Is(err, domain.ErrNotFound) {

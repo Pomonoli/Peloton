@@ -1,4 +1,6 @@
 <script lang="ts">
+	import StreamChart from '#lib/components/StreamChart.svelte';
+	import { formatDateOnly, intlLocale } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { memberURL } from '#lib/member.js';
 
@@ -7,7 +9,8 @@
 		ctl: number[];
 		atl: number[];
 		tsb: number[];
-		tss: number[];
+		tss: (number | null)[];
+		tss_observed?: (number | null)[];
 		coverage?: {
 			imported: number;
 			sensor_estimate: number;
@@ -22,6 +25,12 @@
 	let days = $state(180);
 	let a = $state<Analysis | null>(null);
 	let loading = $state(true);
+	const infoId = $props.id();
+	const stress = $derived(a?.tss_observed ?? a?.tss.map((value) => value || null) ?? []);
+	const offsets = $derived(a?.dates.map((date) => Date.parse(date) / 1000) ?? []);
+	const tssNumber = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 }));
+	let stressDay = $state<number | null>(null);
+	const stressIndex = $derived(stressDay === null ? -1 : offsets.indexOf(stressDay));
 
 	$effect(() => {
 		const url = memberURL(`/api/analysis?days=${days}`, data.member);
@@ -29,6 +38,8 @@
 		const request = new AbortController();
 		loading = true;
 		a = null;
+		stressDay = null;
+		hover = null;
 		void fetch(url, { signal: request.signal })
 			.then(async (response) => {
 				if (!response.ok) throw new Error();
@@ -174,6 +185,30 @@
 							<span class="inline-block size-2 shrink-0 rounded-full" style:background={s.color}
 							></span>
 							{s.label}
+							<button
+								type="button"
+								popovertarget={infoId + s.key}
+								onfocus={(event) => {
+									if (event.currentTarget.matches(':focus-visible')) {
+										document.getElementById(infoId + s.key)?.showPopover();
+									}
+								}}
+								aria-label={m.analysis_metric_info({ metric: s.label })}
+								aria-describedby={infoId + s.key}
+								class="grid size-7 shrink-0 place-items-center rounded-full hover:text-accent-300 focus-visible:outline-2 focus-visible:outline-accent-500"
+							>
+								<span
+									aria-hidden="true"
+									class="grid size-4 place-items-center rounded-full border text-[10px]">i</span
+								>
+							</button>
+							<p
+								id={infoId + s.key}
+								popover="auto"
+								class="fixed inset-x-0 top-auto bottom-[max(5rem,env(safe-area-inset-bottom))] mx-auto w-max max-w-[calc(100vw-2rem)] rounded-lg border border-zinc-700 bg-panel px-3 py-2 text-sm text-quiet shadow-lg"
+							>
+								{s.description}
+							</p>
 						</div>
 						<div class="mt-1 text-lg font-bold tabular-nums sm:text-2xl text-zinc-100">
 							{a.dates.length
@@ -182,23 +217,9 @@
 									: a.current[s.key].toFixed(1)
 								: '—'}
 						</div>
-						<p class="mt-1 text-xs text-quiet">{s.description}</p>
 					</div>
 				{/each}
 			</div>
-		{/if}
-
-		{#if a?.coverage}
-			<dl class="flex flex-wrap gap-x-5 gap-y-1 text-xs">
-				{#each [{ label: m.analysis_stress_imported(), count: a.coverage.imported }, { label: m.analysis_stress_sensor(), count: a.coverage.sensor_estimate }, { label: m.analysis_stress_duration(), count: a.coverage.duration_estimate }, { label: m.analysis_stress_missing(), count: a.coverage.missing }] as item (item.label)}
-					<div class="flex gap-1">
-						<dt class="text-quiet">{item.label}</dt>
-						<dd class="font-semibold tabular-nums">{item.count}</dd>
-					</div>
-				{/each}
-			</dl>
-		{:else if a?.dates.length}
-			<p class="text-xs text-quiet">{m.analysis_training_estimated()}</p>
 		{/if}
 
 		<!-- chart -->
@@ -309,5 +330,42 @@
 				</div>
 			{/if}
 		</div>
+		{#if a}
+			<section class="min-w-0 space-y-2 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4">
+				<h2 class="text-sm font-medium">{m.analysis_tss()}</h2>
+				{#if a?.coverage}
+					<dl class="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+						{#each [{ label: m.analysis_stress_imported(), count: a.coverage.imported }, { label: m.analysis_stress_sensor(), count: a.coverage.sensor_estimate }, { label: m.analysis_stress_duration(), count: a.coverage.duration_estimate }, { label: m.analysis_stress_missing(), count: a.coverage.missing }] as item (item.label)}
+							<div class="flex gap-1">
+								<dt class="text-quiet">{item.label}</dt>
+								<dd class="font-semibold tabular-nums">{item.count}</dd>
+							</div>
+						{/each}
+					</dl>
+				{:else if a?.dates.length}
+					<p class="text-xs text-quiet">{m.analysis_training_estimated()}</p>
+				{/if}
+				{#if stress.some((value) => value != null)}
+					<StreamChart
+						{offsets}
+						series={[{ label: 'TSS', values: stress, color: 'var(--plot-power)' }]}
+						height={170}
+						calendar
+						legend={false}
+						yAxis={{ label: 'TSS', format: (value) => tssNumber.format(value) }}
+						onHover={(date) => (stressDay = date)}
+					/>
+					{#if stressDay !== null && stress[stressIndex] != null}
+						<p class="text-xs text-quiet">
+							{formatDateOnly(new Date(stressDay * 1000).toISOString())} · {tssNumber.format(
+								stress[stressIndex]!
+							)} TSS
+						</p>
+					{/if}
+				{:else}
+					<p class="text-sm text-quiet">{m.analysis_tss_empty()}</p>
+				{/if}
+			</section>
+		{/if}
 	{/if}
 </div>

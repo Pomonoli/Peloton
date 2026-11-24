@@ -18,7 +18,7 @@ func (s *CommunityRecords) List(ctx context.Context, viewer domain.UserID) ([]do
 	if viewer == (domain.UserID{}) {
 		return nil, port.NewActionError(port.ActionErrorForbidden, "Authentication required")
 	}
-	rows, err := s.Reader.ListCommunityRecords(ctx, nil)
+	rows, err := s.Reader.ListCommunityRecords(port.WithCommunityViewer(ctx, viewer), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (s *CommunityRecords) Detail(ctx context.Context, viewer domain.UserID, buc
 	if !bucket.Valid() || domain.RemovedRecordDistance(bucket.WindowKind, bucket.WindowValue) {
 		return nil, port.NewActionError(port.ActionErrorInvalid, "Invalid record category or window")
 	}
-	return s.Reader.ListCommunityRecords(ctx, &bucket)
+	return s.Reader.ListCommunityRecords(port.WithCommunityViewer(ctx, viewer), &bucket)
 }
 
 // StandardRecordBuckets returns the record categories computed for an activity type.

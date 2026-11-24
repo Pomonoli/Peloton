@@ -32,7 +32,7 @@ func (s *ActivityServer) ListLaps(ctx context.Context, req *v1.ListLapsRequest) 
 	if err != nil {
 		return nil, err
 	}
-	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
+	act, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func (s *ActivityServer) ListLaps(ctx context.Context, req *v1.ListLapsRequest) 
 		out.SourceId = sid.String()
 	}
 	for i, l := range laps {
-		out.Laps = append(out.Laps, lapToProto(l, i))
+		out.Laps = append(out.Laps, lapToProto(viewer.RedactLap(l), i))
 	}
 	return out, nil
 }
@@ -84,6 +84,7 @@ func (s *ActivityServer) GetActivityZones(ctx context.Context, req *v1.GetActivi
 	if err != nil {
 		return nil, actionErr(err)
 	}
+	z = viewer.RedactZones(z)
 	out := &v1.GetActivityZonesResponse{Hr: zoneSummaryToProto(z.HR, viewer.IsOwner), Power: zoneSummaryToProto(z.Power, viewer.IsOwner)}
 	if z.Decoupling != nil {
 		out.Decoupling = &v1.Decoupling{Pct: z.Decoupling.Pct, Basis: z.Decoupling.Basis, Coupled: z.Decoupling.Coupled}
@@ -110,9 +111,12 @@ func (s *ActivityServer) ListActivitySegmentEfforts(ctx context.Context, req *v1
 	if err != nil {
 		return nil, err
 	}
-	act, _, err := s.visibleActivity(ctx, req.GetActivityId())
+	act, viewer, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
+	}
+	if !viewer.Cats.Has(domain.CategorySegments) {
+		return &v1.ListActivitySegmentEffortsResponse{}, nil
 	}
 	rows, err := d.SegmentEfforts(ctx, act)
 	if err != nil {
@@ -120,6 +124,7 @@ func (s *ActivityServer) ListActivitySegmentEfforts(ctx context.Context, req *v1
 	}
 	out := &v1.ListActivitySegmentEffortsResponse{Efforts: make([]*v1.ActivitySegmentEffort, 0, len(rows))}
 	for _, row := range rows {
+		row.Effort = viewer.RedactEffort(row.Effort)
 		out.Efforts = append(out.Efforts, effortRowToProto(row))
 	}
 	return out, nil
@@ -207,7 +212,7 @@ func (s *ActivityServer) GetMergedStream(ctx context.Context, req *v1.GetMergedS
 	if !has {
 		return out, nil
 	}
-	return mergedStreamToProto(merged), nil
+	return mergedStreamToProto(viewer.RedactMergedStream(merged)), nil
 }
 
 func mergedStreamToProto(m streamalign.MergedStream) *v1.GetMergedStreamResponse {

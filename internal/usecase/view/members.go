@@ -39,6 +39,7 @@ func (m *Members) Read(ctx context.Context, viewer domain.UserID, member string)
 	if viewer == (domain.UserID{}) {
 		return ctx, viewer, ErrForbidden
 	}
+	ctx = port.WithCommunityViewer(ctx, viewer)
 	if member == "" {
 		return ctx, viewer, nil
 	}
