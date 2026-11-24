@@ -7,9 +7,8 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
-// ActivityAccess loads one activity for a caller: the owner's own, one a
-// viewer may see a category of, or any live one (signed-URL reads, where the
-// token is the authorization). Every refusal is domain.ErrNotFound.
+// ActivityAccess loads an activity for a member or an owner. Every refusal is
+// domain.ErrNotFound.
 type ActivityAccess struct {
 	activities port.ActivityReader
 	visibility *Visibility
@@ -38,9 +37,8 @@ func (a *ActivityAccess) Live(ctx context.Context, id domain.ActivityID) (domain
 	return act, nil
 }
 
-// Visible is the activity when viewer (nil = anonymous) may see cat of it;
-// owners always may.
-func (a *ActivityAccess) Visible(ctx context.Context, id domain.ActivityID, viewer *domain.UserID, hasLink bool, cat domain.Category) (domain.Activity, Viewer, error) {
+// Visible is the activity when viewer has member access.
+func (a *ActivityAccess) Visible(ctx context.Context, id domain.ActivityID, viewer *domain.UserID) (domain.Activity, Viewer, error) {
 	if viewer == nil {
 		return domain.Activity{}, Viewer{}, domain.ErrNotFound
 	}
@@ -48,8 +46,8 @@ func (a *ActivityAccess) Visible(ctx context.Context, id domain.ActivityID, view
 	if err != nil {
 		return domain.Activity{}, Viewer{}, domain.ErrNotFound
 	}
-	vw, ok := a.visibility.Resolve(ctx, act, viewer, hasLink)
-	if !ok || (!vw.IsOwner && !vw.Cats.Has(cat)) {
+	vw, ok := a.visibility.Resolve(ctx, act, viewer)
+	if !ok {
 		return domain.Activity{}, Viewer{}, domain.ErrNotFound
 	}
 	return act, vw, nil

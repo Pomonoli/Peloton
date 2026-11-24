@@ -12,7 +12,6 @@ import (
 
 type HeadToHead struct {
 	Members  *Members
-	Blocks   port.BlockRepo
 	Segments port.SegmentComparisonReader
 	Records  port.RecordComparisonReader
 }
@@ -85,15 +84,6 @@ func (h *HeadToHead) Compare(ctx context.Context, viewer domain.UserID, first, s
 		}
 		if !rider.IsActive() {
 			return out, domain.ErrNotFound
-		}
-		if rider.ID != viewer {
-			blocked, err := h.Blocks.IsBlockedEitherWay(ctx, viewer, rider.ID)
-			if err != nil {
-				return out, err
-			}
-			if blocked {
-				return out, domain.ErrNotFound
-			}
 		}
 		riders[i] = rider
 	}

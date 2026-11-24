@@ -108,8 +108,8 @@ func (h *DashboardHandlers) stats(w http.ResponseWriter, r *http.Request) {
 		"by_discipline": dashFacets(st.ByDiscipline),
 		"by_year":       yearOut,
 		"records": map[string]any{
-			"longest_distance": dashStatsRecordJSON(h.statsRecord(ctx, st.LongestDistance)),
-			"longest_duration": dashStatsRecordJSON(h.statsRecord(ctx, st.LongestDuration)),
+			"longest_distance": dashStatsRecordJSON(st.LongestDistance),
+			"longest_duration": dashStatsRecordJSON(st.LongestDuration),
 		},
 	})
 }
@@ -119,19 +119,12 @@ func (h *DashboardHandlers) redactActivity(ctx context.Context, activity domain.
 		return activity
 	}
 	id, _ := port.CommunityViewer(ctx)
-	viewer, _ := h.Visibility.Resolve(ctx, activity, &id, false)
+	viewer, ok := h.Visibility.Resolve(ctx, activity, &id)
+	if !ok {
+		activity.StartPlace, activity.StartLat, activity.StartLng = "", nil, nil
+		return activity
+	}
 	return viewer.Redact(activity)
-}
-
-func (h *DashboardHandlers) statsRecord(ctx context.Context, activity *domain.Activity) *domain.Activity {
-	if activity == nil {
-		return nil
-	}
-	redacted := h.redactActivity(ctx, *activity)
-	if !port.IsCommunityActivityRead(ctx) || redacted.Summary.AvgSpeedMps != nil {
-		redacted.Summary.AvgSpeedMps = domain.ActivityAverageSpeed(redacted.Summary.DistanceM, redacted.MovingDuration)
-	}
-	return &redacted
 }
 
 // dashStatsRecordJSON renders a record-holding activity; nil when none.
@@ -149,7 +142,7 @@ func dashStatsRecordJSON(a *domain.Activity) map[string]any {
 		"distance_m":         dist,
 		"elapsed_duration_s": int64(a.ElapsedDuration.Seconds()),
 		"moving_duration_s":  int64(a.MovingDuration.Seconds()),
-		"avg_speed_mps":      a.Summary.AvgSpeedMps,
+		"avg_speed_mps":      domain.ActivityAverageSpeed(a.Summary.DistanceM, a.MovingDuration),
 	}
 }
 

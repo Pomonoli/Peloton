@@ -164,7 +164,7 @@ func (h *FollowHandlers) projected(w http.ResponseWriter, r *http.Request) {
 func socialProjectedFeedJSON(it view.FeedItem) map[string]any {
 	var m map[string]any
 	if it.Own != nil {
-		m = projectActivityJSON(*it.Own, domain.ResolveVisibility(domain.VisibilityInput{IsOwner: true}), nil)
+		m = projectActivityJSON(*it.Own, domain.ActivityCategories(), nil)
 	} else {
 		m = projectedJSON(*it.Projected)
 	}

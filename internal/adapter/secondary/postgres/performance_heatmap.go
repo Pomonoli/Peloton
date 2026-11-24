@@ -31,15 +31,16 @@ const heatmapSourcesSQL = `
 	FROM activities a
 	JOIN activity_sources p ON p.id = a.primary_stream_source_id
 		AND p.activity_id = a.id AND p.status <> 'detached' AND p.provider <> 'derived'
+		AND (p.provider <> 'strava' OR a.provider_restricted)
 	JOIN activity_sources src ON src.activity_id = a.id
-		AND src.status <> 'detached' AND src.provider <> 'derived'
+		AND ` + canonicalPerformanceSourceSQL + ` AND src.provider <> 'derived'
 		AND (src.id = p.id OR src.parsed @> '{"has_stream":true}')`
 
 func (r *PerformanceHeatmapRepo) HeatmapActivities(ctx context.Context, member domain.UserID, filter port.ActivityListFilter) ([]port.HeatmapActivity, error) {
 	conditions, args := activityFilterConds(member, filter, "")
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		WITH filtered AS (
-			SELECT id FROM activities WHERE `+strings.Join(conditions, " AND ")+communityReadSQL(ctx, "")+communityMapSQL(ctx, "")+`
+			SELECT id FROM activities WHERE `+strings.Join(conditions, " AND ")+communityReadSQL(ctx, "")+`
 		), candidates AS (
 			SELECT a.id, p.id AS primary_id, array_agg(src.id ORDER BY src.id) AS sources,
 				`+heatmapSignatureSQL+` AS signature
@@ -180,6 +181,14 @@ func (r *PerformanceHeatmapRepo) VisitHeatmapBins(ctx context.Context, member do
 	if len(ids) == 0 {
 		return nil
 	}
+	var zones []domain.PrivacyZone
+	if port.IsCommunityActivityRead(ctx) {
+		var err error
+		zones, err = NewVisibilityRepo(r.pool).ListPrivacyZones(ctx, member)
+		if err != nil {
+			return err
+		}
+	}
 	args := []any{ids, versions, member.UUID(), int16(viewport.Level)}
 	filter := ""
 	if b := viewport.Bounds; b != nil {
@@ -199,26 +208,19 @@ func (r *PerformanceHeatmapRepo) VisitHeatmapBins(ctx context.Context, member do
 				OR ($7 > $8 AND (t.tile_x >= $7 OR t.tile_x <= $8)))`
 		}
 	}
-	showHR, showPower := "true", "true"
-	if port.IsCommunityActivityRead(ctx) {
-		viewer := communityViewerSQL(ctx)
-		showHR = sharedCategorySQL("a.", viewer, "'hr'")
-		showPower = sharedCategorySQL("a.", viewer, "'power'")
-	}
-	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT t.bins, `+showHR+`, `+showPower+`
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT t.bins
 		FROM unnest($1::uuid[], $2::text[]) f(id,signature)
 		JOIN activities a ON a.id=f.id AND a.user_id=$3 AND a.deleted_at IS NULL AND a.type='ride'
 		JOIN performance_heatmap_cache h ON h.activity_id=f.id AND h.signature=f.signature
 		JOIN performance_heatmap_tiles t ON t.activity_id=f.id AND t.level=$4
-		WHERE TRUE`+communityReadSQL(ctx, "a.")+communityMapSQL(ctx, "a.")+filter+` ORDER BY t.activity_id, t.tile_x, t.tile_y`, args...)
+		WHERE TRUE`+communityReadSQL(ctx, "a.")+filter+` ORDER BY t.activity_id, t.tile_x, t.tile_y`, args...)
 	if err != nil {
 		return fmt.Errorf("read heatmap tiles: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var raw []byte
-		var hr, power bool
-		if err := rows.Scan(&raw, &hr, &power); err != nil {
+		if err := rows.Scan(&raw); err != nil {
 			return err
 		}
 		if len(raw)%heatmapBinSize != 0 {
@@ -229,13 +231,9 @@ func (r *PerformanceHeatmapRepo) VisitHeatmapBins(ctx context.Context, member do
 			return err
 		}
 		for _, bin := range bins {
-			if !hr {
-				bin.HeartRate = heatmap.Weighted{}
+			if !bin.Key.IntersectsPrivacyZone(viewport.Level, zones) {
+				visit(bin)
 			}
-			if !power {
-				bin.Power = heatmap.Weighted{}
-			}
-			visit(bin)
 		}
 	}
 	return rows.Err()

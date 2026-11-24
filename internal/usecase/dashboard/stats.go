@@ -25,7 +25,7 @@ type Stats struct {
 	bestEfforts  port.BestEffortRepo
 	streams      port.StreamRepo
 	now          func() time.Time
-	PrivacyZones port.VisibilityRepo
+	PrivacyZones port.PrivacyZoneRepo
 }
 
 // NewStats wires the repos; metrics, bestEfforts and streams may be nil.
@@ -181,7 +181,6 @@ func (s *Stats) Heatmap(ctx context.Context, userID domain.UserID, filter port.A
 	if s.streams == nil {
 		return HeatmapResult{}, ErrUnavailable
 	}
-	filter.RequireVisibleMap = true
 	filter.Sort = "date_desc"
 	filter.Limit = HeatmapMaxActivities
 	filter.Offset = 0

@@ -100,7 +100,7 @@ func TestAPI_FriendsDirectory(t *testing.T) {
 	}
 }
 
-func TestAPI_SharingDefaultsAndExplicitLimits(t *testing.T) {
+func TestAPI_MemberSharingAndLegacyWrites(t *testing.T) {
 	env := newITDiscoveryEnv(t)
 	owner := env.user("visibility-owner", domain.UserRoleUser)
 	viewer := env.user("visibility-viewer", domain.UserRoleUser)
@@ -142,14 +142,15 @@ func TestAPI_SharingDefaultsAndExplicitLimits(t *testing.T) {
 	laps := "/api/activities/" + id + "/laps"
 	viewer.do(http.MethodGet, laps, nil, http.StatusOK)
 	owner.do(http.MethodPut, policyPath, map[string]any{"policy": map[string][]string{}}, http.StatusOK)
-	viewer.do(http.MethodGet, laps, nil, http.StatusNotFound)
+	viewer.do(http.MethodGet, laps, nil, http.StatusOK)
 	owner.do(http.MethodGet, laps, nil, http.StatusOK)
 	var saved struct {
 		Policy map[string][]string `json:"policy"`
 	}
-	if err := json.Unmarshal(owner.do(http.MethodGet, policyPath, nil, http.StatusOK), &saved); err != nil || len(saved.Policy["public"]) != 0 {
-		t.Fatalf("explicit empty policy = %+v, err = %v", saved, err)
+	if err := json.Unmarshal(owner.do(http.MethodGet, policyPath, nil, http.StatusOK), &saved); err != nil || len(saved.Policy["public"]) != len(domain.AllCategories) {
+		t.Fatalf("fixed policy after legacy write = %+v, err = %v", saved, err)
 	}
 	owner.do(http.MethodPut, "/api/profile/public", map[string]bool{"public": false}, http.StatusOK)
-	viewer.do(http.MethodGet, profilePath, nil, http.StatusForbidden)
+	viewer.do(http.MethodGet, profilePath, nil, http.StatusOK)
+	env.anon().do(http.MethodGet, profilePath, nil, http.StatusUnauthorized)
 }

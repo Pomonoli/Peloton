@@ -68,7 +68,7 @@ func detailOwned(w http.ResponseWriter, r *http.Request, auth *Auth, access *vie
 }
 
 func (h *DetailHandlers) laps(w http.ResponseWriter, r *http.Request) {
-	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategorySummary, "bad activity id")
+	act, _, ok := detailVisible(w, r, h.Auth, h.Access, "bad activity id")
 	if !ok {
 		return
 	}
@@ -78,14 +78,13 @@ func (h *DetailHandlers) laps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"laps": detailLapsJSON(laps, viewer)})
+	writeJSON(w, http.StatusOK, map[string]any{"laps": detailLapsJSON(laps)})
 }
 
 // detailLapsJSON renders laps, defaulting index to position.
-func detailLapsJSON(laps []domain.ActivityLap, viewer view.Viewer) []map[string]any {
+func detailLapsJSON(laps []domain.ActivityLap) []map[string]any {
 	out := make([]map[string]any, 0, len(laps))
 	for i, l := range laps {
-		l = viewer.RedactLap(l)
 		idx := l.Index
 		if idx == 0 {
 			idx = i + 1
@@ -108,7 +107,7 @@ func detailLapsJSON(laps []domain.ActivityLap, viewer view.Viewer) []map[string]
 }
 
 func (h *DetailHandlers) zones(w http.ResponseWriter, r *http.Request) {
-	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryZones, "bad activity id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, "bad activity id")
 	if !ok {
 		return
 	}
@@ -117,7 +116,6 @@ func (h *DetailHandlers) zones(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err, "stream query failed")
 		return
 	}
-	z = viewer.RedactZones(z)
 	resp := map[string]any{"hr": detailZoneSummaryJSON(z.HR, viewer.IsOwner), "power": detailZoneSummaryJSON(z.Power, viewer.IsOwner)}
 	if z.Decoupling != nil {
 		resp["decoupling"] = map[string]any{"pct": z.Decoupling.Pct, "basis": z.Decoupling.Basis, "coupled": z.Decoupling.Coupled}
@@ -141,7 +139,7 @@ func detailZoneSummaryJSON(s *domain.ZoneSummary, includeReference bool) any {
 }
 
 func (h *DetailHandlers) mergedStream(w http.ResponseWriter, r *http.Request) {
-	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, "bad activity id")
 	if !ok {
 		return
 	}
@@ -178,7 +176,7 @@ func detailMergedStreamJSON(merged streamalign.MergedStream) map[string]any {
 }
 
 func (h *DetailHandlers) similar(w http.ResponseWriter, r *http.Request) {
-	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, "bad activity id")
 	if !ok {
 		return
 	}
@@ -223,7 +221,7 @@ func (h *DetailHandlers) similar(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DetailHandlers) exportOptions(w http.ResponseWriter, r *http.Request) {
-	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, "bad activity id")
 	if !ok {
 		return
 	}
@@ -242,7 +240,7 @@ func (h *DetailHandlers) exportOptions(w http.ResponseWriter, r *http.Request) {
 // exportFile serves the file; ?exclude=gps,heart_rate,… drops features.
 func (h *DetailHandlers) exportFile(format string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad activity id")
+		act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, "bad activity id")
 		if !ok {
 			return
 		}

@@ -21,9 +21,9 @@ func mountRestDash(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	if app.BestEfforts != nil {
 		(&rest.RecordHandlers{Auth: auth, Stats: app.Stats, Community: &besteffort.CommunityRecords{Reader: app.BestEfforts}, Log: logger}).Mount(mux)
 	}
-	if app.Users != nil && app.Blocks != nil && app.Segments != nil && app.BestEfforts != nil {
+	if app.Users != nil && app.Segments != nil && app.BestEfforts != nil {
 		(&rest.HeadToHeadHandlers{Auth: auth, Log: logger, Views: &view.HeadToHead{
-			Members: auth.Members, Blocks: app.Blocks, Segments: app.Segments, Records: app.BestEfforts,
+			Members: auth.Members, Segments: app.Segments, Records: app.BestEfforts,
 		}}).Mount(mux)
 	}
 	if app.CustomBestEfforts != nil {

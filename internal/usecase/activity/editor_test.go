@@ -61,7 +61,6 @@ type editorFixture struct {
 	uc       *Editor
 	repo     *inmem.ActivityRepo
 	remerges *remergeSpy
-	fed      *fedRec
 	events   *eventSpy
 	overlays *memOverlays
 	gear     *fakeGear
@@ -71,14 +70,14 @@ type editorFixture struct {
 
 func newEditorFixture(privacy domain.ActivityPrivacy) *editorFixture {
 	f := &editorFixture{
-		repo: inmem.NewActivityRepo(), remerges: &remergeSpy{}, fed: &fedRec{}, events: &eventSpy{},
+		repo: inmem.NewActivityRepo(), remerges: &remergeSpy{}, events: &eventSpy{},
 		overlays: &memOverlays{set: map[domain.ActivityID]domain.ClassificationOverride{}},
 		gear:     &fakeGear{owned: map[domain.GearID]domain.UserID{}},
 		user:     domain.UserID(uuid.New()), act: domain.ActivityID(uuid.New()),
 	}
 	f.repo.Activities[f.act] = domain.Activity{ID: f.act, UserID: f.user, Type: domain.ActivityTypeRide, StartTime: saNow, Privacy: privacy, Title: "old"}
 	f.uc = NewEditor(f.repo, nil)
-	f.uc.ClassOverrides, f.uc.Gear, f.uc.Federation, f.uc.Events, f.uc.FollowUps = f.overlays, f.gear, f.fed, f.events, f.remerges
+	f.uc.ClassOverrides, f.uc.Gear, f.uc.Events, f.uc.FollowUps = f.overlays, f.gear, f.events, f.remerges
 	return f
 }
 
@@ -146,29 +145,15 @@ func TestEditor_UserFieldsRemergeAndEvent(t *testing.T) {
 	if len(f.events.keys) != 1 || f.events.keys[0] != "activity.updated" {
 		t.Fatalf("events %v", f.events.keys)
 	}
-	if len(f.fed.created)+len(f.fed.deleted) != 0 {
-		t.Fatal("no federation without a privacy edit")
-	}
 }
 
-func TestEditor_FederatesPublicTransitions(t *testing.T) {
-	for _, tc := range []struct {
-		name             string
-		from, to         domain.ActivityPrivacy
-		created, deleted int
-	}{
-		{"go public", domain.PrivacyPrivate, domain.PrivacyPublic, 1, 0},
-		{"leave public", domain.PrivacyPublic, domain.PrivacyFollowers, 0, 1},
-		{"non-public shuffle", domain.PrivacyFollowers, domain.PrivacyPrivate, 0, 0},
-		{"unchanged public", domain.PrivacyPublic, domain.PrivacyPublic, 0, 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newEditorFixture(tc.from)
-			if _, err := f.update(t, domain.ActivityPatch{Privacy: new(tc.to)}); err != nil {
-				t.Fatal(err)
-			}
-			if len(f.fed.created) != tc.created || len(f.fed.deleted) != tc.deleted {
-				t.Fatalf("created %v deleted %v", f.fed.created, f.fed.deleted)
+func TestEditor_LegacyPrivacyWritesKeepMemberAccess(t *testing.T) {
+	for _, privacy := range []domain.ActivityPrivacy{domain.PrivacyPrivate, domain.PrivacyFollowers, domain.PrivacyPublic} {
+		t.Run(string(privacy), func(t *testing.T) {
+			f := newEditorFixture(domain.PrivacyPublic)
+			got, err := f.update(t, domain.ActivityPatch{Privacy: &privacy})
+			if err != nil || got.Privacy != domain.PrivacyPublic {
+				t.Fatalf("legacy update kept privacy %q, err = %v", got.Privacy, err)
 			}
 		})
 	}

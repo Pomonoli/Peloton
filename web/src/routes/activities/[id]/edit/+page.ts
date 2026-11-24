@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { connectClients, isUnauthenticated, Code, ConnectError } from '#lib/connect.js';
-import { ActivityType, Discipline, GearSetBy, Privacy } from '#lib/proto/cairn/v1/activity_pb.js';
+import { ActivityType, Discipline, GearSetBy } from '#lib/proto/cairn/v1/activity_pb.js';
 import { enumName, protoDurationToSeconds } from '#lib/proto-helpers.js';
 import { gearToView } from '#lib/gear.js';
 import type { PageLoad } from './$types';
@@ -24,7 +24,6 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 				title: a.title,
 				description: a.description,
 				type: enumName(ActivityType, a.type),
-				privacy: a.privacy || Privacy.PRIVATE,
 				discipline: enumName(Discipline, a.discipline),
 				isVirtual: a.isVirtual,
 				isEbike: a.isEbike,

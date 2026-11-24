@@ -106,7 +106,7 @@ func MergeWithOverrides(
 		UserID:          userID,
 		MergeProvenance: MergeProvenance{},
 		MergedAt:        now,
-		Privacy:         PrivacyPublic, // recompute preserves an existing activity's selection
+		Privacy:         PrivacyPublic,
 	}
 
 	// ----- 1. Classification (bootstrap policy) ------------------------

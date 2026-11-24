@@ -7,19 +7,13 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
-// ContentURL is a short-lived URL a client fetches with a plain GET and no
-// credentials (image loaders and share sheets cannot add headers). It is a
-// bearer credential for that one object: short TTL, signed per request.
+// ContentURL is a signed, short-lived URL fetched by an authenticated member.
 type ContentURL struct {
 	URL       string
 	ExpiresAt time.Time
 }
 
-// ContentSigner mints the URLs under which binary content (photos, static
-// maps, exports) is delivered. Implemented by usecase/content: a stored object
-// is presigned on the public object-store endpoint when one is configured,
-// otherwise (and always for content rendered on demand) the URL points at the
-// server's own signed /content/{token} route.
+// ContentSigner mints URLs for binary content downloads and uploads.
 type ContentSigner interface {
 	// Blob signs a stored object. contentType and filename are hints for the
 	// response headers; filename empty → inline.

@@ -69,13 +69,13 @@ func TestProfilesFollowListsAndBlocks(t *testing.T) {
 	if cards, _ := p.Following(ctx, me, me, 10, 0); len(cards) != 1 || cards[0].ID != alice {
 		t.Fatalf("following: %+v", cards)
 	}
-	// A blocked user's graph is gone; a private profile is for followers only.
+	// Blocks still apply to the follow graph.
 	if _, err := p.Followers(ctx, me, bob, 10, 0); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("blocked graph: %v", err)
 	}
 	stranger := domain.UserID(uuid.New())
-	if _, err := p.Following(ctx, stranger, alice, 10, 0); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("private graph: %v", err)
+	if _, err := p.Following(ctx, stranger, alice, 10, 0); err != nil {
+		t.Fatalf("member graph: %v", err)
 	}
 	if cards, _ := p.Blocked(ctx, me); len(cards) != 1 || cards[0].ID != bob {
 		t.Fatalf("blocked: %+v", cards)

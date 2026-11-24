@@ -39,8 +39,6 @@ type Editor struct {
 	ClassOverrides port.ClassificationOverrideRepo
 	// Gear backs gear edits (nil → ErrGearUnavailable).
 	Gear GearPicker
-	// Federation announces public⇄non-public transitions (optional).
-	Federation port.FederationPublisher
 	// Events receives activity.updated for the owner's open streams (optional).
 	Events port.ActivityEventSink
 	// FollowUps re-merges with follow-ups (optional; nil → recompute only).
@@ -60,7 +58,6 @@ func (uc *Editor) Update(ctx context.Context, userID domain.UserID, id domain.Ac
 		return domain.Activity{}, err
 	}
 
-	prevPrivacy := act.Privacy
 	applyUserFields(&act, patch)
 	if patch.Gear != nil {
 		if err := uc.applyGear(ctx, &act, *patch.Gear); err != nil {
@@ -80,9 +77,6 @@ func (uc *Editor) Update(ctx context.Context, userID domain.UserID, id domain.Ac
 	updated, err := uc.activities.GetActivity(ctx, id)
 	if err != nil {
 		return domain.Activity{}, fmt.Errorf("reload activity: %w", err)
-	}
-	if patch.Privacy != nil {
-		uc.federate(ctx, prevPrivacy, updated)
 	}
 	if uc.Events != nil {
 		uc.Events.Publish(domain.NewActivityEvent(domain.ActivityEventActivityUpdated, updated.UserID, "activity.updated").For(updated.ID, domain.SourceID{}))
@@ -126,7 +120,8 @@ func applyUserFields(act *domain.Activity, p domain.ActivityPatch) {
 		act.Tags = domain.MergeTags(act.Tags, p.AddTags)
 	}
 	if p.Privacy != nil {
-		act.Privacy = *p.Privacy
+		// Older clients can still submit the legacy field.
+		act.Privacy = domain.PrivacyPublic
 	}
 }
 
@@ -199,18 +194,4 @@ func (uc *Editor) remerge(ctx context.Context, id domain.ActivityID) error {
 	}
 	_, err := uc.recompute.Execute(ctx, id)
 	return err
-}
-
-// federate announces going public (the ingest-time publish only covers
-// public-at-import) and retracts leaving public. Best-effort.
-func (uc *Editor) federate(ctx context.Context, prev domain.ActivityPrivacy, updated domain.Activity) {
-	if uc.Federation == nil || prev == updated.Privacy {
-		return
-	}
-	switch {
-	case updated.Privacy == domain.PrivacyPublic:
-		uc.Federation.PublishCreate(ctx, updated)
-	case prev == domain.PrivacyPublic:
-		uc.Federation.PublishDelete(ctx, updated.UserID, updated.ID)
-	}
 }

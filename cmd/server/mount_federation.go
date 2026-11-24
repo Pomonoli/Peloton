@@ -18,14 +18,6 @@ import (
 // loosen it before anything is served.
 var fedClient = apclient.NewClient()
 
-// fedAudience is the shared visibility resolver, nil until wired.
-func fedAudience(app *App) federation.Audience {
-	if app.Visibility2 == nil {
-		return nil
-	}
-	return app.Visibility2
-}
-
 func fedRemote(app *App) *federation.Remote {
 	r := &federation.Remote{Client: fedClient}
 	if app.FederationActors != nil {
@@ -50,7 +42,6 @@ func fedPublisher(app *App, logger *slog.Logger) *federation.Publisher {
 	p := &federation.Publisher{
 		Enabled:  app.FederationEnabled,
 		Instance: federation.NewInstance(app.PublicBaseURL),
-		Audience: fedAudience(app),
 		Remote:   fedRemote(app),
 		Sender:   fedSender(app),
 		Go:       syncGo(logger),
@@ -103,12 +94,11 @@ func mountRestFederation(mux *http.ServeMux, app *App, cfg *config.Config, logge
 	remote, sender := fedRemote(app), fedSender(app)
 	actors := &federation.Actors{
 		Instance: in, Users: app.Users, Keys: app.FederationKeys, Follows: app.Follows,
-		Activities: app.Activities, FedFollows: app.FederationFollows,
-		Audience: fedAudience(app), Remote: remote, Sender: sender, Log: logger,
+		FedFollows: app.FederationFollows, Remote: remote, Sender: sender, Log: logger,
 	}
 	inbox := &federation.Inbox{
 		Instance: in, Follows: app.FederationFollows, Feed: app.FederationFeed, Engagement: app.Engagement,
-		Activities: app.Activities, Audience: fedAudience(app), Sender: sender, Go: syncGo(logger), Log: logger,
+		Activities: app.Activities, Sender: sender, Go: syncGo(logger), Log: logger,
 	}
 	if app.InboxDedup != nil {
 		inbox.Dedup = app.InboxDedup

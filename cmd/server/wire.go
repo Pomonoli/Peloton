@@ -610,7 +610,6 @@ func wireActivityEditor(app *App, logger *slog.Logger) {
 	app.ActivityEditor = activity.NewEditor(app.Activities, app.RecomputeActivity)
 	app.ActivityEditor.ClassOverrides = app.ClassOverrides
 	app.ActivityEditor.Gear = app.Gear
-	app.ActivityEditor.Federation = newFederationPublisher(app, logger)
 	app.ActivityEditor.Events = app.ActivityEvents
 }
 
@@ -862,7 +861,7 @@ func wireAppGeocoder(app *App, cfg *config.Config, logger *slog.Logger) {
 
 // wireAppViews builds the read-side use cases REST and Connect both render from.
 func wireAppViews(app *App, logger *slog.Logger) {
-	app.Visibility2 = &view.Visibility{Policies: app.Visibility, Follows: app.Follows, Blocks: app.Blocks}
+	app.Visibility2 = &view.Visibility{Zones: app.Visibility, Blocks: app.Blocks}
 	app.Exports = activityexport.NewExports(app.Streams)
 	app.Overviews = dashboard.NewOverviews(app.Activities, nil)
 	app.Searches = dashboard.NewSearches(app.Activities, app.Gear)

@@ -38,7 +38,7 @@ func (r *BestEffortRepo) ListPersonalRecords(ctx context.Context, userID domain.
 		       achieved_value, activity_id, ts
 		  FROM best_efforts b
 		 WHERE user_id = $1 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+` AND `+validCyclingMotionRecordSQL+`
-		   AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL AND a.type = b.activity_type AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+communityRecordSQL(ctx, "a.")+`)
+		   AND EXISTS (SELECT 1 FROM activities a WHERE a.id = b.activity_id AND a.deleted_at IS NULL AND a.type = b.activity_type AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`)
 		 ORDER BY activity_type, metric, window_kind, window_value,
 		          (CASE WHEN metric = ANY($2) THEN achieved_value ELSE -achieved_value END) ASC,
 		          ts ASC`,
@@ -182,7 +182,7 @@ func (r *BestEffortRepo) ListForActivity(ctx context.Context, activityID domain.
 	rows, err := db.Query(ctx,
 		`SELECT DISTINCT ON (b.metric, b.window_kind, b.window_value) `+prefixedColumns(bestEffortColumns, "b.")+`
 		   FROM best_efforts b JOIN activities a ON a.id = b.activity_id
-		  WHERE b.activity_id = $1 AND NOT b.downhill_excluded AND `+recordDistanceSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+communityRecordSQL(ctx, "a.")+`
+		  WHERE b.activity_id = $1 AND NOT b.downhill_excluded AND `+recordDistanceSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
 		  ORDER BY b.metric, b.window_kind, b.window_value,
 		           CASE WHEN b.metric = ANY($2) THEN b.achieved_value ELSE -b.achieved_value END, b.ts, b.id`,
 		activityID.UUID(), smallerIsBetterMetrics(),
@@ -269,7 +269,7 @@ func (r *BestEffortRepo) ListBestEffortHistory(
 		   JOIN activities a ON a.id = b.activity_id AND a.deleted_at IS NULL AND a.type = b.activity_type
 		  WHERE b.user_id = $1 AND b.activity_type = $2
 		    AND b.metric = $3 AND b.window_kind = $4 AND b.window_value = $5 AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+`
-		    AND `+validCyclingMotionRecordSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+communityRecordSQL(ctx, "a.")+`
+		    AND `+validCyclingMotionRecordSQL+` AND `+canonicalEffortSourceSQL("b.")+communityReadSQL(ctx, "a.")+`
 		  ORDER BY b.activity_id, b.achieved_value `+betterDir,
 		userID.UUID(), activityType, metric, windowKind, windowValue,
 	)

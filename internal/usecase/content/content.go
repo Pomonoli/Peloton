@@ -1,11 +1,6 @@
-// Package content mints and verifies the short-lived signed URLs binary
-// content (photos, static course images, exports, client uploads) is
-// delivered under, so image loaders and share sheets fetch with a plain GET.
-// A stored object is presigned on the public object-store endpoint when one
-// is configured; otherwise, and always for rendered content, the URL points at
-// the server's /content/{token} route. The token is an HMAC-signed, base64url
-// JSON claim set bound to one object and an expiry; it is the whole
-// authorization.
+// Package content mints and verifies short-lived URLs for member downloads
+// and client uploads. The token is an HMAC-signed claim set bound to one
+// object and an expiry. Downloads require an authenticated member.
 package content
 
 import (
@@ -140,23 +135,10 @@ func (s *Signer) route(cl Claims) (port.ContentURL, error) {
 	return port.ContentURL{URL: s.baseURL + "/content/" + tok, ExpiresAt: exp}, nil
 }
 
-// Blob signs a stored object.
-func (s *Signer) Blob(ctx context.Context, key, contentType, filename string) (port.ContentURL, error) {
+// Blob signs a download through the authenticated content route.
+func (s *Signer) Blob(_ context.Context, key, contentType, filename string) (port.ContentURL, error) {
 	if key == "" {
 		return port.ContentURL{}, errors.New("content: empty blob key")
-	}
-	if s.blobs != nil {
-		opts := port.PresignDownloadOpts{Expiry: s.ttl, ResponseContentType: contentType}
-		if filename != "" {
-			opts.ResponseContentDisposition = "attachment; filename=\"" + filename + "\""
-		}
-		signed, err := s.blobs.PresignPublicDownload(ctx, key, opts)
-		if err == nil {
-			return port.ContentURL{URL: signed.URL, ExpiresAt: signed.ExpiresAt}, nil
-		}
-		if !errors.Is(err, port.ErrNoPublicEndpoint) {
-			return port.ContentURL{}, err
-		}
 	}
 	return s.route(Claims{Kind: KindBlob, Key: key, ContentType: contentType, Filename: filename})
 }

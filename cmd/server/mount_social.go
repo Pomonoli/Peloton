@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/opencairn-org/cairn-core/internal/adapter/primary/rest"
-	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/moderation"
 	"github.com/opencairn-org/cairn-core/internal/usecase/social"
 )
@@ -52,17 +51,12 @@ func mountRestProfiles(mux *http.ServeMux, app *App, auth *rest.Auth, logger *sl
 	if app.Users == nil {
 		return
 	}
-	privacy := &social.Privacy{Users: app.Users}
-	var visibility port.VisibilityRepo
-	if app.Visibility != nil {
-		visibility = app.Visibility
-	}
-	privacy.Visibility = visibility
-	h := &rest.ProfileHandlers{Auth: auth, Profiles: app.ProfileViews, Privacy: privacy}
+	h := &rest.ProfileHandlers{Auth: auth, Profiles: app.ProfileViews}
 	h.Mount(mux)
 	auth.MountMembers(mux)
-	if visibility != nil {
-		h.MountVisibility(mux)
+	if app.Visibility != nil {
+		h.Privacy = &social.Privacy{Visibility: app.Visibility}
+		h.MountPrivacyZones(mux)
 	}
 	logger.Info("profile endpoints mounted")
 }

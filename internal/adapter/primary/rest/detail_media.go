@@ -37,15 +37,15 @@ func detailServePNG(w http.ResponseWriter, r *http.Request, data []byte) {
 	_, _ = w.Write(data) //nolint:gosec // G705: rendered PNG bytes served as image/png
 }
 
-// detailVisible loads the {id} activity for a member who may see its category.
+// detailVisible loads the {id} activity for a member.
 func detailVisible(w http.ResponseWriter, r *http.Request, auth *Auth, access *view.ActivityAccess,
-	cat domain.Category, badID string) (domain.Activity, view.Viewer, bool) {
+	badID string) (domain.Activity, view.Viewer, bool) {
 	id, err := domain.ParseUUID[domain.ActivityID](r.PathValue("id"))
 	if err != nil {
 		http.Error(w, badID, http.StatusBadRequest)
 		return domain.Activity{}, view.Viewer{}, false
 	}
-	act, vw, err := access.Visible(r.Context(), id, auth.Viewer(r), false, cat)
+	act, vw, err := access.Visible(r.Context(), id, auth.Viewer(r))
 	if err != nil {
 		http.NotFound(w, r)
 		return domain.Activity{}, view.Viewer{}, false
@@ -70,7 +70,7 @@ func (h *MapImageHandlers) Mount(mux *http.ServeMux) {
 }
 
 func (h *MapImageHandlers) serve(w http.ResponseWriter, r *http.Request) {
-	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryMap, "bad id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, "bad id")
 	if !ok {
 		return
 	}
@@ -127,9 +127,8 @@ const (
 //	GET    /api/activities/{id}/attachments/{aid}/raw    stream the image bytes
 //	DELETE /api/activities/{id}/attachments/{aid}        remove
 //
-// Reads are gated on the photos category for non-owners (like map.png);
-// writes are owner-only. Bytes are proxied on /raw so the storage endpoint
-// never leaks to the browser.
+// Reads require member access to the activity. Writes require ownership.
+// The server proxies photo downloads.
 type AttachmentHandlers struct {
 	Auth   *Auth
 	Access *view.ActivityAccess
@@ -145,7 +144,7 @@ func (h *AttachmentHandlers) Mount(mux *http.ServeMux) {
 }
 
 func (h *AttachmentHandlers) visible(w http.ResponseWriter, r *http.Request) (domain.Activity, bool, bool) {
-	act, vw, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategoryPhotos, "invalid activity id")
+	act, vw, ok := detailVisible(w, r, h.Auth, h.Access, "invalid activity id")
 	return act, vw.IsOwner, ok
 }
 
@@ -370,7 +369,7 @@ func (h *ContentHandlers) signedActivity(w http.ResponseWriter, r *http.Request,
 		http.NotFound(w, r)
 		return domain.Activity{}, false
 	}
-	act, viewer, err := h.Access.Visible(r.Context(), id, &me, false, domain.CategoryMap)
+	act, viewer, err := h.Access.Visible(r.Context(), id, &me)
 	if err != nil || len(viewer.Zones) > 0 || (export && !viewer.CanExport()) {
 		http.NotFound(w, r)
 		return domain.Activity{}, false

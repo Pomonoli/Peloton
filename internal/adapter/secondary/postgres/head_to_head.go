@@ -9,22 +9,19 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
-func comparisonRidesSQL(extra string) string {
-	return `
+const comparisonRidesSQL = `
 	WITH rides AS (
-		SELECT a.id, a.user_id, a.primary_stream_source_id, a.provider_restricted, a.privacy, a.visibility_override
+		SELECT a.id, a.user_id, a.primary_stream_source_id, a.provider_restricted
 		FROM activities a
 		WHERE a.user_id IN ($1, $2) AND a.type = 'ride' AND a.deleted_at IS NULL AND ((NOT a.hidden_by_admin AND NOT a.provider_restricted) OR a.user_id = $3)
-		 AND ` + sharedCategorySQL("a.", "$3", "'summary'") + extra + `
 	)`
-}
 
 // Head-to-Head uses recorded local efforts. Derived sources may copy data
 // from another ride whose permissions cannot be inferred from this one.
 const comparisonSourceSQL = canonicalPerformanceSourceSQL + ` AND src.provider <> 'derived'`
 
 func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, first, opponent domain.UserID) ([]domain.SharedSegment, error) {
-	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL(" AND "+sharedCategorySQL("a.", "$3", "'segments'"))+`,
+	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL+`,
 		recordings AS (
 			SELECT e.id, e.segment_id, e.user_id, e.activity_id, e.elapsed_s, e.start_time,
 				dense_rank() OVER (PARTITION BY e.segment_id, e.activity_id ORDER BY
@@ -73,13 +70,13 @@ func (r *SegmentRepo) ListSharedSegments(ctx context.Context, viewer, first, opp
 func (r *BestEffortRepo) ListComparisonRecords(ctx context.Context, viewer, first, opponent domain.UserID) ([]domain.MemberRecord, error) {
 	// Use the stored window bucket. Historical sample-count windows can span
 	// a different duration when the recording was not sampled at 1 Hz.
-	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL("")+`
+	rows, err := dbtx(ctx, r.pool).Query(ctx, comparisonRidesSQL+`
 		SELECT DISTINCT ON (b.user_id, b.metric, b.window_kind, b.window_value)
 			b.user_id, b.metric, b.window_kind, b.window_value, b.activity_id, b.achieved_value
 		FROM rides a
 		JOIN best_efforts b ON b.activity_id = a.id AND b.user_id = a.user_id
 		JOIN activity_sources src ON src.id = b.activity_source_id AND src.activity_id = a.id
-		WHERE b.user_id IN ($1, $2) AND b.activity_type = 'ride'`+sharedRecordSQL("a.", "$3")+`
+		WHERE b.user_id IN ($1, $2) AND b.activity_type = 'ride'
 			AND `+comparisonSourceSQL+`
 			AND NOT b.downhill_excluded AND `+recordDistanceSQL+` AND `+validRecordSQL+`
 			AND ((b.metric = 'pace' AND b.window_kind = 'distance')

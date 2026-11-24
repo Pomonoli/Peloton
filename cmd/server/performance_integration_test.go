@@ -25,12 +25,17 @@ type performanceProperties struct {
 	Power     *float64
 }
 
+type performanceMapFeature struct {
+	Properties performanceProperties
+	Geometry   struct{ Coordinates [][2]float64 }
+}
+
 type performanceResponse struct {
 	Matched   int
 	WithTrack int `json:"with_track"`
 	Pending   int
 	GeoJSON   struct {
-		Features []struct{ Properties performanceProperties }
+		Features []performanceMapFeature
 	}
 }
 
@@ -109,6 +114,32 @@ func TestAPI_MemberHeatmapPreparation(t *testing.T) {
 		t.Fatalf("member cache did not recover: %+v", got)
 	}
 	cacheCount(total + 1)
+}
+
+func TestAPI_MemberHeatmapPrivacyZone(t *testing.T) {
+	env := newITestEnv(t)
+	viewer := env.user("zone-viewer", domain.UserRoleUser)
+	rider := env.user("zone-rider", domain.UserRoleUser)
+	start := time.Date(2020, 3, 2, 10, 0, 0, 0, time.UTC)
+	rider.upload("zoned.gpx", performanceGPX(start, time.Second, 145, 200))
+
+	zone := domain.PrivacyZone{Lat: 47.002, Lng: 8.004, RadiusM: 200}
+	rider.post("/api/profile/privacy-zones", map[string]any{
+		"lat": zone.Lat, "lng": zone.Lng, "radius_m": zone.RadiusM,
+	}, http.StatusOK)
+	riderMap := readPerformanceMap(t, rider, "level=2")
+	memberMap := readPerformanceMap(t, viewer, "level=2&member="+rider.name)
+	if memberMap.WithTrack != 1 || len(memberMap.GeoJSON.Features) == 0 || len(memberMap.GeoJSON.Features) >= len(riderMap.GeoJSON.Features) {
+		t.Fatalf("route should be partially visible to members: owner=%d, member=%d",
+			len(riderMap.GeoJSON.Features), len(memberMap.GeoJSON.Features))
+	}
+	for _, feature := range memberMap.GeoJSON.Features {
+		for _, point := range feature.Geometry.Coordinates {
+			if zone.Contains(point[1], point[0]) {
+				t.Fatalf("member heatmap returned a coordinate inside the zone: %v", point)
+			}
+		}
+	}
 }
 
 func readPerformanceMap(t *testing.T, client *itestClient, query string) performanceResponse {

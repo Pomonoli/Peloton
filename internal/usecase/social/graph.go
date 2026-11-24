@@ -1,5 +1,5 @@
 // Package social holds a user's own social writes: following and blocking,
-// profile privacy, clubs and engagement. The reads live in usecase/view.
+// geographic privacy zones, clubs and engagement. The reads live in usecase/view.
 package social
 
 import (
@@ -43,33 +43,13 @@ func (g *Graph) Unblock(ctx context.Context, me, target domain.UserID) error {
 	return g.Blocks.Unblock(ctx, me, target)
 }
 
-// Privacy edits the caller's profile visibility, default policy and privacy zones.
+// Privacy manages the caller's geographic privacy zones.
 type Privacy struct {
-	Users      port.UserProfileWriter
-	Visibility port.VisibilityRepo
+	Visibility port.PrivacyZoneRepo
 }
 
 // defaultZoneRadiusM applies when a zone is added without a radius.
 const defaultZoneRadiusM = 200
-
-// SetProfilePublic toggles whether the profile renders to anonymous viewers.
-func (p *Privacy) SetProfilePublic(ctx context.Context, me domain.UserID, public bool) error {
-	return p.Users.SetProfilePublic(ctx, me, public)
-}
-
-// Policy is the caller's default policy, the built-in default when unset.
-func (p *Privacy) Policy(ctx context.Context, me domain.UserID) (domain.VisibilityPolicy, error) {
-	pol, err := p.Visibility.GetUserPolicy(ctx, me)
-	if err != nil {
-		return domain.VisibilityPolicy{}, err
-	}
-	return pol.Effective(), nil
-}
-
-// SetPolicy replaces the caller's default policy.
-func (p *Privacy) SetPolicy(ctx context.Context, me domain.UserID, pol domain.VisibilityPolicy) error {
-	return p.Visibility.SetUserPolicy(ctx, me, pol)
-}
 
 // Zones lists the caller's privacy zones.
 func (p *Privacy) Zones(ctx context.Context, me domain.UserID) ([]domain.PrivacyZone, error) {

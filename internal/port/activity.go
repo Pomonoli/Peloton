@@ -86,9 +86,8 @@ type UserFootprint struct {
 }
 
 type ActivityListFilter struct {
-	RequireVisibleMap bool   // Community heatmap reads require the map category.
-	Type              string // activities.type, "" = any
-	Discipline        string // activities.discipline, "" = any
+	Type       string // activities.type, "" = any
+	Discipline string // activities.discipline, "" = any
 	// Sort: "date_desc" (default) | "date_asc" | "distance_desc" |
 	// "duration_desc" | "elevation_desc" | "speed_desc".
 	Sort string

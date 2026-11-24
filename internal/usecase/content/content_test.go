@@ -92,8 +92,8 @@ func TestSignerPicksPresignOrRoute(t *testing.T) {
 	id := domain.ActivityID(uuid.New())
 
 	pre := newTestSigner(presignBlobs{})
-	if u, err := pre.Blob(ctx, "k", "image/png", ""); err != nil || u.URL != "https://s3.public/k" {
-		t.Fatalf("presign blob: %v %v", u, err)
+	if u, err := pre.Blob(ctx, "k", "image/png", ""); err != nil || !strings.HasPrefix(u.URL, "https://cairn.test/content/") {
+		t.Fatalf("authenticated blob: %v %v", u, err)
 	}
 	if u, err := pre.Upload(ctx, "k", "image/png", 10); err != nil || u.URL != "https://s3.public/k" || u.Method != "PUT" {
 		t.Fatalf("presign upload: %v %v", u, err)

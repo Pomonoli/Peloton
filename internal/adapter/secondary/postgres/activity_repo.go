@@ -1039,7 +1039,7 @@ func (r *ActivityRepo) HasHiddenTrainingStress(ctx context.Context, userID domai
 	var hidden bool
 	err := dbtx(ctx, r.pool).QueryRow(ctx, `SELECT EXISTS (
 		SELECT 1 FROM activities WHERE user_id = $1 AND deleted_at IS NULL
-		AND (hidden_by_admin OR provider_restricted OR NOT `+sharedCategorySQL("", communityViewerSQL(ctx), "'summary'")+`) AND tss IS NOT NULL AND start_time < $2
+		AND (hidden_by_admin OR provider_restricted) AND tss IS NOT NULL AND start_time < $2
 	)`, userID.UUID(), before).Scan(&hidden)
 	return hidden, err
 }
@@ -1323,9 +1323,6 @@ func (r *ActivityRepo) ListActivitiesFiltered(
 
 	conds, args := activityFilterConds(userID, filter, "")
 	where := strings.Join(conds, " AND ") + communityReadSQL(ctx, "")
-	if filter.RequireVisibleMap && port.IsCommunityActivityRead(ctx) {
-		where += " AND " + sharedCategorySQL("", communityViewerSQL(ctx), "'map'")
-	}
 
 	var matched int
 	if err := db.QueryRow(ctx,

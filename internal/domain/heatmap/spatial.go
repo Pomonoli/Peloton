@@ -54,13 +54,36 @@ type Key struct {
 
 var directions = [...]Point{{1, 0}, {math.Sqrt2 / 2, math.Sqrt2 / 2}, {0, 1}, {-math.Sqrt2 / 2, math.Sqrt2 / 2}}
 
-func (k Key) Tile(level Level) Tile {
-	size := grid[level]
-	axis := directions[k.Axis]
+func (k Key) center(level Level) Point {
+	size, axis := grid[level], directions[k.Axis]
 	u, v := (float64(k.Along)+0.5)*size.along, (float64(k.Across)+0.5)*size.across
-	x := u*axis.X - v*axis.Y
-	x = math.Mod(x+3*WorldHalf, 2*WorldHalf) - WorldHalf
-	return TileAt(Point{x, u*axis.Y + v*axis.X})
+	return Point{u*axis.X - v*axis.Y, u*axis.Y + v*axis.X}
+}
+
+func (k Key) Tile(level Level) Tile {
+	center := k.center(level)
+	center.X = math.Mod(center.X+3*WorldHalf, 2*WorldHalf) - WorldHalf
+	return TileAt(center)
+}
+
+// IntersectsPrivacyZone conservatively masks the whole cell if it could
+// contain a private point. The projected half diagonal bounds the ground
+// distance from the center to any point in the cell.
+func (k Key) IntersectsPrivacyZone(level Level, zones []domain.PrivacyZone) bool {
+	if len(zones) == 0 {
+		return false
+	}
+	size := grid[level]
+	center := k.center(level).Location()
+	// Allow for coordinate rounding in the map response as well.
+	margin := math.Hypot(size.along, size.across)/2 + 1
+	for _, zone := range zones {
+		zone.RadiusM += margin
+		if zone.Contains(center.Lat, center.Lon) {
+			return true
+		}
+	}
+	return false
 }
 
 type Weighted struct {

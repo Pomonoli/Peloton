@@ -11,7 +11,7 @@ import (
 )
 
 // allCats is every category, as an owner sees them.
-var allCats = domain.ResolveVisibility(domain.VisibilityInput{IsOwner: true})
+var allCats = domain.ActivityCategories()
 
 func TestBuildDelete_MatchesCreateObjectID(t *testing.T) {
 	actorID := "https://cairn.example/users/alice"

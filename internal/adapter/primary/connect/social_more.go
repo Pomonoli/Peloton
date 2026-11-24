@@ -146,7 +146,7 @@ func (s *SocialServer) GetProfile(ctx context.Context, req *v1.GetProfileRequest
 		return nil, actionErr(err)
 	}
 	out := &v1.GetProfileResponse{
-		User: userCardToProto(pv.User), IsPublic: pv.User.ProfileIsPublic, IsSelf: pv.IsOwner, IsFollowing: pv.IsFollowing,
+		User: userCardToProto(pv.User), IsPublic: true, IsSelf: pv.IsOwner, IsFollowing: pv.IsFollowing,
 		FollowersCount: connectClampInt32(pv.Counts.Followers), FollowingCount: connectClampInt32(pv.Counts.Following),
 	}
 	for _, p := range pv.Activities {

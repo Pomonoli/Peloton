@@ -75,13 +75,8 @@ func TestGraphFollow(t *testing.T) {
 }
 
 type fakeVisibility struct {
-	port.VisibilityRepo
-	policy domain.VisibilityPolicy
-	zone   domain.PrivacyZone
-}
-
-func (f *fakeVisibility) GetUserPolicy(context.Context, domain.UserID) (domain.VisibilityPolicy, error) {
-	return f.policy, nil
+	port.PrivacyZoneRepo
+	zone domain.PrivacyZone
 }
 
 func (f *fakeVisibility) AddPrivacyZone(_ context.Context, z domain.PrivacyZone) (domain.PrivacyZoneID, error) {
@@ -89,16 +84,12 @@ func (f *fakeVisibility) AddPrivacyZone(_ context.Context, z domain.PrivacyZone)
 	return domain.PrivacyZoneID(uuid.New()), nil
 }
 
-func TestPrivacyDefaults(t *testing.T) {
+func TestPrivacyZoneDefaults(t *testing.T) {
 	ctx := t.Context()
 	me := newUser()
 	vis := &fakeVisibility{}
 	p := &Privacy{Visibility: vis}
 
-	pol, err := p.Policy(ctx, me)
-	if err != nil || pol.ByAudience == nil {
-		t.Fatalf("unset policy must fall back to the default: %v %+v", err, pol)
-	}
 	if _, err := p.AddZone(ctx, me, domain.PrivacyZone{UserID: newUser(), Lat: 1, Lng: 2}); err != nil {
 		t.Fatal(err)
 	}

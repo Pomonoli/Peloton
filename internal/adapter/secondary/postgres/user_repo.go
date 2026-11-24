@@ -149,18 +149,6 @@ func (r *UserRepo) GetUser(ctx context.Context, id domain.UserID) (domain.User, 
 	return wrapNotFound(u, err, fmt.Sprintf("get user %s", id))
 }
 
-// SetProfilePublic toggles the user's public-profile opt-in.
-func (r *UserRepo) SetProfilePublic(ctx context.Context, id domain.UserID, public bool) error {
-	db := dbtx(ctx, r.pool)
-	_, err := db.Exec(ctx,
-		`UPDATE users SET profile_is_public = $2, updated_at = now() WHERE id = $1`,
-		id.UUID(), public)
-	if err != nil {
-		return fmt.Errorf("set profile public: %w", err)
-	}
-	return nil
-}
-
 // SetFederationEnabled toggles the user's per-user ActivityPub opt-in.
 func (r *UserRepo) SetFederationEnabled(ctx context.Context, id domain.UserID, enabled bool) error {
 	db := dbtx(ctx, r.pool)

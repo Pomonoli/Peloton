@@ -37,13 +37,13 @@ func TestActivityAccess(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, vw, err := a.Visible(ctx, private, &owner, false, domain.CategoryMap); err != nil || !vw.IsOwner {
+	if _, vw, err := a.Visible(ctx, private, &owner); err != nil || !vw.IsOwner {
 		t.Fatalf("owner visible: %v %+v", err, vw)
 	}
-	if _, _, err := a.Visible(ctx, private, &other, false, domain.CategoryMap); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("private to other: %v", err)
+	if _, vw, err := a.Visible(ctx, private, &other); err != nil || vw.IsOwner {
+		t.Fatalf("other member reads legacy private activity: %v %+v", err, vw)
 	}
-	if _, _, err := a.Visible(ctx, private, nil, false, domain.CategoryPhotos); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, err := a.Visible(ctx, private, nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("private to anonymous: %v", err)
 	}
 }

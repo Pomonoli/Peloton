@@ -142,10 +142,6 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 		order = fastestOrder
 	}
 	columns := prefixedColumns(segmentEffortColumns, "e.") + ", COALESCE(NULLIF(u.display_name, ''), u.username::text) AS display_name, COALESCE(u.avatar_url, '') AS avatar_url"
-	actualViewer := "$2"
-	if _, ok := port.CommunityViewer(ctx); ok {
-		actualViewer = communityViewerSQL(ctx)
-	}
 	from := ` FROM segment_efforts e
 		   JOIN activities a ON a.id = e.activity_id
 		   JOIN segments s ON s.id = e.segment_id
@@ -156,8 +152,7 @@ func (r *SegmentRepo) ListSegmentEffortsFiltered(ctx context.Context, segmentID 
 		    AND (a.hidden_by_admin = false OR (s.source <> 'strava_catalog' AND e.user_id = $2))
 		    AND ($3::uuid IS NULL OR e.user_id = $3)
 		    AND ($4::timestamptz IS NULL OR e.start_time >= $4)
-		    AND ($5::timestamptz IS NULL OR e.start_time < $5)` + communityReadSQL(ctx, "a.") +
-		" AND " + sharedCategorySQL("a.", actualViewer, "'segments'")
+		    AND ($5::timestamptz IS NULL OR e.start_time < $5)` + communityReadSQL(ctx, "a.")
 	if q.ValidOnly || q.BestPerUser {
 		from += " AND e.elapsed_s > 0 AND e.elapsed_s < 'Infinity'::float8"
 	}
@@ -199,12 +194,7 @@ func (r *SegmentRepo) ListCatalogSegments(ctx context.Context, q domain.CatalogS
 		where += catalogViewportSQL(b, &args)
 	}
 
-	viewer := "$4"
-	if _, ok := port.CommunityViewer(ctx); ok {
-		viewer = communityViewerSQL(ctx)
-	}
-	visibleActivity := "a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted AND " +
-		sharedCategorySQL("a.", viewer, "'segments'")
+	const visibleActivity = "a.deleted_at IS NULL AND NOT a.hidden_by_admin AND NOT a.provider_restricted"
 	if len(q.Order) == 0 {
 		q.Order = []domain.CatalogSegmentOrder{
 			{Column: domain.CatalogSortMembers, Descending: true},

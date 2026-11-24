@@ -302,8 +302,7 @@ func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestCl
 	alice.rpc(activityRPC+"UpdateActivity", map[string]any{
 		"id": old.ActivityID.String(), "field_mask": []string{"privacy"}, "privacy": "PRIVACY_PRIVATE",
 	}, http.StatusOK)
-	bob.do(http.MethodGet, activity+"/zones", nil, http.StatusNotFound)
-	setITSegmentVisibility(alice, old.ActivityID.String(), "PUBLIC")
+	bob.do(http.MethodGet, activity+"/zones", nil, http.StatusOK)
 	bike := alice.post(gearRPC+"CreateGear", map[string]any{"kind": "GEAR_KIND_BIKE", "name": "Garmin Test Bike", "weightKg": 8.5}, http.StatusOK)["gear"].(map[string]any)
 	gearID := str(bike, "id")
 	alice.rpc(activityRPC+"UpdateActivity", map[string]any{
@@ -384,7 +383,7 @@ func verifyGarminCommunityReads(t *testing.T, env *itestEnv, alice, bob *itestCl
 		env.anon().do(http.MethodGet, req.path, nil, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound)
 	}
 	performance := readPerformanceMap(t, bob, "level=2&member="+alice.name)
-	if performance.WithTrack < 2 || !slices.ContainsFunc(performance.GeoJSON.Features, func(row struct{ Properties performanceProperties }) bool {
+	if performance.WithTrack < 2 || !slices.ContainsFunc(performance.GeoJSON.Features, func(row performanceMapFeature) bool {
 		return row.Properties.Power != nil && *row.Properties.Power == 225
 	}) {
 		t.Fatalf("community performance map did not include recorded Garmin watts: %d tracks", performance.WithTrack)

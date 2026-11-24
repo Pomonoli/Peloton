@@ -218,9 +218,6 @@ func (s *ActivityServer) GetActivity(
 	if err != nil {
 		return nil, err
 	}
-	if !viewer.Cats.Has(domain.CategorySummary) {
-		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
-	}
 
 	sources, err := s.Activities.ListSourcesForActivity(ctx, activity.ID)
 	if err != nil {
@@ -230,7 +227,7 @@ func (s *ActivityServer) GetActivity(
 
 	redacted := viewer.Redact(activity)
 	out := withGear(activityReadToProto(redacted, sources, viewer.IsOwner), redacted, s.gearNames(ctx, activity))
-	if viewer.Cats.Has(domain.CategoryMap) && len(viewer.Zones) == 0 {
+	if len(viewer.Zones) == 0 {
 		out = s.withMapImage(ctx, out, redacted)
 	}
 	return &v1.GetActivityResponse{Activity: out}, nil
@@ -490,17 +487,7 @@ func (s *ActivityServer) GetActivityStream(
 		}
 	}
 
-	if !viewer.IsOwner {
-		if channels == nil {
-			channels = domain.AllStreamChannels
-		}
-		allowed := make([]domain.StreamChannel, 0, len(channels))
-		for _, channel := range channels {
-			if viewer.Cats.Has(domain.StreamCategory(channel)) {
-				allowed = append(allowed, channel)
-			}
-		}
-		channels = allowed
+	if len(viewer.Zones) > 0 {
 		for i := range stream.Samples {
 			sample := &stream.Samples[i]
 			if sample.Latitude != nil && sample.Longitude != nil && domain.PointInAnyZone(viewer.Zones, *sample.Latitude, *sample.Longitude) {
@@ -530,9 +517,6 @@ func (s *ActivityServer) ListBestEfforts(
 		return nil, err
 	}
 
-	if !viewer.Cats.Has(domain.CategoryBestEfforts) {
-		return &v1.ListBestEffortsResponse{}, nil
-	}
 	efforts, err := s.BestEfforts.ListForActivity(viewer.ActivityReadContext(ctx), activity.ID)
 	if err != nil {
 		return nil, connectError(connectrpc.CodeInternal,

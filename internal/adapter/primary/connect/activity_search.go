@@ -179,12 +179,12 @@ func sharedActivityToProto(ctx context.Context, visibility *view.Visibility, a d
 		if !ok {
 			return nil
 		}
-		viewer, visible := visibility.Resolve(ctx, a, &id, false)
-		if !visible || !viewer.Cats.Has(domain.CategorySummary) {
+		viewer, visible := visibility.Resolve(ctx, a, &id)
+		if !visible {
 			return nil
 		}
 		a = viewer.Redact(a)
-		if !viewer.Cats.Has(domain.CategoryMap) || len(viewer.Zones) > 0 {
+		if len(viewer.Zones) > 0 {
 			content = nil
 		}
 	}

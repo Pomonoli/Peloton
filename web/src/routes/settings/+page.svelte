@@ -2,8 +2,7 @@
 	import { onMount } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
-	import PrivacySharingSettings from '#lib/components/PrivacySharingSettings.svelte';
-	import ComparisonSharing from '#lib/components/ComparisonSharing.svelte';
+	import PrivacyZonesSettings from '#lib/components/PrivacyZonesSettings.svelte';
 	import LocaleSwitcher from '#lib/components/LocaleSwitcher.svelte';
 	import { locales } from '#lib/paraglide/runtime.js';
 	import { appearance, setAppearance } from '#lib/appearance.js';
@@ -91,9 +90,7 @@
 		<p class="mt-1 text-sm text-zinc-400">{m.settings_intro()}</p>
 	</header>
 
-	<ComparisonSharing />
-
-	<PrivacySharingSettings username={data.user.username} />
+	<PrivacyZonesSettings />
 
 	<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
 		<h2 class="mb-4 text-sm font-medium text-zinc-300">{m.settings_account_section()}</h2>

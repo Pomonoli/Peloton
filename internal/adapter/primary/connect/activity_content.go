@@ -55,14 +55,14 @@ func (s *ActivityServer) visibleActivity(ctx context.Context, rawID string) (dom
 	if err != nil {
 		return domain.Activity{}, view.Viewer{}, notFoundErr(err)
 	}
-	vw, ok := s.Visibility.Resolve(ctx, act, &me, false)
+	vw, ok := s.Visibility.Resolve(ctx, act, &me)
 	if !ok {
 		return domain.Activity{}, view.Viewer{}, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 	return act, vw, nil
 }
 
-// ListAttachments: the owner, or a viewer the photos category is open to.
+// ListAttachments lists photo variants available to the member.
 func (s *ActivityServer) ListAttachments(ctx context.Context, req *v1.ListAttachmentsRequest) (*v1.ListAttachmentsResponse, error) {
 	if s.Attachments == nil || s.Content == nil {
 		return nil, connectrpc.NewError(connectrpc.CodeUnavailable, "attachments are not available on this instance")
@@ -70,9 +70,6 @@ func (s *ActivityServer) ListAttachments(ctx context.Context, req *v1.ListAttach
 	act, vw, err := s.visibleActivity(ctx, req.GetActivityId())
 	if err != nil {
 		return nil, err
-	}
-	if !vw.IsOwner && !vw.Cats.Has(domain.CategoryPhotos) {
-		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 	atts, err := s.Attachments.ListForActivity(vw.ActivityReadContext(ctx), act.ID)
 	if err != nil {
@@ -124,7 +121,7 @@ func (s *ActivityServer) GetActivityMapImage(ctx context.Context, req *v1.GetAct
 	if err != nil {
 		return nil, err
 	}
-	if !vw.Cats.Has(domain.CategoryMap) || len(vw.Zones) > 0 {
+	if len(vw.Zones) > 0 {
 		return nil, connectrpc.NewError(connectrpc.CodeNotFound, "not found")
 	}
 	if act.PrimaryStreamSourceID == nil {

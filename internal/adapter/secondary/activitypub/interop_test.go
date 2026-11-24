@@ -227,5 +227,5 @@ func testClient(srv *httptest.Server) *Client {
 
 // allCats is every category, as an owner sees them.
 func allCats() domain.CategorySet {
-	return domain.ResolveVisibility(domain.VisibilityInput{IsOwner: true})
+	return domain.ActivityCategories()
 }

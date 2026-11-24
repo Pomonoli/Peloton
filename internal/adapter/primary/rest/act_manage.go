@@ -52,7 +52,7 @@ func actOwnedActivity(w http.ResponseWriter, r *http.Request, auth *Auth, action
 }
 
 func (h *ActivityManageHandlers) insights(w http.ResponseWriter, r *http.Request) {
-	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, domain.CategorySummary, "bad activity id")
+	act, viewer, ok := detailVisible(w, r, h.Auth, h.Access, "bad activity id")
 	if !ok {
 		return
 	}

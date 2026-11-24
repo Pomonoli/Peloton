@@ -83,6 +83,9 @@ type OutboxPage struct {
 
 // OutboxTotal counts the user's public activities.
 func (a *Actors) OutboxTotal(ctx context.Context, uid domain.UserID) int {
+	if a.Audience == nil || a.Activities == nil {
+		return 0
+	}
 	n, _ := a.Activities.CountPublicActivitiesForUser(ctx, uid)
 	return n
 }
@@ -90,7 +93,10 @@ func (a *Actors) OutboxTotal(ctx context.Context, uid domain.UserID) int {
 // Outbox renders the page at offset with the same Create pushed to
 // followers, so a new follower's server can backfill.
 func (a *Actors) Outbox(ctx context.Context, u domain.User, offset int) OutboxPage {
-	page := OutboxPage{Total: a.OutboxTotal(ctx, u.ID)}
+	page := OutboxPage{Items: []any{}, Total: a.OutboxTotal(ctx, u.ID)}
+	if a.Audience == nil || a.Activities == nil {
+		return page
+	}
 	acts, _ := a.Activities.ListPublicActivitiesForUser(ctx, u.ID, OutboxPageSize, offset)
 	page.Fetched = len(acts)
 	aid := a.Instance.ActorID(u.Username)

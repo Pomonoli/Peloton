@@ -100,7 +100,7 @@ type RecomputeResult struct {
 //  2. If zero sources: soft-delete the activity and return.
 //  3. Otherwise: build a PolicyResolver bound to the user, call the
 //     pure-function merge engine, then preserve user-controlled fields
-//     (Title/Description/Tags/Privacy/GearID/CreatedAt) from the prior row.
+//     (Title/Description/Tags/GearID/CreatedAt) from the prior row.
 //  4. Validate and persist.
 func (uc *RecomputeActivityFromSources) Execute(
 	ctx context.Context,
@@ -352,7 +352,6 @@ func (uc *RecomputeActivityFromSources) buildResolver(
 //	Title         — user typically renames default provider titles
 //	Description   — user-authored notes
 //	Tags          — user-assigned labels
-//	Privacy       — user-controlled visibility
 //	GearID        — user-attached gear
 //
 // Provenance preservation:
@@ -362,7 +361,6 @@ func preserveUserEdits(merged *domain.Activity, prev domain.Activity) {
 	merged.Title = prev.Title
 	merged.Description = prev.Description
 	merged.Tags = prev.Tags
-	merged.Privacy = prev.Privacy
 	merged.GearID = prev.GearID
 	merged.GearSetBy = prev.GearSetBy
 	merged.CreatedAt = prev.CreatedAt

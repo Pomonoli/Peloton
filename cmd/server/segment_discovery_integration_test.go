@@ -239,10 +239,6 @@ func TestAPI_DiscoveredSegments(t *testing.T) {
 		t.Fatal("a second rider did not reuse the cached segment")
 	}
 	setITSegmentVisibility(bob, bobActivity, "PRIVATE")
-	if privateBoard := segmentBoard(t, alice, segmentID); len(privateBoard) != 1 || privateBoard[0].UserID != alice.userID.String() {
-		t.Fatalf("private effort appeared in shared standings: %+v", privateBoard)
-	}
-	setITSegmentVisibility(bob, bobActivity, "PUBLIC")
 	board := segmentBoard(t, alice, segmentID)
 	if len(board) != 2 || board[0].UserID != bob.userID.String() || board[0].Rank != 1 || board[1].Rank != 2 ||
 		board[0].StartTime.IsZero() || math.Abs(board[0].SpeedKmh-seg.DistanceM/100*3.6) > 0.000001 {

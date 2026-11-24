@@ -236,16 +236,9 @@ type CommentView struct {
 // kudoserCap bounds the people listed on a kudos read.
 const kudoserCap = 50
 
-// SocialAllowed reports whether me may see and give reactions on act: the
-// owner always, others when the owner shares the "social" category with them.
+// SocialAllowed reports whether me may see and give reactions on act.
 func (d *Details) SocialAllowed(ctx context.Context, act domain.Activity, me domain.UserID) bool {
-	if act.IsDeleted() {
-		return false
-	}
-	if d.visibility == nil {
-		return act.UserID == me
-	}
-	return d.visibility.For(ctx, &act, &me, false).Has(domain.CategorySocial)
+	return d.visibility.CanReact(ctx, act, me)
 }
 
 // Kudos lists kudos, local users first then federated actors.

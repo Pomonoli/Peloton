@@ -9,13 +9,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
-// ProfileHandlers serve member athlete profiles and the owner's profile and
-// visibility settings (multi-user v1).
-//
-//	GET     /api/profiles/{username}          member profile
-//	PUT     /api/profile/public               owner: toggle profile_is_public
-//	GET/PUT /api/profile/visibility           owner: default visibility policy
-//	GET/POST/DELETE /api/profile/privacy-zones  owner: privacy zones
+// ProfileHandlers serve member profiles, privacy zones and legacy settings responses.
 type ProfileHandlers struct {
 	Auth     *Auth
 	Profiles *view.Profiles
@@ -26,12 +20,12 @@ type ProfileHandlers struct {
 func (h *ProfileHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/profiles/{username}", h.getProfile)
 	mux.HandleFunc("PUT /api/profile/public", h.setPublic)
-}
-
-// MountVisibility registers the default-policy editor and privacy-zone CRUD (#83).
-func (h *ProfileHandlers) MountVisibility(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/profile/visibility", h.getVisibility)
 	mux.HandleFunc("PUT /api/profile/visibility", h.putVisibility)
+}
+
+// MountPrivacyZones registers the owner-only location masking settings.
+func (h *ProfileHandlers) MountPrivacyZones(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/profile/privacy-zones", h.listZones)
 	mux.HandleFunc("POST /api/profile/privacy-zones", h.addZone)
 	mux.HandleFunc("DELETE /api/profile/privacy-zones/{id}", h.deleteZone)
@@ -53,7 +47,7 @@ func (h *ProfileHandlers) getProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":            userCardJSON(pv.User),
-		"is_public":       pv.User.ProfileIsPublic,
+		"is_public":       true,
 		"is_self":         pv.IsOwner,
 		"is_following":    pv.IsFollowing,
 		"followers_count": pv.Counts.Followers,
@@ -63,9 +57,10 @@ func (h *ProfileHandlers) getProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Legacy clients can continue calling the former sharing settings endpoints.
+// Every authenticated member now receives the same access.
 func (h *ProfileHandlers) setPublic(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
-	if !ok {
+	if _, ok := h.Auth.requireUser(w, r); !ok {
 		return
 	}
 	var body struct {
@@ -75,34 +70,24 @@ func (h *ProfileHandlers) setPublic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body", http.StatusBadRequest)
 		return
 	}
-	if err := h.Privacy.SetProfilePublic(r.Context(), me, body.Public); err != nil {
-		http.Error(w, "update failed", http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"public": body.Public})
+	writeJSON(w, http.StatusOK, map[string]any{"public": true})
 }
 
 func (h *ProfileHandlers) getVisibility(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
-	if !ok {
+	if _, ok := h.Auth.requireUser(w, r); !ok {
 		return
 	}
-	p, err := h.Privacy.Policy(r.Context(), me)
-	if err != nil {
-		http.Error(w, "load failed", http.StatusInternalServerError)
-		return
-	}
+	audiences := []string{"public", "followers", "link"}
+	categories := socialCategoryStrings()
+	policy := fixedVisibilityPolicy(audiences, categories)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"policy":         domain.MarshalPolicy(p),
-		"default_policy": domain.MarshalPolicy(domain.DefaultVisibilityPolicy()),
-		"all_categories": socialCategoryStrings(),
-		"all_audiences":  []string{"public", "followers", "link"},
+		"policy": policy, "default_policy": policy,
+		"all_categories": categories, "all_audiences": audiences,
 	})
 }
 
 func (h *ProfileHandlers) putVisibility(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
-	if !ok {
+	if _, ok := h.Auth.requireUser(w, r); !ok {
 		return
 	}
 	var body struct {
@@ -112,12 +97,17 @@ func (h *ProfileHandlers) putVisibility(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "bad body", http.StatusBadRequest)
 		return
 	}
-	p := domain.UnmarshalPolicy(body.Policy)
-	if err := h.Privacy.SetPolicy(r.Context(), me, p); err != nil {
-		http.Error(w, "save failed", http.StatusInternalServerError)
-		return
+	writeJSON(w, http.StatusOK, map[string]any{
+		"policy": fixedVisibilityPolicy([]string{"public", "followers", "link"}, socialCategoryStrings()),
+	})
+}
+
+func fixedVisibilityPolicy(audiences, categories []string) map[string][]string {
+	policy := make(map[string][]string, len(audiences))
+	for _, audience := range audiences {
+		policy[audience] = categories
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"policy": domain.MarshalPolicy(p.Effective())})
+	return policy
 }
 
 func (h *ProfileHandlers) listZones(w http.ResponseWriter, r *http.Request) {

@@ -12,16 +12,14 @@ import (
 // ErrForbidden: the record exists but is not shared with this caller.
 var ErrForbidden = port.NewActionError(port.ActionErrorForbidden, "not permitted")
 
-// Project renders activities for viewer (nil = anonymous): the viewer's own
-// rows stay full activities, everyone else's are projected through the
-// community visibility rules. Owner records are cached per owner.
+// Project renders the feed for a member. Owner records are cached per owner.
 func (f *Feeds) Project(ctx context.Context, acts []domain.Activity, viewer *domain.UserID) []FeedItem {
 	owners := map[domain.UserID]domain.User{}
 	out := make([]FeedItem, 0, len(acts))
 	for i := range acts {
 		a := acts[i]
 		isOwner := viewer != nil && *viewer == a.UserID
-		resolved, visible := f.visibility.Resolve(ctx, a, viewer, false)
+		resolved, visible := f.visibility.Resolve(ctx, a, viewer)
 		if !visible {
 			continue
 		}
@@ -32,7 +30,7 @@ func (f *Feeds) Project(ctx context.Context, acts []domain.Activity, viewer *dom
 		if isOwner {
 			item.Source, item.Own = FeedSelf, &a
 		} else {
-			p := domain.ProjectActivity(a, resolved.Cats, resolved.Zones)
+			p := domain.ProjectActivity(a, domain.ActivityCategories(), resolved.Zones)
 			item.Projected = &p
 		}
 		out = append(out, item)
@@ -40,9 +38,8 @@ func (f *Feeds) Project(ctx context.Context, acts []domain.Activity, viewer *dom
 	return out
 }
 
-// Projected renders one activity for viewer: owners get the full projection,
-// others only what the owner shares; a private or hidden activity, a block
-// or an empty grant is ErrForbidden; an unknown id is domain.ErrNotFound.
+// Projected renders one activity for a member. Share links also exclude moderated
+// and provider-restricted rides when used by the owner.
 func (f *Feeds) Projected(ctx context.Context, id domain.ActivityID, viewer *domain.UserID, hasLink bool) (domain.ProjectedActivity, domain.User, bool, error) {
 	a, err := f.activities.GetActivity(ctx, id)
 	if err != nil {
@@ -51,17 +48,19 @@ func (f *Feeds) Projected(ctx context.Context, id domain.ActivityID, viewer *dom
 	if a.IsDeleted() || (hasLink && (a.HiddenByAdmin || a.ProviderRestricted)) {
 		return domain.ProjectedActivity{}, domain.User{}, false, domain.ErrNotFound
 	}
-	vw, ok := f.visibility.Resolve(ctx, a, viewer, hasLink)
+	vw, ok := f.visibility.Resolve(ctx, a, viewer)
 	if !ok {
 		return domain.ProjectedActivity{}, domain.User{}, false, ErrForbidden
 	}
 	owner, _ := f.users.GetUser(ctx, a.UserID)
-	return domain.ProjectActivity(a, vw.Cats, vw.Zones), owner, vw.IsOwner, nil
+	return domain.ProjectActivity(a, domain.ActivityCategories(), vw.Zones), owner, vw.IsOwner, nil
 }
 
-// Shared resolves a share link: the token is the authorization and resolves
-// as the "link" audience (which the owner's policy may restrict further).
+// Shared resolves an active share link for an authenticated member.
 func (f *Feeds) Shared(ctx context.Context, links port.ShareLinkRepo, token string, viewer *domain.UserID) (domain.ProjectedActivity, domain.User, error) {
+	if viewer == nil {
+		return domain.ProjectedActivity{}, domain.User{}, ErrForbidden
+	}
 	if links == nil {
 		return domain.ProjectedActivity{}, domain.User{}, ErrUnavailable
 	}
@@ -207,7 +206,7 @@ func (c *Clubs) Feed(ctx context.Context, slug string, viewer *domain.UserID, li
 	return c.feeds.Project(ctx, acts, viewer), nil
 }
 
-// ProfileView is a public athlete profile as one viewer sees it.
+// ProfileView is a member profile as one viewer sees it.
 type ProfileView struct {
 	User        domain.User
 	IsOwner     bool
@@ -217,7 +216,7 @@ type ProfileView struct {
 	HasMore     bool
 }
 
-// Profiles are the public profile reads (SocialService.GetProfile, GET /api/profiles/{username}).
+// Profiles are the signed-in profile reads (SocialService.GetProfile, GET /api/profiles/{username}).
 type Profiles struct {
 	users      port.UserReader
 	activities port.ActivityReader
@@ -241,18 +240,12 @@ func (p *Profiles) Get(ctx context.Context, username string, viewer *domain.User
 
 // GetPage pages a member's activity history for a signed-in viewer.
 func (p *Profiles) GetPage(ctx context.Context, username string, viewer *domain.UserID, offset int) (ProfileView, error) {
-	if viewer == nil {
+	if viewer == nil || *viewer == (domain.UserID{}) {
 		return ProfileView{}, ErrForbidden
 	}
 	u, err := p.users.GetUserByUsername(ctx, strings.ToLower(strings.TrimSpace(username)))
 	if err != nil {
 		return ProfileView{}, domain.ErrNotFound
-	}
-	if *viewer != u.ID && p.blocks != nil {
-		blocked, err := p.blocks.IsBlockedEitherWay(ctx, *viewer, u.ID)
-		if err != nil || blocked {
-			return ProfileView{}, domain.ErrNotFound
-		}
 	}
 	v := ProfileView{User: u, IsOwner: *viewer == u.ID}
 	if p.follows != nil {
@@ -261,18 +254,15 @@ func (p *Profiles) GetPage(ctx context.Context, username string, viewer *domain.
 		}
 		v.Counts, _ = p.follows.Counts(ctx, u.ID)
 	}
-	if !v.IsOwner && !v.IsFollowing && !u.ProfileIsPublic {
-		return ProfileView{}, ErrForbidden
-	}
 	activities, err := p.activities.ListCommunityActivities(ctx, *viewer, &u.ID, profileRecent+1, max(0, offset))
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("list member activities: %w", err)
 	}
 	v.HasMore = len(activities) > profileRecent
 	for _, act := range activities[:min(len(activities), profileRecent)] {
-		resolved, visible := p.visibility.Resolve(ctx, act, viewer, false)
+		resolved, visible := p.visibility.Resolve(ctx, act, viewer)
 		if visible {
-			v.Activities = append(v.Activities, domain.ProjectActivity(act, resolved.Cats, resolved.Zones))
+			v.Activities = append(v.Activities, domain.ProjectActivity(act, domain.ActivityCategories(), resolved.Zones))
 		}
 	}
 	return v, nil
@@ -329,28 +319,20 @@ func (p *Profiles) Following(ctx context.Context, me, target domain.UserID, limi
 	return p.cards(ctx, ids), nil
 }
 
-// canSeeGraph applies Get's profile rule to the follow lists: a block hides
-// the profile, a non-public one is for its owner and followers only.
+// canSeeGraph applies the block rule to followers and following lists.
 func (p *Profiles) canSeeGraph(ctx context.Context, me, target domain.UserID) error {
 	if me == target {
 		return nil
 	}
-	u, err := p.users.GetUser(ctx, target)
-	if err != nil {
+	if _, err := p.users.GetUser(ctx, target); err != nil {
 		return domain.ErrNotFound
 	}
 	if p.blocks != nil {
-		if blocked, _ := p.blocks.IsBlockedEitherWay(ctx, me, target); blocked {
+		if blocked, err := p.blocks.IsBlockedEitherWay(ctx, me, target); err != nil || blocked {
 			return domain.ErrNotFound
 		}
 	}
-	if u.ProfileIsPublic {
-		return nil
-	}
-	if following, _ := p.follows.IsFollowing(ctx, me, target); following {
-		return nil
-	}
-	return ErrForbidden
+	return nil
 }
 
 // Blocked lists the users me has blocked as cards.

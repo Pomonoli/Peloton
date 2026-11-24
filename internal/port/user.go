@@ -102,10 +102,6 @@ type UserCredentialStore interface {
 
 // UserProfileWriter updates self-editable profile, preference and email columns.
 type UserProfileWriter interface {
-	// SetProfilePublic toggles whether the user's profile renders to
-	// anonymous viewers at /u/{username} (multi-user v1).
-	SetProfilePublic(ctx context.Context, id domain.UserID, public bool) error
-
 	// UpdateUserPreferences sets display-format preferences (units + date/time
 	// format). Empty strings reset to the locale default.
 	UpdateUserPreferences(ctx context.Context, id domain.UserID, units, dateFormat, timeFormat string) error

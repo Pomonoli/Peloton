@@ -274,28 +274,16 @@ func TestAPI_HeadToHead(t *testing.T) {
 	}
 	for _, row := range peer.Records {
 		if row.Metric == "power" && row.Window == 300 && (row.You == nil || row.You.ActivityID != bID.String() || row.You.Value != 225) {
-			t.Fatalf("third-party comparison exposed a private activity: %+v", row)
+			t.Fatalf("third-party comparison included a moderated or restricted activity: %+v", row)
 		}
 	}
 	admin.do(http.MethodGet, "/api/head-to-head?first="+alice.name+"&second="+alice.name, nil, http.StatusBadRequest)
 
-	override := domain.VisibilityPolicy{ByAudience: map[domain.Audience]domain.CategorySet{domain.AudiencePublic: {}}}
-	if err := env.app.Visibility.SetUserPolicy(ctx, bob.userID, override); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.app.Visibility.SetActivityOverride(ctx, b.activity, &override); err != nil {
-		t.Fatal(err)
-	}
-
-	if comparison := readHeadToHead(t, alice, bob); comparison.SegmentScore.Comparable != 0 || comparison.RecordScore.Comparable != 0 {
-		t.Fatalf("comparison exposed a rider's explicitly hidden results: %+v", comparison)
-	}
-
 	if err := env.app.Blocks.Block(ctx, bob.userID, alice.userID); err != nil {
 		t.Fatal(err)
 	}
-	alice.do(http.MethodGet, endpoint+bob.name, nil, http.StatusNotFound)
-	bob.do(http.MethodGet, endpoint+alice.name, nil, http.StatusNotFound)
+	alice.do(http.MethodGet, endpoint+bob.name, nil, http.StatusOK)
+	bob.do(http.MethodGet, endpoint+alice.name, nil, http.StatusOK)
 }
 
 func TestAPI_HeadToHeadHistoricalDurationRecords(t *testing.T) {
