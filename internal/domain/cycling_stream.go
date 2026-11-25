@@ -37,6 +37,10 @@ func cyclingPosition(s StreamSample) (GeoPoint, bool) {
 // Outdoor rides require a continuous GPS fix. Indoor rides can use their
 // odometer or trainer speed. Sensor-only rides still have a valid timeline.
 func ValidateCyclingStream(samples []StreamSample) CyclingStream {
+	return validateCyclingStream(samples, cyclingGapLimit(samples))
+}
+
+func validateCyclingStream(samples []StreamSample, maxGap float64) CyclingStream {
 	out := CyclingStream{Legs: make([]CyclingLeg, len(samples))}
 	withGPS := false
 	for _, s := range samples {
@@ -44,7 +48,6 @@ func ValidateCyclingStream(samples []StreamSample) CyclingStream {
 		withGPS = withGPS || s.Latitude != nil || s.Longitude != nil
 		out.HasMotion = out.HasMotion || position || s.DistanceM != nil || s.SpeedMps != nil
 	}
-	maxGap := cyclingGapLimit(samples)
 	for i := 1; i < len(samples); i++ {
 		out.Legs[i] = cyclingLeg(samples[i-1], samples[i], maxGap, withGPS, out.HasMotion)
 	}
@@ -53,6 +56,40 @@ func ValidateCyclingStream(samples []StreamSample) CyclingStream {
 		out.removeDrift(samples)
 	}
 	return out
+}
+
+// CyclingActivityDistance uses validated movement unless a source total is
+// corroborated by sparse samples excluded from effort calculations. The
+// separate pass keeps the GPS, odometer, and recording-boundary checks.
+func CyclingActivityDistance(samples []StreamSample, motion CyclingStream, sourceTotal *float64) *float64 {
+	validTotal := sourceTotal != nil && *sourceTotal >= 0 && !math.IsInf(*sourceTotal, 0)
+	if !motion.HasMotion || len(samples) < 2 {
+		if validTotal {
+			return sourceTotal
+		}
+		return nil
+	}
+	distance, _, _ := motion.SpeedSummary()
+	if !validTotal || *sourceTotal <= distance {
+		return &distance
+	}
+	total := *sourceTotal
+	maxGap := cyclingGapLimit(samples)
+	for i := 1; i < len(samples); i++ {
+		a, b := samples[i-1], samples[i]
+		if b.Timestamp.Sub(a.Timestamp).Seconds() <= maxGap || !ContinuousRecordingLeg(a, b, cyclingMaxGap) {
+			continue
+		}
+		withSparse, _, _ := validateCyclingStream(samples, cyclingMaxGap).SpeedSummary()
+		// Allow for GPS chord lengths and small differences between
+		// the source's whole-ride total and the sampled track.
+		difference := math.Abs(total - withSparse)
+		if difference <= max(10, 0.05*total) && difference < total-distance {
+			return sourceTotal
+		}
+		break
+	}
+	return &distance
 }
 
 // A gap of several missing fixes breaks a dense recording. Allow more time

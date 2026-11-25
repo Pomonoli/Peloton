@@ -174,7 +174,8 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 						}
 					}
 				}
-				return activity.RefreshCyclingSummary(ctx, activities, streams, activities, overrides, id)
+				_, err = activity.RefreshCyclingSummary(ctx, activities, streams, activities, overrides, id)
+				return err
 			})
 			if err != nil {
 				failures = append(failures, fmt.Errorf("recompute activity %s: %w", id, err))

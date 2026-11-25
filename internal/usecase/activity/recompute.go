@@ -233,7 +233,7 @@ func (uc *RecomputeActivityFromSources) applyOverlays(
 			return err
 		}
 	}
-	if err := applyCyclingSummary(load, merged, overlay.DistanceM == nil); err != nil {
+	if err := applyCyclingSummary(load, merged, sources, overlay.DistanceM == nil); err != nil {
 		return err
 	}
 	merged.RecalculateAverageSpeed()

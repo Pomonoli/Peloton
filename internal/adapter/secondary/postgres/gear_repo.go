@@ -460,6 +460,16 @@ func (r *GearRepo) Repoint(ctx context.Context, from, to domain.GearID) error {
 // RecomputeTotalsForUser rewrites the user's gear totals from live
 // activities. One statement: gear with no activities is zeroed too.
 func (r *GearRepo) RecomputeTotalsForUser(ctx context.Context, userID domain.UserID) error {
+	return r.recomputeTotals(ctx, userID, nil)
+}
+
+// RecomputeTotalsForGear refreshes one gear item's totals after a targeted repair.
+func (r *GearRepo) RecomputeTotalsForGear(ctx context.Context, userID domain.UserID, gearID domain.GearID) error {
+	id := gearID.UUID()
+	return r.recomputeTotals(ctx, userID, &id)
+}
+
+func (r *GearRepo) recomputeTotals(ctx context.Context, userID domain.UserID, gearID *uuid.UUID) error {
 	db := dbtx(ctx, r.pool)
 	_, err := db.Exec(ctx,
 		`UPDATE gear g SET
@@ -475,13 +485,14 @@ func (r *GearRepo) RecomputeTotalsForUser(ctx context.Context, userID domain.Use
 		          count(*)                       AS n
 		     FROM activities
 		    WHERE user_id = $1 AND deleted_at IS NULL AND gear_id IS NOT NULL
+		      AND ($2::uuid IS NULL OR gear_id = $2)
 		    GROUP BY gear_id
 		 ) t ON t.gear_id = g2.id
-		 WHERE g.id = g2.id AND g2.user_id = $1
+		 WHERE g.id = g2.id AND g2.user_id = $1 AND ($2::uuid IS NULL OR g2.id = $2)
 		   AND (g.total_distance_m IS DISTINCT FROM COALESCE(t.distance_m, 0)
 		     OR g.total_moving_s IS DISTINCT FROM COALESCE(t.moving_s, 0)
 		     OR g.activity_count IS DISTINCT FROM COALESCE(t.n, 0))`,
-		userID.UUID())
+		userID.UUID(), gearID)
 	if err != nil {
 		return fmt.Errorf("recompute gear totals: %w", err)
 	}

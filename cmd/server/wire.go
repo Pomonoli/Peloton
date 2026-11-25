@@ -518,6 +518,35 @@ func backfillMovingTime(ctx context.Context, pool *pgxpool.Pool, archive port.Ac
 	}).Execute(ctx)
 }
 
+func repairCyclingDistance(ctx context.Context, pool *pgxpool.Pool, id domain.ActivityID) (bool, error) {
+	activities := postgres.NewActivityRepo(pool)
+	tx := postgres.NewTxManager(pool)
+	var changed bool
+	err := tx.InTx(ctx, func(ctx context.Context) error {
+		act, err := activities.GetActivity(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := tx.LockUser(ctx, act.UserID); err != nil {
+			return err
+		}
+		act, err = activities.GetActivity(ctx, id)
+		if err != nil {
+			return err
+		}
+		if act.IsDeleted() || act.Type != domain.ActivityTypeRide {
+			return fmt.Errorf("activity %s is not an active ride", id)
+		}
+		changed, err = activity.RefreshCyclingSummary(ctx, activities, postgres.NewStreamRepo(pool),
+			activities, postgres.NewClassificationOverrideRepo(pool), id)
+		if err != nil || !changed || act.GearID == nil {
+			return err
+		}
+		return postgres.NewGearRepo(pool).RecomputeTotalsForGear(ctx, act.UserID, *act.GearID)
+	})
+	return changed && err == nil, err
+}
+
 // wireAppIngestUseCases builds the ingest, recluster, gear and post-ingest compute use cases.
 func wireAppIngestUseCases(app *App, pool *pgxpool.Pool, logger *slog.Logger) {
 	gearRepo := postgres.NewGearRepo(pool)

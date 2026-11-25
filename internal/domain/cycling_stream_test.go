@@ -101,3 +101,53 @@ func TestValidateCyclingSuppressesStationaryGPSDrift(t *testing.T) {
 		t.Fatalf("stationary drift leaked into summary or raw data changed: %v, %v, %v", distance, moving, peak)
 	}
 }
+
+func TestCyclingActivityDistanceFallbacks(t *testing.T) {
+	sparse := []StreamSample{
+		cyclingTestSample(0, 0), cyclingTestSample(1, 10), cyclingTestSample(3, 30),
+		cyclingTestSample(6, 60), cyclingTestSample(8, 80), cyclingTestSample(10, 100),
+		cyclingTestSample(17, 170), cyclingTestSample(25, 250), cyclingTestSample(34, 340),
+	}
+	motion := ValidateCyclingStream(sparse)
+	for _, tc := range []struct {
+		name  string
+		total *float64
+		want  float64
+	}{
+		{"corroborated source", new(342.0), 342},
+		{"missing", nil, 100},
+		{"zero", new(0.0), 100},
+		{"negative", new(-1.0), 100},
+		{"nonfinite", new(math.Inf(1)), 100},
+		{"NaN", new(math.NaN()), 100},
+		{"inflated", new(1000.0), 100},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CyclingActivityDistance(sparse, motion, tc.total); got == nil || *got != tc.want {
+				t.Fatalf("distance = %v, want %v", Deref(got), tc.want)
+			}
+		})
+	}
+	for _, adjust := range []func([]StreamSample){
+		func(s []StreamSample) {
+			// An ordinality break also excludes the interval from total corroboration.
+			s[5].RecordingIndex, s[6].RecordingIndex = 6, 8
+		},
+		func(s []StreamSample) {
+			// A large GPS jump remains invalid even inside the sparse sampling range.
+			s[6].Longitude = new(13.0)
+		},
+	} {
+		broken := append([]StreamSample(nil), sparse...)
+		adjust(broken)
+		if got := CyclingActivityDistance(broken, ValidateCyclingStream(broken), new(340.0)); got == nil || *got != 100 {
+			t.Fatalf("broken recording distance = %v, want 100", Deref(got))
+		}
+	}
+	if got := CyclingActivityDistance(nil, CyclingStream{}, new(340.0)); Deref(got) != 340 {
+		t.Fatalf("summary-only distance = %v, want 340", Deref(got))
+	}
+	if got := CyclingActivityDistance(nil, CyclingStream{}, new(math.Inf(1))); got != nil {
+		t.Fatalf("invalid summary-only distance = %v, want nil", *got)
+	}
+}

@@ -283,7 +283,7 @@ func (uc *IngestActivityFromWorker) handleCreateNew(
 	}
 	if merged.Type == domain.ActivityTypeRide {
 		motion := domain.ValidateCyclingStream(in.Stream)
-		applyCyclingDistance(&merged, motion)
+		merged.Summary.DistanceM = domain.CyclingActivityDistance(in.Stream, motion, src.Parsed.Summary.DistanceM)
 		applyCyclingMaxSpeed(&merged, motion)
 	}
 	merged.RecalculateAverageSpeed()
