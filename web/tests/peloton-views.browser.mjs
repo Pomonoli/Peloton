@@ -116,7 +116,15 @@ try {
 				return width === 430
 					? route.fulfill({ status: 503 })
 					: route.fulfill({
-							json: { current: { temperature_2m: 9, wind_speed_10m: 14, wind_direction_10m: 225 } }
+							json: {
+								current: {
+									temperature_2m: 9,
+									wind_speed_10m: 14,
+									wind_direction_10m: 225,
+									weather_code: 2,
+									is_day: 1
+								}
+							}
 						});
 			}
 			if (url.origin !== origin) return route.abort();
@@ -271,13 +279,22 @@ try {
 		);
 		assert.equal(await main.getByRole('button', { name: 'Last week' }).count(), 0);
 		assert.equal(await page.getByRole('contentinfo').count(), 0);
-		await main
-			.getByText(width === 430 ? 'Weather unavailable' : 'Wind from SW at 14 km/h')
-			.waitFor();
+		if (width === 430) {
+			await main.getByText('Weather unavailable').waitFor();
+		} else {
+			await main.getByRole('img', { name: 'Partly cloudy' }).waitFor();
+			const wind = main.getByRole('img', { name: 'Wind blowing toward northeast at 14 km/h' });
+			assert.equal((await wind.textContent()).trim(), '14 km/h');
+			assert.equal(await wind.locator('svg').evaluate((node) => node.style.rotate), '45deg');
+			assert.equal(
+				await main.getByRole('link', { name: 'Open-Meteo' }).getAttribute('href'),
+				'https://open-meteo.com/'
+			);
+		}
 		assert.equal(weatherRequests, 1);
 		assert.equal(weatherLocation, width === 390 ? '50.85' : '51.165');
 		assert.equal(
-			await main.getByText('Sint-Niklaas, Belgium (default)').count(),
+			await main.getByText('Sint-Niklaas (default)').count(),
 			width === 390 || width === 430 ? 0 : 1
 		);
 		assert.deepEqual(await main.locator('h2').allTextContents(), [

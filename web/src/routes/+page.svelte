@@ -67,9 +67,11 @@
 {:else}
 	<div class="space-y-4 md:space-y-5">
 		<header
-			class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-2xl border border-zinc-800 bg-panel px-4 py-3"
+			class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 rounded-2xl border border-zinc-800 bg-panel px-3 py-3 sm:gap-x-6 sm:px-4 sm:py-4"
 		>
-			<h1 class="text-2xl font-bold tracking-tight sm:text-3xl">
+			<h1
+				class="text-xl leading-tight font-bold tracking-tight wrap-anywhere min-[22.5rem]:text-2xl sm:text-3xl"
+			>
 				{data.member
 					? data.member.display_name || data.member.username
 					: m.overview_welcome({ name: data.user.displayName || data.user.username })}

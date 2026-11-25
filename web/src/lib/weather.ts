@@ -2,6 +2,8 @@ interface Weather {
 	temperature_2m: number;
 	wind_speed_10m: number;
 	wind_direction_10m: number;
+	weather_code?: number;
+	is_day?: number;
 	fallback: boolean;
 }
 
@@ -36,9 +38,9 @@ function viewerLocation() {
 	}));
 }
 
-export function compassDirection(degrees: number) {
-	const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-	return directions[((Math.round(degrees / 45) % 8) + 8) % 8] ?? directions[0]!;
+// Open-Meteo reports the direction the wind comes from.
+export function windToward(degrees: number) {
+	return (((degrees + 180) % 360) + 360) % 360;
 }
 
 export async function currentWeather(): Promise<Weather> {
@@ -50,7 +52,7 @@ export async function currentWeather(): Promise<Weather> {
 			url.search = new URLSearchParams({
 				latitude: String(location.latitude),
 				longitude: String(location.longitude),
-				current: 'temperature_2m,wind_speed_10m,wind_direction_10m',
+				current: 'temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,is_day',
 				temperature_unit: 'celsius',
 				wind_speed_unit: 'kmh'
 			}).toString();
