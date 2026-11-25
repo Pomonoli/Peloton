@@ -24,22 +24,20 @@ import (
 // Scope catalog. Access tokens carry a space-separated subset; the API and the
 // MCP server enforce them. Read-only is the safe default for agents.
 const (
-	ScopeActivitiesRead     = "activities:read"
-	ScopeActivitiesWrite    = "activities:write"
-	ScopeProfileRead        = "profile:read"
-	ScopeProfileWrite       = "profile:write"
-	ScopeSocialRead         = "social:read"
-	ScopeSocialWrite        = "social:write"
-	ScopeSegmentsRead       = "segments:read"
-	ScopeSegmentsWrite      = "segments:write"
-	ScopeTrainingRead       = "training:read" // training load, best efforts, health and athlete metrics
-	ScopeTrainingWrite      = "training:write"
-	ScopeGearRead           = "gear:read"
-	ScopeGearWrite          = "gear:write"
-	ScopeNotificationsRead  = "notifications:read"
-	ScopeNotificationsWrite = "notifications:write"
-	ScopeConnectionsRead    = "connections:read" // provider connections and sync status
-	ScopeConnectionsWrite   = "connections:write"
+	ScopeActivitiesRead   = "activities:read"
+	ScopeActivitiesWrite  = "activities:write"
+	ScopeProfileRead      = "profile:read"
+	ScopeProfileWrite     = "profile:write"
+	ScopeSocialRead       = "social:read"
+	ScopeSocialWrite      = "social:write"
+	ScopeSegmentsRead     = "segments:read"
+	ScopeSegmentsWrite    = "segments:write"
+	ScopeTrainingRead     = "training:read" // training load, best efforts, health and athlete metrics
+	ScopeTrainingWrite    = "training:write"
+	ScopeGearRead         = "gear:read"
+	ScopeGearWrite        = "gear:write"
+	ScopeConnectionsRead  = "connections:read" // provider connections and sync status
+	ScopeConnectionsWrite = "connections:write"
 	// ScopeDevicesRead / ScopeDevicesWrite live in oauth_device.go.
 )
 
@@ -58,8 +56,6 @@ var SupportedScopes = []string{
 	ScopeTrainingWrite,
 	ScopeGearRead,
 	ScopeGearWrite,
-	ScopeNotificationsRead,
-	ScopeNotificationsWrite,
 	ScopeConnectionsRead,
 	ScopeConnectionsWrite,
 	ScopeDevicesRead,
@@ -74,7 +70,6 @@ var ReadOnlyScopes = []string{
 	ScopeSegmentsRead,
 	ScopeTrainingRead,
 	ScopeGearRead,
-	ScopeNotificationsRead,
 	ScopeConnectionsRead,
 }
 
@@ -138,7 +133,7 @@ func ScopesContain(scope, want string) bool {
 // any mutation scope.
 func ScopesHaveAnyWrite(scope string) bool {
 	for _, s := range strings.Fields(scope) {
-		if IsWriteScope(s) {
+		if IsWriteScope(s) && ScopeSupported(s) {
 			return true
 		}
 	}

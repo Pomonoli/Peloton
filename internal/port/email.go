@@ -11,8 +11,8 @@ type EmailMessage struct {
 	HTMLBody string // optional
 }
 
-// EmailSender delivers transactional email (verification, password reset,
-// notification channels). Implementations are selected by EMAIL_ADAPTER
+// EmailSender delivers transactional email (such as verification and password reset).
+// Implementations are selected by EMAIL_ADAPTER
 // (smtp, ses, …); a nil EmailSender means email is disabled (EMAIL_ADAPTER=none)
 // and callers skip the email channel.
 type EmailSender interface {

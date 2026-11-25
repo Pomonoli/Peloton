@@ -1,7 +1,7 @@
 import { formatMetricDistance, formatSpeedKmh, intlLocale } from '#lib/format.js';
 import { m } from '#lib/paraglide/messages.js';
 import {
-	bestEffortValue,
+	recordValue,
 	compareRecordCategories,
 	isCyclingDistanceRecord,
 	recordSpeed,
@@ -147,7 +147,7 @@ export function recordRows(
 						effortTime((effort.value * r.window_value) / 1000),
 						recordSpeed(3600 / effort.value)
 					)
-				: effortCell(effort, bestEffortValue(r, effort.value));
+				: effortCell(effort, recordValue(r, effort.value));
 		};
 		const winner = r.winner ? winnerLabel(r.winner, opponent, first) : null;
 		return {

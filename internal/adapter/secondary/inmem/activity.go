@@ -468,11 +468,11 @@ func (r *ActivityRepo) ActivityYearStats(ctx context.Context, userID domain.User
 	return out, nil
 }
 
-func (r *ActivityRepo) ListCommunityActivities(_ context.Context, viewerID domain.UserID, ownerID *domain.UserID, limit, offset int) ([]domain.Activity, error) {
+func (r *ActivityRepo) ListMemberActivities(_ context.Context, viewerID, ownerID domain.UserID, limit, offset int) ([]domain.Activity, error) {
 	r.mu.Lock()
 	var out []domain.Activity
 	for _, a := range r.Activities {
-		if a.IsDeleted() || ((a.HiddenByAdmin || a.ProviderRestricted) && a.UserID != viewerID) || (ownerID != nil && a.UserID != *ownerID) {
+		if a.IsDeleted() || ((a.HiddenByAdmin || a.ProviderRestricted) && a.UserID != viewerID) || a.UserID != ownerID {
 			continue
 		}
 		out = append(out, a)

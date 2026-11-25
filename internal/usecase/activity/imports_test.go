@@ -55,7 +55,7 @@ func newImportsFixture(maxActivities int) *importsFixture {
 	f := &importsFixture{repo: repo, ing: &fakeIngester{repo: repo}, gear: inmem.NewGearRepo(), user: domain.UserID(uuid.New())}
 	f.uc = &Imports{
 		Quota: quota.NewPolicy(repo, nil, maxActivities), Ingest: f.ing,
-		Gear: gearuc.NewService(f.gear, nil, nil, nil, nil, nil, nil), Activities: repo,
+		Gear: gearuc.NewService(f.gear, nil, nil, nil, nil, nil), Activities: repo,
 		Recompute: NewRecomputeActivityFromSources(repo, inmem.DefaultSettings{}, nil, nil, nil, nil, inmem.PassTx{}, func() time.Time { return saNow }),
 	}
 	return f

@@ -47,19 +47,3 @@ func (h *HealthMetricsHandlers) series(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"type": dt, "series": out})
 }
-
-// InstanceFeaturesHandlers tell the SPA which optional instance features are
-// on. Public on purpose: only booleans an anonymous visitor could infer anyway.
-//
-//	GET /api/instance/features → { "federation": bool }
-type InstanceFeaturesHandlers struct {
-	Federation bool
-}
-
-// Mount registers the routes.
-func (h *InstanceFeaturesHandlers) Mount(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/instance/features", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
-		writeJSON(w, http.StatusOK, map[string]any{"federation": h.Federation})
-	})
-}

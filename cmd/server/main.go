@@ -22,8 +22,6 @@ import (
 
 	// Embed the IANA timezone database in the binary so time.LoadLocation works
 	// regardless of the base image (slim/distroless containers ship no tzdata).
-	// Used by notification quiet hours, which interpret the window in the user's
-	// IANA timezone.
 	_ "time/tzdata"
 
 	"github.com/spf13/cobra"

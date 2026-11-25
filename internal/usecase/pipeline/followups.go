@@ -12,7 +12,6 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/activity"
-	"github.com/opencairn-org/cairn-core/internal/usecase/notification"
 )
 
 // ActivityChangedSubject carries the follow-ups a durable write owes (stream CAIRN_EVENTS).
@@ -33,8 +32,8 @@ type EventPublisher interface {
 type ChangeKind string
 
 const (
-	ChangeIngested      ChangeKind = "ingested"       // IngestSource: per-source + user stages, PRs, federation create
-	ChangeRemerged      ChangeKind = "remerged"       // Remerge: user stages, federation delete when soft-deleted
+	ChangeIngested      ChangeKind = "ingested"       // IngestSource: per-source stages, training load, and live segment records
+	ChangeRemerged      ChangeKind = "remerged"       // Remerge: recompute training load
 	ChangeBorrowed      ChangeKind = "borrowed"       // BorrowFrom: per-source + user stages
 	ChangeSegmentRescan ChangeKind = "segment_rescan" // consumed only by segment discovery
 )
@@ -46,11 +45,9 @@ type ActivityChanged struct {
 	UserID      domain.UserID
 	ActivityID  domain.ActivityID
 	SourceID    domain.SourceID       // zero for remerged
-	Action      activity.IngestAction // ingested only; merged_into_existing → no federation
+	Action      activity.IngestAction // ingested only
 	SoftDeleted bool                  // remerged only
 	MsgID       string
-	// Redelivery skips the non-idempotent announcements (federation) a first attempt already made.
-	Redelivery bool
 }
 
 type activityChangedWire struct {
@@ -154,7 +151,7 @@ func (p *Pipeline) QueueSegmentRescan(ctx context.Context, act domain.Activity) 
 
 // RunFollowUps runs every follow-up ev owes. Each stage logs and recovers;
 // the joined stage errors are returned so a bus consumer retries the event
-// (all stages are idempotent, federation is skipped on redelivery).
+// (all stages are idempotent).
 func (p *Pipeline) RunFollowUps(ctx context.Context, ev ActivityChanged) error {
 	if ev.Kind == ChangeSegmentRescan {
 		return nil
@@ -183,35 +180,11 @@ func (p *Pipeline) RunFollowUps(ctx context.Context, ev ActivityChanged) error {
 		out := activity.IngestResult{ActivityID: ev.ActivityID, SourceID: ev.SourceID, Activity: act, Action: ev.Action}
 		p.sourceFollowUps(ctx, ev.SourceID, out, run)
 	}
-	if ev.Kind == ChangeRemerged && ev.SoftDeleted && p.Federation != nil && !ev.Redelivery {
-		run("federation delete", func() error {
-			p.Federation.PublishDelete(ctx, ev.UserID, ev.ActivityID)
-			return nil
-		})
-	}
 	if p.TrainingLoad != nil {
 		run("training load", func() error { return p.trainingLoad(ctx, ev.UserID) })
 	}
-	if ev.Kind == ChangeIngested {
-		p.ingestAnnouncements(ctx, ev, act, run)
+	if ev.Kind == ChangeIngested && p.SegmentEfforts != nil && p.Events != nil {
+		run("segment records", func() error { return p.publishSegmentRecords(ctx, ev.ActivityID, ev.SourceID) })
 	}
 	return errors.Join(errs...)
-}
-
-// ingestAnnouncements dispatches PR notifications and, for a genuinely new
-// recent activity, the federation Create.
-func (p *Pipeline) ingestAnnouncements(ctx context.Context, ev ActivityChanged, act domain.Activity, run func(string, func() error)) {
-	if p.PRs != nil {
-		run("PR dispatch", func() error {
-			_, err := p.PRs.Execute(ctx, notification.Input{ActivityID: ev.ActivityID, SourceID: ev.SourceID})
-			return err
-		})
-	}
-	if ev.Action == activity.IngestActionImportedNew && p.Federation != nil && !ev.Redelivery &&
-		p.now().Sub(act.StartTime) <= FederationMaxAge {
-		run("federation publish", func() error {
-			p.Federation.PublishCreate(ctx, act)
-			return nil
-		})
-	}
 }

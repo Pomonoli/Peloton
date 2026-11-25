@@ -2,7 +2,6 @@ package view
 
 import (
 	"context"
-	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,36 +32,4 @@ func addActivity(r *inmem.ActivityRepo, user domain.UserID, t domain.ActivityTyp
 	r.Activities[id] = domain.Activity{ID: id, UserID: user, Type: t, Discipline: domain.DisciplineRideRoad, Title: "a", StartTime: start,
 		MovingDuration: time.Hour, ElapsedDuration: time.Hour, Summary: domain.ActivitySummary{DistanceM: &d}, Privacy: privacy}
 	return id
-}
-
-func TestFeedsHomeMergesSources(t *testing.T) {
-	repo := inmem.NewActivityRepo()
-	me, friend := domain.UserID(uuid.New()), domain.UserID(uuid.New())
-	users := &fakeUsers{users: map[domain.UserID]domain.User{
-		me: {ID: me, Username: "me", DisplayName: "Me"}, friend: {ID: friend, Username: "friend", DisplayName: "Friend"},
-	}}
-	own := addActivity(repo, me, domain.ActivityTypeRide, vNow.Add(-2*time.Hour), domain.PrivacyPrivate)
-	theirs := addActivity(repo, friend, domain.ActivityTypeRide, vNow.Add(-time.Hour), domain.PrivacyPublic)
-	hidden := addActivity(repo, friend, domain.ActivityTypeRide, vNow, domain.PrivacyPublic)
-	act := repo.Activities[hidden]
-	act.HiddenByAdmin = true
-	repo.Activities[hidden] = act
-
-	feeds := NewFeeds(repo, users, NewVisibility(), nil, false)
-	items := feeds.Home(context.Background(), me, 10, 0)
-	if len(items) != 2 {
-		t.Fatalf("items %d", len(items))
-	}
-	if items[0].Source != FeedFollowing || items[0].Projected == nil || items[0].Projected.ID != theirs || items[0].Owner.Username != "friend" {
-		t.Fatalf("first %+v", items[0])
-	}
-	if items[1].Source != FeedSelf || items[1].Own == nil || items[1].Own.ID != own || items[1].Owner.Username != "me" {
-		t.Fatalf("second %+v", items[1])
-	}
-	if got := feeds.Home(context.Background(), me, 1, 1); len(got) != 1 || got[0].Own == nil || got[0].Own.ID != own {
-		t.Fatalf("limit: %d", len(got))
-	}
-	if RemoteHandle("https://other.test/users/alice") != "@alice@other.test" {
-		t.Fatal("remote handle")
-	}
 }

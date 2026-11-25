@@ -31,15 +31,6 @@ func (s *ActivityServer) withMapImage(ctx context.Context, out *v1.Activity, a d
 	return decorateActivity(ctx, out, a, nil, s.Content, s.MapETag)
 }
 
-// viewerFor resolves the calling viewer (nil when anonymous) for a
-// visibility-gated read.
-func viewerFor(ctx context.Context) *domain.UserID {
-	if id, err := userIDFromHandlerCtx(ctx); err == nil {
-		return &id
-	}
-	return nil
-}
-
 // visibleActivity loads an activity and resolves how the caller may see it:
 // members through the community visibility rules.
 func (s *ActivityServer) visibleActivity(ctx context.Context, rawID string) (domain.Activity, view.Viewer, error) {

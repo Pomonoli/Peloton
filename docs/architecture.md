@@ -1,4 +1,4 @@
-# Cairn Architecture
+# Peloton architecture
 
 Deeper architecture reference for the layers that `README.md` and the ADRs in
 `docs/adr/` only touch on briefly. If you are implementing the NATS-based async layer, the worker
@@ -167,8 +167,6 @@ Cairn:
 | Best-effort compute | `DELETE for source ... INSERT new` pattern in one tx. |
 | Segment match | same `DELETE then INSERT` pattern; rank recompute idempotent. |
 | Training load | `external_id = "computed:<date>"` + partial-unique-index UPSERT. |
-| PR notifications | `dedup_key = "segment_pr:<seg>:<date>"` + CTE coalesce-or-insert. |
-| External-account-reauth subscriber | Notification DedupKey `"reauth:<account_id>"`. |
 
 Two-layer dedup architecture:
 
@@ -916,7 +914,7 @@ source the user detached does not re-attach when the provider pushes it
 again under a new source id.
 
 The follow-up consumer `activity-follow-ups` (stream aggregates, best
-efforts, segments, training load, PR dispatch, federation) listens on
+efforts, segments, training load, and live record events) listens on
 `cairn.events.activity.changed`. See section 8.
 
 **Metric results.** `import_metrics` results carry METRIC events
@@ -1373,8 +1371,8 @@ it dispatches a `pipeline.ActivityChanged` event:
 | `kind` | `ingested` / `remerged` / `borrowed` |
 | `user_id`, `activity_id` | owner and the activity the follow-ups address (for `ingested`: the surviving activity after re-clustering) |
 | `source_id` | the written source (`ingested`, `borrowed`) |
-| `action` | `ingested` only; `merged_into_existing` → no created event, no federation |
-| `soft_deleted` | `remerged` only; the merge left no source → federation delete |
+| `action` | `ingested` only; `merged_into_existing` indicates an existing activity |
+| `soft_deleted` | `remerged` only; the merge left no source |
 | `msg_id` | `activity-changed:<kind>:<activity>:<uuid>`, also the `Nats-Msg-Id` |
 
 **With NATS wired**, the event is published to
@@ -1384,18 +1382,15 @@ push consumer `activity-follow-ups` (`cmd/server/followup_consumer.go`,
 
 ```
 ingested   stream aggregates, best efforts (+ live new-PR events), segment match
-           → training load → PR dispatch → federation Create
+           → training load → live segment PR events
 borrowed   stream aggregates, best efforts, segment match → training load
-remerged   federation Delete (if soft-deleted) → training load
+remerged   training load
 ```
 
 Every stage logs and recovers (panics included); the joined stage errors
 NAK the event and the bus redelivers with back-off (`retryDelay`), until
 `MaxDeliver` sends it to `CAIRN_DLQ`. A malformed payload is terminated.
-The stages are idempotent (section 3), so a redelivery re-runs all of them;
-the federation announcements are not, so they run on the first delivery
-only (`Redelivery` from `DeliveryAttempt > 1`). The 48 h federation
-recency gate (`FederationMaxAge`) is evaluated when the event is handled.
+A redelivery can repeat the derived writes and transient record events.
 An activity deleted meanwhile acks the event without work.
 
 **Without NATS** (tests, API-only instances) or when the publish fails,
@@ -1769,7 +1764,7 @@ reaching `MaxDeliver` automatically DLQ.
 |---|---|
 | Token still valid | reply with cached/DB token |
 | Refresh successful | UPDATE DB, reply with new token |
-| **Strava 401 on refresh** (user disconnected in the provider app) | UPDATE `external_accounts.status='needs_reauth'`, reply `{error:"needs_reauth"}`, publish `cairn.events.external_account.needs_reauth` |
+| **Strava 401 on refresh** (user disconnected in the provider app) | UPDATE `external_accounts.status='auth_invalid'`, reply `{error:"needs_reauth"}`, publish `cairn.events.external_account.needs_reauth` |
 | Network error to the provider | reply `{error:"transient", retry_after:30}` — worker `NakWithDelay(30s)` |
 | Account not found (race: user disconnected while the job was running) | reply `{error:"account_gone"}` — worker `Term()` |
 
@@ -1826,22 +1821,11 @@ Server (advisory consumer, cmd/server/dlq_listener.go):
 
 ### Account-needs-reauth recovery
 
-The only "doesn't work without the user" case:
-
-```
-1. Worker 401 from the token refresh → publish cairn.events.external_account.needs_reauth
-2. Server (notification-dispatcher subscriber):
-   - INSERT notification_events (
-        user_id, type=external_account_refresh_failed,
-        severity='warn', dedup_key='reauth:<account_id>'
-     )
-   - Email/Push (once delivery channels are implemented)
-3. User UI red badge "Renew Strava connection"
-4. User clicks → /oauth/strava/start re-flow
-5. Callback UPDATE external_accounts SET ..., status='active'
-6. Server publish cairn.events.external_account.reconnected
-   → Subscriber re-enqueues all ReimportStatus='failed' sources of the account
-```
+On a permanent token refresh failure the worker reports the failure over
+`cairn.tokens.<provider>.needs_reauth`. The server marks the account
+`auth_invalid` and records the reason. Connections shows the persisted
+account status and offers **Reconnect**. The OAuth callback stores the
+new credentials and returns the connection to active sync.
 
 ---
 

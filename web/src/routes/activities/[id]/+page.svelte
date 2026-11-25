@@ -25,7 +25,7 @@
 	import GearPrompt from '#lib/components/GearPrompt.svelte';
 	import ActivityNav from '#lib/components/ActivityNav.svelte';
 	import {
-		bestEffortValue,
+		recordValue,
 		isCyclingDistanceRecord,
 		recordMetric,
 		recordWindow
@@ -636,7 +636,7 @@
 								</td>
 								<td class="px-4 py-2 text-zinc-300">{recordWindow(b.windowKind, b.windowValue)}</td>
 								<td class="px-4 py-2 text-right tabular-nums"
-									>{bestEffortValue(bucket, b.achievedValue)} ↗</td
+									>{recordValue(bucket, b.achievedValue)} ↗</td
 								>
 							</tr>
 						{/each}

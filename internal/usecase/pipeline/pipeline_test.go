@@ -16,15 +16,6 @@ import (
 
 var tNow = time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 
-type fedSpy struct{ created, deleted []domain.ActivityID }
-
-func (f *fedSpy) PublishCreate(_ context.Context, a domain.Activity) {
-	f.created = append(f.created, a.ID)
-}
-func (f *fedSpy) PublishDelete(_ context.Context, _ domain.UserID, id domain.ActivityID) {
-	f.deleted = append(f.deleted, id)
-}
-
 // panicStreams panics on every aggregate refresh.
 type panicStreams struct{ port.StreamRepo }
 
@@ -33,14 +24,13 @@ func (panicStreams) RefreshAggregates(context.Context, domain.SourceID) error { 
 type fixture struct {
 	p    *Pipeline
 	repo *inmem.ActivityRepo
-	fed  *fedSpy
 	user domain.UserID
 }
 
 func newFixture() *fixture {
-	f := &fixture{repo: inmem.NewActivityRepo(), fed: &fedSpy{}, user: domain.UserID(uuid.New())}
+	f := &fixture{repo: inmem.NewActivityRepo(), user: domain.UserID(uuid.New())}
 	recompute := activity.NewRecomputeActivityFromSources(f.repo, inmem.DefaultSettings{}, nil, nil, nil, nil, inmem.PassTx{}, func() time.Time { return tNow })
-	f.p = &Pipeline{Activities: f.repo, Recompute: recompute, Federation: f.fed, Now: func() time.Time { return tNow }}
+	f.p = &Pipeline{Activities: f.repo, Recompute: recompute, Now: func() time.Time { return tNow }}
 	return f
 }
 
@@ -80,7 +70,7 @@ func TestFollowSourceAddressesTheSurvivingActivity(t *testing.T) {
 	}
 }
 
-func TestRemergeRetractsSoftDeleted(t *testing.T) {
+func TestRemergeSoftDeletes(t *testing.T) {
 	f := newFixture()
 	aid, srcs := f.seed(1)
 	s := f.repo.Sources[srcs[0]]
@@ -90,9 +80,6 @@ func TestRemergeRetractsSoftDeleted(t *testing.T) {
 	res, err := f.p.Remerge(context.Background(), aid)
 	if err != nil || !res.SoftDeleted {
 		t.Fatalf("remerge: %v %+v", err, res)
-	}
-	if len(f.fed.deleted) != 1 || f.fed.deleted[0] != aid {
-		t.Fatalf("federation delete: %+v", f.fed.deleted)
 	}
 }
 

@@ -141,7 +141,7 @@ func newActFixture(t *testing.T) *actFixture {
 	f.srv = NewActivityServer(f.repo, nil, &fakeBestEfforts{}, recompute, nil)
 	f.srv.Editor = activity.NewEditor(f.repo, recompute)
 	f.srv.Editor.ClassOverrides = f.class
-	f.srv.SourceActions = activity.NewSourceActions(f.repo, f.deny, recompute, nil, now)
+	f.srv.SourceActions = activity.NewSourceActions(f.repo, f.deny, recompute, now)
 	f.srv.SourceLinks = matchuc.NewSourceLinks(f.repo, recluster)
 	f.srv.Reimporter = f.reimp
 	f.srv.Blobs = f.blobs

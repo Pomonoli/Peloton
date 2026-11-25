@@ -1,6 +1,6 @@
 # Peloton
 
-Peloton is a private, self-hosted cycling platform for a small group of friends. Signed-in members share a feed, browse each other’s rides, routes, profiles and activity history, and give kudos or leave comments. Activity data and profiles require sign-in.
+Peloton is an invite-only, self-hosted cycling platform for a small group of friends. Open **Social → Riders** to browse member profiles, rides, and cycling data, or **Social → Head-to-Head** to compare records and segment efforts. [Member visibility](docs/visibility-model.md)
 
 ## Features
 
@@ -69,7 +69,7 @@ docker stop peloton
 docker rm peloton
 ```
 
-Repeat the `docker run` command above with the same environment file. Peloton applies pending migrations on startup with `CAIRN_DATABASE_AUTO_MIGRATE=true`. The Compose volumes hold the database and activity files.
+Repeat the `docker run` command above with the same environment file. Peloton applies pending migrations on startup with `CAIRN_DATABASE_AUTO_MIGRATE=true`. The Compose volumes hold the database and activity files. The removal of the legacy social and notification features uses the existing schema and preserves historical rows. Account verification and password-reset email still use the configured mail adapter.
 
 ### Rebuild cycling records
 

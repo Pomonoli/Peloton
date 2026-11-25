@@ -7,17 +7,11 @@ import (
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/usecase/moderation"
-	"github.com/opencairn-org/cairn-core/internal/usecase/social"
 	"github.com/opencairn-org/cairn-core/internal/usecase/useradmin"
-	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
-// ModerationHandlers serve user blocking, content reports and the admin
-// moderation queue (multi-user v1).
+// ModerationHandlers serve content reports and the admin moderation queue.
 //
-//	POST   /api/users/{id}/block            block a user (severs follows both ways)
-//	DELETE /api/users/{id}/block            unblock
-//	GET    /api/blocks                      the users you've blocked
 //	POST   /api/reports                     file a content report
 //	GET    /api/admin/reports               moderator: queue
 //	POST   /api/admin/reports/{id}/resolve  moderator: mark reviewed/dismissed
@@ -25,17 +19,8 @@ import (
 //	POST   /api/admin/activities/{id}/hide  moderator: hide/unhide an activity
 type ModerationHandlers struct {
 	Auth      *Auth
-	Graph     *social.Graph
-	Profiles  *view.Profiles
 	Reports   *moderation.Reports
 	UserAdmin *useradmin.Users
-}
-
-// Mount registers the block routes.
-func (h *ModerationHandlers) Mount(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/users/{id}/block", h.setBlocked(true))
-	mux.HandleFunc("DELETE /api/users/{id}/block", h.setBlocked(false))
-	mux.HandleFunc("GET /api/blocks", h.listBlocks)
 }
 
 // MountReports registers report filing.
@@ -54,46 +39,6 @@ func (h *ModerationHandlers) MountAdmin(mux *http.ServeMux) {
 // MountHide registers activity hiding.
 func (h *ModerationHandlers) MountHide(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/activities/{id}/hide", h.hideActivity)
-}
-
-// setBlocked blocks (true) or unblocks (false) the target user.
-func (h *ModerationHandlers) setBlocked(block bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		me, ok := h.Auth.requireUser(w, r)
-		if !ok {
-			return
-		}
-		target, err := domain.ParseUUID[domain.UserID](r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
-			return
-		}
-		msg := "unblock failed"
-		if block {
-			msg = "block failed"
-			err = h.Graph.Block(r.Context(), me, target)
-		} else {
-			err = h.Graph.Unblock(r.Context(), me, target)
-		}
-		if err != nil {
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"blocked": block})
-	}
-}
-
-func (h *ModerationHandlers) listBlocks(w http.ResponseWriter, r *http.Request) {
-	me, ok := h.Auth.requireUser(w, r)
-	if !ok {
-		return
-	}
-	users, err := h.Profiles.Blocked(r.Context(), me)
-	if err != nil {
-		http.Error(w, "load failed", http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": userCardsJSON(users)})
 }
 
 func (h *ModerationHandlers) createReport(w http.ResponseWriter, r *http.Request) {

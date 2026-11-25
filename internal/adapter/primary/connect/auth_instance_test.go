@@ -56,12 +56,12 @@ func (f *fakeRedeemer) Execute(_ context.Context, in invite.RedeemInviteInput) (
 
 func TestGetInstanceInfo(t *testing.T) {
 	built := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
-	s := &AuthServer{Instance: InstanceInfo{Version: "v0.6.0", Commit: "abc123", BuildTime: built, FederationEnabled: true, OAuthEnabled: true}}
+	s := &AuthServer{Instance: InstanceInfo{Version: "v0.6.0", Commit: "abc123", BuildTime: built, OAuthEnabled: true}}
 	res, err := s.GetInstanceInfo(t.Context(), &v1.GetInstanceInfoRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.GetVersion() != "v0.6.0" || res.GetCommit() != "abc123" || !res.GetFederationEnabled() || !res.GetOauthEnabled() || res.GetRegistrationOpen() {
+	if res.GetVersion() != "v0.6.0" || res.GetCommit() != "abc123" || !res.GetOauthEnabled() || res.GetRegistrationOpen() {
 		t.Fatalf("response %v", res)
 	}
 	if res.GetBuildTime().AsTime() != built || len(res.GetSupportedScopes()) != len(domain.SupportedScopes) {

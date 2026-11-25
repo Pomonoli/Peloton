@@ -157,10 +157,6 @@ func ScopeDescription(scope string) string {
 		return "Read your gear"
 	case ScopeGearWrite:
 		return "Edit your gear"
-	case ScopeNotificationsRead:
-		return "Read your notifications"
-	case ScopeNotificationsWrite:
-		return "Manage your notifications and webhooks"
 	case ScopeConnectionsRead:
 		return "Read your provider connections"
 	case ScopeConnectionsWrite:

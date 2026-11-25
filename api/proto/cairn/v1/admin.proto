@@ -202,14 +202,6 @@ service AdminService {
   // Scope: admin cookie session only (OAuth tokens are refused).
   rpc SetUserQuota(SetUserQuotaRequest) returns (SetUserQuotaResponse);
 
-  // ---- Federation blocks (twins of /api/admin/federation/blocks) ----
-  // Scope: admin cookie session only (OAuth tokens are refused).
-  rpc ListBlockedDomains(ListBlockedDomainsRequest) returns (ListBlockedDomainsResponse);
-  // Scope: admin cookie session only (OAuth tokens are refused).
-  rpc BlockDomain(BlockDomainRequest) returns (BlockDomainResponse);
-  // Scope: admin cookie session only (OAuth tokens are refused).
-  rpc UnblockDomain(UnblockDomainRequest) returns (UnblockDomainResponse);
-
   // ---- Instance merge defaults (twins of /api/admin/instance/merge-defaults) ----
   // Scope: admin cookie session only (OAuth tokens are refused).
   rpc GetInstanceMergeDefaults(GetInstanceMergeDefaultsRequest) returns (GetInstanceMergeDefaultsResponse);
@@ -1140,31 +1132,6 @@ message SetUserQuotaRequest {
   optional int32 max_activities = 2;
 }
 message SetUserQuotaResponse {}
-
-// ============================================================================
-// Federation blocks
-// ============================================================================
-
-message BlockedDomain {
-  string domain = 1;
-  string reason = 2;
-  google.protobuf.Timestamp created_at = 3;
-}
-message ListBlockedDomainsRequest {}
-message ListBlockedDomainsResponse {
-  repeated BlockedDomain domains = 1;
-}
-message BlockDomainRequest {
-  string domain = 1;
-  string reason = 2;
-}
-message BlockDomainResponse {
-  BlockedDomain domain = 1;
-}
-message UnblockDomainRequest {
-  string domain = 1;
-}
-message UnblockDomainResponse {}
 
 // ============================================================================
 // Instance merge defaults

@@ -15,7 +15,7 @@
 // Segment matching runs on every activity import — irrespective of the
 // activity's source — using PostGIS ST_DWithin to filter candidates and a
 // Hausdorff-distance + direction check to confirm matches. Matched
-// efforts are recorded in segment_efforts and trigger PR notifications
+// efforts are recorded in segment_efforts and drive live PR events
 // when they beat the user's prior best.
 //
 // Records (fastest 5k, max 5min power, etc.) are NOT segment-scoped;

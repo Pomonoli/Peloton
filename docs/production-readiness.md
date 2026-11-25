@@ -1,18 +1,6 @@
-# Production readiness
+# Operating Peloton
 
-A candid assessment of what's solid, what's missing, and the runbook for a
-real deployment. Last reviewed 2026-06-05.
-
-## Verdict
-
-Cairn is **feature-complete and usable as a self-hosted, multi-user tracker**:
-import → merge → analysis → web UI all work end-to-end and have been exercised
-against a real ~280-activity import. The code is in good shape —
-hexagonal boundaries intact, unit + targeted integration tests in CI, dev
-surfaces removed from the binary.
-
-It is **not yet a safe public 1.0**. The gaps below are mostly operational and
-validation, not architectural.
+Peloton is an invite-only, self-hosted service. This guide covers deployment dependencies, backups, and operational checks. [Member visibility](visibility-model.md)
 
 ## Pre-flight checklist
 
@@ -78,7 +66,7 @@ Three stateful stores; back up all three consistently.
      their refresh policies cover only a recent window. Historical buckets are
      materialised on demand by `StreamRepo.RefreshAggregates` after each
      ingest; a bulk backfill is a one-time `refresh_continuous_aggregate` over
-     the historical range (see Update 2026-06-04f in the session memory).
+     the historical range (see [the architecture notes](architecture.md)).
 2. **Object storage (S3/MinIO)** — archived raw blobs (`raw_blob_id`). Back up
    the bucket. Losing it disables per-source download + quota-free re-parse,
    but activities + streams survive (re-fetch from the provider restores blobs).
@@ -104,24 +92,6 @@ with `CAIRN_AUTH_MASTER_ENCRYPTION_KEY` (AAD-bound to the row). Back it up
 - **DLQ**: jobs that exhaust redelivery are captured in `dead_lettered_jobs`;
   inspect/replay via `/api/admin/dlq`. Alert on a growing DLQ.
 
-## Known gaps (before a public 1.0)
+## Provider checks
 
-| Gap | Status |
-| --- | --- |
-| **Live-provider validation** | The Strava worker's HTTP paths are unit-tested (httptest), but the full round-trip against the real Strava API — incl. its real rate limits — needs an operator session. This is the single biggest "verify in prod" item. |
-| **Rate-limiter under load** | The KV CAS thundering-herd livelock that bit us in dev is **fixed** (jittered backoff + soft-deny, #80) and tested at 300 concurrent reservers. |
-| **Notification retry queue** | Email/webhook sends are best-effort (fire-and-forget) with a per-event delivery audit. No automated retry yet (#78 deferred; `notification_deliveries.next_retry_at` column exists). |
-| **`worker_offline` alerts** | The notification type exists but nothing creates it (needs a presence-staleness watcher + admin-broadcast recipient model). |
-| **HTTP-level integration tests** | Repo-layer integration tests run in CI (real Postgres); there's no automated test that boots the server and exercises the REST surface end-to-end. |
-| **Webhook account disambiguation** | When the same provider athlete is linked by two users/connections, the webhook owner-lookup can be ambiguous (#50) — needs a subscription→connection table + live Strava to build/verify. |
-| **Social / multi-user** | **Shipped.** Per-field visibility, follow graph + feed, public profiles, share links, kudos + comments, clubs, moderation, quotas, delegated-admin roles (#79, #83–92). **Federation / ActivityPub shipped** (Phases 1–5, off by default — `CAIRN_FEDERATION_ENABLED` + per-user opt-in; see `docs/federation-design.md`). |
-
-## What's deliberately out of scope
-
-Cairn now ships a full **multi-user social layer** (#79 epic) — per-field
-visibility, follow graph + feed, public profiles, share links, kudos + comments,
-clubs, moderation, quotas, delegated-admin roles — and **ActivityPub federation**
-(off by default). Still out of scope: hard multi-tenant isolation beyond
-per-user data scoping (no per-tenant resource limits / billing), and the v2/v3
-federation polish in `docs/federation-design.md` §12.6 (shared-inbox fan-out,
-`Move`/account migration, key-rotation UI).
+The integration suite runs against disposable PostgreSQL and covers the HTTP API, authorization, and provider fixtures. Use a consenting test account for live Garmin or Strava checks. The optional Strava worker and live segment discovery have their own verification steps. [Garmin](garmin-connect.md) · [Strava](strava-connect.md) · [Segment discovery](../experiments/strava-segments/DYNAMIC_DISCOVERY.md)

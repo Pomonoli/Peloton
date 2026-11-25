@@ -48,7 +48,6 @@ type AdminServer struct {
 	// CoreRelease is this binary's release, reported next to each worker.
 	CoreRelease   string
 	Reports       *moderation.Reports
-	Blocks        *moderation.Blocks
 	MergeDefaults *instance.MergeDefaults
 	Ops           *instance.Ops
 	WebhookTokens *webhooks.Tokens

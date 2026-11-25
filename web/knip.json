@@ -1,4 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": ["src/env.ts", "static/waas-engine/engine.js", "static/waas-engine/ride-options.js"],
+	"ignoreDependencies": ["@inlang/plugin-message-format"],
 	"ignoreIssues": { "tsconfig.json": ["unlisted"] }
 }

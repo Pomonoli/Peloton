@@ -11,8 +11,7 @@ import (
 
 // Visibility grants authenticated members access to ordinary activities.
 type Visibility struct {
-	Zones  port.PrivacyZoneRepo
-	Blocks port.BlockRepo
+	Zones port.PrivacyZoneRepo
 }
 
 func NewVisibility() *Visibility { return &Visibility{} }
@@ -20,18 +19,6 @@ func NewVisibility() *Visibility { return &Visibility{} }
 func memberCanView(act domain.Activity, viewer *domain.UserID) bool {
 	return viewer != nil && *viewer != (domain.UserID{}) && !act.IsDeleted() &&
 		(*viewer == act.UserID || (!act.HiddenByAdmin && !act.ProviderRestricted))
-}
-
-// CanReact applies social blocks to kudos and comments.
-func (v *Visibility) CanReact(ctx context.Context, act domain.Activity, viewer domain.UserID) bool {
-	if !memberCanView(act, &viewer) {
-		return false
-	}
-	if viewer == act.UserID || v == nil || v.Blocks == nil {
-		return true
-	}
-	blocked, err := v.Blocks.IsBlockedEitherWay(ctx, viewer, act.UserID)
-	return err == nil && !blocked
 }
 
 // Viewer describes how a member may look at an activity.
@@ -53,14 +40,19 @@ func (v *Visibility) Resolve(ctx context.Context, act domain.Activity, viewer *d
 		return Viewer{}, false
 	}
 	result := Viewer{viewer: viewer, IsOwner: *viewer == act.UserID}
-	if !result.IsOwner && v != nil && v.Zones != nil {
-		zones, err := v.Zones.ListPrivacyZones(ctx, act.UserID)
-		if err != nil {
-			return Viewer{}, false
-		}
-		result.Zones = zones
+	zones, err := v.zonesForMember(ctx, act.UserID, result.IsOwner)
+	if err != nil {
+		return Viewer{}, false
 	}
+	result.Zones = zones
 	return result, true
+}
+
+func (v *Visibility) zonesForMember(ctx context.Context, owner domain.UserID, isOwner bool) ([]domain.PrivacyZone, error) {
+	if isOwner || v == nil || v.Zones == nil {
+		return nil, nil
+	}
+	return v.Zones.ListPrivacyZones(ctx, owner)
 }
 
 // Redact masks the start location inside a geographic privacy zone.

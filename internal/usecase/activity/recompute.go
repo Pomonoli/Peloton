@@ -66,7 +66,7 @@ func NewRecomputeActivityFromSources(
 }
 
 // RecomputeResult summarises what changed. Callers (typically the
-// ingest pipeline) use it to decide whether to dispatch notifications
+// ingest pipeline) use it to identify the affected activity and owner
 // and to re-run downstream computations (best efforts, segment matching).
 type RecomputeResult struct {
 	// Activity is the merged result. Zero-valued when SoftDeleted is true.

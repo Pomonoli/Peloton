@@ -17,42 +17,22 @@ export const prerender = false;
 // Resolves the currently-logged-in user once and threads it into every
 // page via layout data. Unauthenticated visitors get `user: null` — pages
 // render the public skeleton or redirect to /login as appropriate.
-export interface InstanceFeatures {
-	federation: boolean;
-}
-
-// Optional instance-level features (CAIRN_*_ENABLED flags). Best-effort and
-// public; everything defaults to off so a failed fetch hides, never shows.
-async function loadFeatures(fetch: typeof globalThis.fetch): Promise<InstanceFeatures> {
-	const off: InstanceFeatures = { federation: false };
-	try {
-		const res = await fetch('/api/instance/features');
-		if (!res.ok) return off;
-		const f = (await res.json()) as Partial<InstanceFeatures>;
-		return { ...off, federation: f.federation === true };
-	} catch {
-		return off;
-	}
-}
-
 export const load: LayoutLoad = async ({ fetch, url }) => {
 	const clients = connectClients(fetch, url.origin);
-	const features = await loadFeatures(fetch);
 	try {
 		const res = await clients.auth.getCurrentUser({});
 		return {
 			user: userToView(res.user),
-			permissions: res.permissions ?? [],
-			features
+			permissions: res.permissions ?? []
 		};
 	} catch (err) {
 		if (isUnauthenticated(err)) {
-			return { user: null, permissions: [], features };
+			return { user: null, permissions: [] };
 		}
 		// Backend reachable but errored — render the shell anyway so a
 		// transient hiccup doesn't take the whole UI down.
 		console.warn('GetCurrentUser failed', err);
-		return { user: null, permissions: [], features };
+		return { user: null, permissions: [] };
 	}
 };
 

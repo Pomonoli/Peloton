@@ -89,42 +89,6 @@ func (s *AdminServer) SetUserQuota(ctx context.Context, req *v1.SetUserQuotaRequ
 	return &v1.SetUserQuotaResponse{}, nil
 }
 
-func (s *AdminServer) ListBlockedDomains(ctx context.Context, _ *v1.ListBlockedDomainsRequest) (*v1.ListBlockedDomainsResponse, error) {
-	if s.Blocks == nil {
-		return nil, unavailable("federation")
-	}
-	list, err := s.Blocks.List(ctx)
-	if err != nil {
-		return nil, actionErr(err)
-	}
-	out := &v1.ListBlockedDomainsResponse{}
-	for _, b := range list {
-		out.Domains = append(out.Domains, &v1.BlockedDomain{Domain: b.Domain, Reason: b.Reason, CreatedAt: timestamppb.New(b.CreatedAt)})
-	}
-	return out, nil
-}
-
-func (s *AdminServer) BlockDomain(ctx context.Context, req *v1.BlockDomainRequest) (*v1.BlockDomainResponse, error) {
-	if s.Blocks == nil {
-		return nil, unavailable("federation")
-	}
-	d, err := s.Blocks.Block(ctx, s.actor(ctx), req.GetDomain(), req.GetReason())
-	if err != nil {
-		return nil, actionErr(err)
-	}
-	return &v1.BlockDomainResponse{Domain: &v1.BlockedDomain{Domain: d, Reason: req.GetReason(), CreatedAt: timestamppb.Now()}}, nil
-}
-
-func (s *AdminServer) UnblockDomain(ctx context.Context, req *v1.UnblockDomainRequest) (*v1.UnblockDomainResponse, error) {
-	if s.Blocks == nil {
-		return nil, unavailable("federation")
-	}
-	if err := s.Blocks.Unblock(ctx, s.actor(ctx), req.GetDomain()); err != nil {
-		return nil, actionErr(err)
-	}
-	return &v1.UnblockDomainResponse{}, nil
-}
-
 func (s *AdminServer) GetInstanceMergeDefaults(ctx context.Context, _ *v1.GetInstanceMergeDefaultsRequest) (*v1.GetInstanceMergeDefaultsResponse, error) {
 	if s.MergeDefaults == nil {
 		return nil, unavailable("merge defaults")

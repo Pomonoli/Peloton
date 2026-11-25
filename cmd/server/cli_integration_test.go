@@ -41,7 +41,6 @@ func TestCLI_MigrateRotateServe(t *testing.T) {
 		"CAIRN_AUTH_SESSION_SECRET":               "itest-session-secret",
 		"CAIRN_AUTH_MASTER_ENCRYPTION_KEY":        "itest-master-encryption-key",
 		"CAIRN_GEOCODER_ENABLED":                  "false",
-		"CAIRN_FEDERATION_ENABLED":                "true",
 		"CAIRN_EMAIL_ADAPTER":                     "none",
 		"CAIRN_NATS_URL":                          "",
 		"CAIRN_STORAGE_DRIVER":                    "none",
@@ -108,14 +107,17 @@ func TestCLI_MigrateRotateServe(t *testing.T) {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	for _, p := range []string{"/healthz", "/api/version", "/api/instance/features", "/.well-known/nodeinfo"} {
+	for p, want := range map[string]int{
+		"/healthz": http.StatusOK, "/api/version": http.StatusOK,
+		"/api/instance/features": http.StatusNotFound, "/.well-known/nodeinfo": http.StatusNotFound,
+	} {
 		resp, err := http.Get(base + p)
 		if err != nil {
 			t.Fatal(err)
 		}
 		_ = resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("GET %s: %d", p, resp.StatusCode)
+		if resp.StatusCode != want {
+			t.Errorf("GET %s: %d, want %d", p, resp.StatusCode, want)
 		}
 	}
 	cancel()

@@ -6,16 +6,6 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
-// BlockRepo persists user blocks (migration 36).
-type BlockRepo interface {
-	Block(ctx context.Context, blocker, blocked domain.UserID) error
-	Unblock(ctx context.Context, blocker, blocked domain.UserID) error
-	// IsBlocked reports whether `a` has blocked `b` OR `b` has blocked `a`
-	// (blocking is mutually isolating).
-	IsBlockedEitherWay(ctx context.Context, a, b domain.UserID) (bool, error)
-	ListBlocked(ctx context.Context, blocker domain.UserID) ([]domain.UserID, error)
-}
-
 // ReportRepo persists content reports for the moderation queue (migration 36).
 type ReportRepo interface {
 	Create(ctx context.Context, r domain.ContentReport) (domain.ContentReportID, error)

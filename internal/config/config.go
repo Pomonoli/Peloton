@@ -52,25 +52,12 @@ type Config struct {
 	Geocoder         GeocoderConfig         `env:", prefix=GEOCODER_"`
 	Map              MapConfig              `env:", prefix=MAP_"`
 	Quota            QuotaConfig            `env:", prefix=QUOTA_"`
-	Federation       FederationConfig       `env:", prefix=FEDERATION_"`
 	SegmentDiscovery SegmentDiscoveryConfig `env:", prefix=SEGMENT_DISCOVERY_"`
 }
 
 // SegmentDiscoveryConfig opts into external, coarse geographic lookups.
 type SegmentDiscoveryConfig struct {
 	Enabled bool `env:"ENABLED, default=false"`
-}
-
-// FederationConfig gates ActivityPub federation (docs/federation-design.md).
-// Off by default; when on, only users who additionally opt in
-// (users.federation_enabled) expose an actor. Phase 1 is read-only discovery.
-type FederationConfig struct {
-	Enabled bool `env:"ENABLED, default=false"`
-	// AllowPrivateHosts drops the SSRF dial guard on federation fetches +
-	// deliveries so instances on a private network (LAN self-hosting, or the
-	// two-instance interop harness) can reach each other. Leave OFF on the
-	// public internet — it re-opens SSRF to internal services.
-	AllowPrivateHosts bool `env:"ALLOW_PRIVATE_HOSTS, default=false"`
 }
 
 // QuotaConfig holds per-user resource limits (multi-tenant v1). A per-user
@@ -178,8 +165,7 @@ type NATSConfig struct {
 	JobAckWait time.Duration `env:"JOB_ACK_WAIT, default=5m"`
 
 	// JobMaxDeliver caps how many times a failed job is retried before
-	// JetStream parks it in the dead-letter consumer. Cairn dispatches
-	// a JobFailedFinal notification when this fires.
+	// JetStream parks it in the dead-letter consumer.
 	JobMaxDeliver int `env:"JOB_MAX_DELIVER, default=5"`
 
 	// AuthCallout makes core answer NATS auth-callout requests, admitting

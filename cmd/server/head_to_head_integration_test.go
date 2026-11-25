@@ -279,9 +279,6 @@ func TestAPI_HeadToHead(t *testing.T) {
 	}
 	admin.do(http.MethodGet, "/api/head-to-head?first="+alice.name+"&second="+alice.name, nil, http.StatusBadRequest)
 
-	if err := env.app.Blocks.Block(ctx, bob.userID, alice.userID); err != nil {
-		t.Fatal(err)
-	}
 	alice.do(http.MethodGet, endpoint+bob.name, nil, http.StatusOK)
 	bob.do(http.MethodGet, endpoint+alice.name, nil, http.StatusOK)
 }

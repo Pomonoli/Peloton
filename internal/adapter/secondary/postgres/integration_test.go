@@ -93,3 +93,21 @@ func TestUserRepo_RoundTrip(t *testing.T) {
 		t.Fatalf("email lookup returned wrong user")
 	}
 }
+
+// seedUser creates a user for repository fixtures.
+func seedUser(t *testing.T) domain.UserID {
+	t.Helper()
+	ctx, pool := requirePool(t)
+	repo := NewUserRepo(pool)
+	id := domain.UserID(uuid.New())
+	suffix := id.String()[:8]
+	u := domain.User{
+		ID: id, Username: "itest-" + suffix, Email: "itest-" + suffix + "@example.com",
+		DisplayName: "Integration Test", Role: domain.UserRoleUser, Status: domain.UserStatusActive,
+		Units: domain.UserUnitsMetric,
+	}
+	if err := repo.CreateUser(ctx, u, domain.Credentials{UserID: id, PasswordHash: "x"}); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	return id
+}

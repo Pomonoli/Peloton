@@ -41,17 +41,12 @@ func mountConnectRPC(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	gearSvc := connectadapter.NewGearServer(app.Gear)
 	gearSvc.Members = communityMembers(app)
 	cairnv1connect.RegisterGearServiceHandler(server, gearSvc)
-	notifSvc := connectadapter.NewNotificationServer(app.Notifications)
-	notifSvc.Hub = app.NotificationHub
-	notifSvc.Preferences = app.NotificationPreferences
-	cairnv1connect.RegisterNotificationServiceHandler(server, notifSvc)
 	cairnv1connect.RegisterExternalAccountServiceHandler(server, connectadapter.NewExternalAccountServer(
 		app.Accounts, app.ExternalAccounts, syncInsight{app: app, logger: logger}, int(app.DefaultPollInterval.Seconds())).
 		WithLifecycle(app.AccountRemover, app.WebhookTokens))
 	cairnv1connect.RegisterAuthServiceHandler(server, newAuthServer(app, logger))
 	registerReadServices(server, app, logger)
-	socialSvc := connectadapter.NewSocialServer(app.Feeds, app.Content, app.Gear, mapImageETag)
-	socialSvc.Clubs = app.ClubViews
+	socialSvc := connectadapter.NewSocialServer(app.ActivityShares, app.Content)
 	socialSvc.Profiles = app.ProfileViews
 	socialSvc.Activities = app.Activities
 	if app.ShareLinks != nil {
@@ -60,7 +55,7 @@ func mountConnectRPC(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	cairnv1connect.RegisterSocialServiceHandler(server, socialSvc)
 	connecthttp.Mount(streamSafeMux{mux}, server)
 	logger.Info("connect-rpc services mounted", "services", []string{
-		cairnv1connect.ActivityServiceName, cairnv1connect.NotificationServiceName, cairnv1connect.AuthServiceName,
+		cairnv1connect.ActivityServiceName, cairnv1connect.AuthServiceName,
 		cairnv1connect.GearServiceName, cairnv1connect.StatsServiceName, cairnv1connect.SocialServiceName,
 		cairnv1connect.SegmentServiceName, cairnv1connect.MetricsServiceName, cairnv1connect.SettingsServiceName,
 		cairnv1connect.ExternalAccountServiceName,
@@ -87,7 +82,7 @@ var streamingProcedures = func() map[string]bool {
 	out := map[string]bool{}
 	for _, fd := range []protoreflect.FileDescriptor{
 		cairnv1.File_cairn_v1_activity_proto, cairnv1.File_cairn_v1_admin_proto, cairnv1.File_cairn_v1_auth_proto,
-		cairnv1.File_cairn_v1_gear_proto, cairnv1.File_cairn_v1_metrics_proto, cairnv1.File_cairn_v1_notification_proto,
+		cairnv1.File_cairn_v1_gear_proto, cairnv1.File_cairn_v1_metrics_proto,
 		cairnv1.File_cairn_v1_segment_proto, cairnv1.File_cairn_v1_stats_proto, cairnv1.File_cairn_v1_social_proto,
 	} {
 		svcs := fd.Services()
@@ -125,11 +120,10 @@ func (m streamSafeMux) Handle(pattern string, h http.Handler) {
 func instanceInfo(app *App) connectadapter.InstanceInfo {
 	version, commit, built := buildInfo()
 	info := connectadapter.InstanceInfo{
-		Version:           version,
-		Commit:            commit,
-		FederationEnabled: app.FederationEnabled,
-		OAuthEnabled:      app.OAuthEnabled,
-		RegistrationOpen:  false, // invite-only; GetLoginMethods says requires_invite
+		Version:          version,
+		Commit:           commit,
+		OAuthEnabled:     app.OAuthEnabled,
+		RegistrationOpen: false, // invite-only; GetLoginMethods says requires_invite
 	}
 	if t, err := time.Parse(time.RFC3339, built); err == nil {
 		info.BuildTime = t
@@ -235,7 +229,6 @@ func newAdminServer(app *App, logger *slog.Logger) *connectadapter.AdminServer {
 	adminSvc.Fleet = app.Fleet
 	adminSvc.CoreRelease = Version
 	adminSvc.Reports = app.ModReports
-	adminSvc.Blocks = app.FedBlocks
 	adminSvc.MergeDefaults = app.MergeDefaults
 	adminSvc.Ops = app.Ops
 	adminSvc.Events = app.AdminEvents

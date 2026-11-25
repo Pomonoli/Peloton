@@ -72,8 +72,6 @@ type OAuthTokenRepo interface {
 	// Called by the worker when the provider returns invalid_grant or
 	// any other permanent refresh failure.
 	//
-	// Emits cairn.events.external_account.needs_reauth so the user-facing
-	// notification dispatcher can alert the user.
 	MarkNeedsReauth(ctx context.Context, accountID domain.ExternalAccountID, reason string) error
 }
 

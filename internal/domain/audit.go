@@ -78,8 +78,6 @@ const (
 	AuditProviderUnbound        = "provider.unbound"
 	AuditEnrollmentCreated      = "worker_enrollment.created"
 	AuditEnrollmentRevoked      = "worker_enrollment.revoked"
-	AuditFederationBlocked      = "federation.domain_blocked"
-	AuditFederationUnblocked    = "federation.domain_unblocked"
 	AuditReportResolved         = "report.resolved"
 	AuditActivityHidden         = "activity.hidden"
 	AuditQuotaChanged           = "user.quota_changed"

@@ -5,13 +5,13 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/activity"
+	"github.com/opencairn-org/cairn-core/internal/usecase/trainingload"
 )
 
 type published struct {
@@ -30,11 +30,53 @@ func (b *busSpy) Publish(ctx context.Context, subject, msgID string, body []byte
 	return b.err
 }
 
+type trainingLoadSpy struct{ users []domain.UserID }
+
+func (s *trainingLoadSpy) Execute(_ context.Context, in trainingload.Input) (trainingload.Result, error) {
+	s.users = append(s.users, in.UserID)
+	return trainingload.Result{}, nil
+}
+
 // ctxStreams records the context each aggregate refresh ran under.
 type ctxStreams struct {
 	port.StreamRepo
 	mu   sync.Mutex
 	errs []error
+}
+
+type segmentEffortsStub struct {
+	port.SegmentReader
+	efforts []domain.SegmentEffort
+}
+
+func (s segmentEffortsStub) ListEffortsForActivity(context.Context, domain.ActivityID) ([]domain.SegmentEffort, error) {
+	return s.efforts, nil
+}
+
+type activityEventsSpy []domain.ActivityEvent
+
+func (s *activityEventsSpy) Publish(event domain.ActivityEvent) { *s = append(*s, event) }
+
+func TestIngestFollowUpsPublishLiveSegmentRecords(t *testing.T) {
+	f := newFixture()
+	aid, sources := f.seed(2)
+	id := domain.SegmentID(uuid.New())
+	f.p.SegmentEfforts = segmentEffortsStub{efforts: []domain.SegmentEffort{
+		{ActivityID: aid, ActivitySourceID: sources[0], UserID: f.user, SegmentID: id, ElapsedS: 90, IsPersonalRecord: true},
+		{ActivityID: aid, ActivitySourceID: sources[0]},
+		{ActivityID: aid, ActivitySourceID: sources[1], IsPersonalRecord: true},
+	}}
+	var events activityEventsSpy
+	f.p.Events = &events
+	err := f.p.RunFollowUps(t.Context(), ActivityChanged{Kind: ChangeIngested, ActivityID: aid, SourceID: sources[0], UserID: f.user})
+	if err != nil || len(events) != 1 {
+		t.Fatalf("events=%+v, err=%v", events, err)
+	}
+	event := events[0]
+	if event.Type != domain.ActivityEventSegmentPR || event.UserID != f.user || event.ActivityID != aid ||
+		event.SourceID != sources[0] || event.Params["segment_id"] != id.String() || event.Params["elapsed_s"] != "90" {
+		t.Fatalf("unexpected live record event: %+v", event)
+	}
 }
 
 func (s *ctxStreams) RefreshAggregates(ctx context.Context, _ domain.SourceID) error {
@@ -55,14 +97,16 @@ func softDeletable(f *fixture) domain.ActivityID {
 func TestRemergePublishesInsteadOfRunningInline(t *testing.T) {
 	f := newFixture()
 	bus := &busSpy{}
+	load := &trainingLoadSpy{}
+	f.p.TrainingLoad = load
 	f.p.Bus = bus
 	aid := softDeletable(f)
 
 	if _, err := f.p.Remerge(context.Background(), aid); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.fed.deleted) != 0 {
-		t.Fatalf("follow-ups ran inline: %+v", f.fed.deleted)
+	if len(load.users) != 0 {
+		t.Fatalf("follow-ups ran inline: %v", load.users)
 	}
 	if len(bus.msgs) != 1 || bus.msgs[0].subject != ActivityChangedSubject || bus.msgs[0].msgID == "" {
 		t.Fatalf("published: %+v", bus.msgs)
@@ -78,20 +122,22 @@ func TestRemergePublishesInsteadOfRunningInline(t *testing.T) {
 	if err := f.p.RunFollowUps(context.Background(), ev); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.fed.deleted) != 1 || f.fed.deleted[0] != aid {
-		t.Fatalf("federation delete: %+v", f.fed.deleted)
+	if len(load.users) != 1 || load.users[0] != f.user {
+		t.Fatalf("training load was not recomputed: %v", load.users)
 	}
 }
 
 func TestPublishFailureFallsBackInline(t *testing.T) {
 	f := newFixture()
+	load := &trainingLoadSpy{}
+	f.p.TrainingLoad = load
 	f.p.Bus = &busSpy{err: errors.New("nats down")}
 	aid := softDeletable(f)
 	if _, err := f.p.Remerge(context.Background(), aid); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.fed.deleted) != 1 {
-		t.Fatalf("inline fallback did not run: %+v", f.fed.deleted)
+	if len(load.users) != 1 || load.users[0] != f.user {
+		t.Fatalf("inline fallback did not run: %v", load.users)
 	}
 }
 
@@ -113,36 +159,6 @@ func TestCancelledRequestDoesNotCancelFollowUps(t *testing.T) {
 	f.p.dispatch(ctx, ActivityChanged{Kind: ChangeBorrowed, UserID: f.user, ActivityID: aid, SourceID: srcs[0]})
 	if len(bus.msgs) != 1 || bus.msgs[0].ctxErr != nil {
 		t.Fatalf("publish context: %+v", bus.msgs)
-	}
-}
-
-func TestFollowUpsFederationGate(t *testing.T) {
-	cases := []struct {
-		name       string
-		action     activity.IngestAction
-		age        time.Duration
-		redelivery bool
-		want       int
-	}{
-		{"new and recent", activity.IngestActionImportedNew, time.Hour, false, 1},
-		{"merged into existing", activity.IngestActionMergedIntoExisting, time.Hour, false, 0},
-		{"historical", activity.IngestActionImportedNew, FederationMaxAge + time.Hour, false, 0},
-		{"redelivery", activity.IngestActionImportedNew, time.Hour, true, 0},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			f := newFixture()
-			aid, srcs := f.seed(1)
-			a := f.repo.Activities[aid]
-			a.StartTime = tNow.Add(-c.age)
-			f.repo.Activities[aid] = a
-			err := f.p.RunFollowUps(context.Background(), ActivityChanged{
-				Kind: ChangeIngested, UserID: f.user, ActivityID: aid, SourceID: srcs[0], Action: c.action, Redelivery: c.redelivery,
-			})
-			if err != nil || len(f.fed.created) != c.want {
-				t.Fatalf("err=%v created=%v want %d", err, f.fed.created, c.want)
-			}
-		})
 	}
 }
 

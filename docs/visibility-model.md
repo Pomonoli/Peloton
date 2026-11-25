@@ -1,13 +1,11 @@
 # Member visibility
 
-Peloton is invite-only. A signed-in member can read other members’ profiles and cycling activities, including historical uploads and their derived statistics, records, heatmaps, and segment efforts. Follows and share links are ways to navigate and interact within Peloton. Personal blocks still apply to follows and activity reactions.
+Peloton is invite-only. **Social → Riders** opens member profiles and the shared views of their cycling data. **Social → Head-to-Head** compares members' records and segment efforts. Members can read available historical rides and derived statistics without changing sharing settings. Share links also require a signed-in member.
 
-An activity that is provider-restricted or hidden by an administrator is excluded from other members’ reads and community rankings. Soft-deleted activities are excluded. A segment’s definition retains its own scope. Geographic privacy zones still mask location data from other members, and photos shared with other members use re-encoded variants. Activity edits and source management require ownership.
+Provider-restricted rides and rides hidden by an administrator are excluded from other members' reads and community rankings. Soft-deleted rides are excluded. A segment definition retains its own scope. Geographic privacy zones mask locations for other members, including in rider history. When a history page has activities, the server loads the profile owner's zones once for that page. Shared photos use re-encoded variants. Activity edits, original source files, and source management require ownership.
 
-Activity media and share links require member credentials. Local activities are excluded from the public federation audience.
+## Existing databases
 
-## Upgrade
+Migration 88 established member visibility for legacy profiles and activities. The database value `public` used by that migration means visible to eligible signed-in members. Existing activities, moderation flags, privacy zones, source identities, and account credentials continue to use the existing migrations.
 
-Migration 88 enables member visibility for legacy profiles, sets existing activity privacy and default activity sharing to the stored `public` value, clears activity-level overrides, and resets saved audience policies. The stored value means member visibility on Peloton. The migration preserves activity and source IDs, computed data, moderation flags, and privacy zones.
-
-Older clients can still send profile, policy, and activity visibility fields. The server returns the fixed member-sharing defaults. Historical visibility selections cannot be reconstructed by rolling back the schema version.
+The former feeds, follow and block controls, clubs, kudos, comments, ActivityPub federation, and profile audience settings have been retired. The notification inbox, delivery preferences, and outbound notification webhooks have also been retired. Their schema and historical rows remain in place. Account email, live activity and admin events, and inbound provider webhooks remain available.

@@ -40,7 +40,6 @@ type (
 	LoginChallengeID        uuid.UUID
 	AuditEntryID            uuid.UUID
 	MetricID                uuid.UUID
-	NotificationID          uuid.UUID
 	WorkerEnrollmentID      uuid.UUID
 	WorkerCredentialGrantID uuid.UUID
 	SigningKeyID            uuid.UUID
@@ -50,9 +49,7 @@ type (
 	PasskeyID               uuid.UUID
 	InviteID                uuid.UUID
 	PATID                   uuid.UUID
-	WebhookEndpointID       uuid.UUID
 	PrivacyZoneID           uuid.UUID
-	CommentID               uuid.UUID
 	ContentReportID         uuid.UUID
 	MatchConstraintID       uuid.UUID
 	AttachmentID            uuid.UUID
@@ -73,7 +70,6 @@ func (id SourcePreviewID) UUID() uuid.UUID         { return uuid.UUID(id) }
 func (id LoginChallengeID) UUID() uuid.UUID        { return uuid.UUID(id) }
 func (id AuditEntryID) UUID() uuid.UUID            { return uuid.UUID(id) }
 func (id MetricID) UUID() uuid.UUID                { return uuid.UUID(id) }
-func (id NotificationID) UUID() uuid.UUID          { return uuid.UUID(id) }
 func (id WorkerEnrollmentID) UUID() uuid.UUID      { return uuid.UUID(id) }
 func (id WorkerCredentialGrantID) UUID() uuid.UUID { return uuid.UUID(id) }
 func (id SigningKeyID) UUID() uuid.UUID            { return uuid.UUID(id) }
@@ -83,9 +79,7 @@ func (id AthleteMetricID) UUID() uuid.UUID         { return uuid.UUID(id) }
 func (id PasskeyID) UUID() uuid.UUID               { return uuid.UUID(id) }
 func (id InviteID) UUID() uuid.UUID                { return uuid.UUID(id) }
 func (id PATID) UUID() uuid.UUID                   { return uuid.UUID(id) }
-func (id WebhookEndpointID) UUID() uuid.UUID       { return uuid.UUID(id) }
 func (id PrivacyZoneID) UUID() uuid.UUID           { return uuid.UUID(id) }
-func (id CommentID) UUID() uuid.UUID               { return uuid.UUID(id) }
 func (id ContentReportID) UUID() uuid.UUID         { return uuid.UUID(id) }
 func (id MatchConstraintID) UUID() uuid.UUID       { return uuid.UUID(id) }
 func (id AttachmentID) UUID() uuid.UUID            { return uuid.UUID(id) }
@@ -104,7 +98,6 @@ func (id SourcePreviewID) String() string         { return uuid.UUID(id).String(
 func (id LoginChallengeID) String() string        { return uuid.UUID(id).String() }
 func (id AuditEntryID) String() string            { return uuid.UUID(id).String() }
 func (id MetricID) String() string                { return uuid.UUID(id).String() }
-func (id NotificationID) String() string          { return uuid.UUID(id).String() }
 func (id WorkerEnrollmentID) String() string      { return uuid.UUID(id).String() }
 func (id WorkerCredentialGrantID) String() string { return uuid.UUID(id).String() }
 func (id SigningKeyID) String() string            { return uuid.UUID(id).String() }
@@ -114,9 +107,7 @@ func (id AthleteMetricID) String() string         { return uuid.UUID(id).String(
 func (id PasskeyID) String() string               { return uuid.UUID(id).String() }
 func (id InviteID) String() string                { return uuid.UUID(id).String() }
 func (id PATID) String() string                   { return uuid.UUID(id).String() }
-func (id WebhookEndpointID) String() string       { return uuid.UUID(id).String() }
 func (id PrivacyZoneID) String() string           { return uuid.UUID(id).String() }
-func (id CommentID) String() string               { return uuid.UUID(id).String() }
 func (id ContentReportID) String() string         { return uuid.UUID(id).String() }
 func (id MatchConstraintID) String() string       { return uuid.UUID(id).String() }
 func (id AttachmentID) String() string            { return uuid.UUID(id).String() }

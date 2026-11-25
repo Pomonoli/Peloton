@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest';
 import {
-	bestEffortValue,
 	compareRecordCategories,
 	filterCommunityRecords,
 	recordLabel,
@@ -65,7 +64,7 @@ it.each([
 ])('formats a %i second climbing record as elevation gained', (seconds, expected) => {
 	const bucket = { ...initial, metric: 'vam', window_value: seconds };
 	expect(recordValue(bucket, 900)).toBe(expected);
-	expect(bestEffortValue(bucket, 900)).toBe(expected);
+	expect(recordValue(bucket, 900)).toBe(expected);
 });
 
 it.each([
@@ -78,7 +77,7 @@ it.each([
 ])('formats a %i m cycling record using the ranked pace', (distance, pace, expected) => {
 	const bucket = { ...cyclingDistance, window_value: distance };
 	expect(recordValue(bucket, pace)).toBe(expected);
-	expect(bestEffortValue(bucket, pace)).toBe(expected);
+	expect(recordValue(bucket, pace)).toBe(expected);
 });
 
 it('labels cycling distance records and keeps duration metrics in their own units', () => {
@@ -86,8 +85,8 @@ it('labels cycling distance records and keeps duration metrics in their own unit
 	expect(recordLabel(initial)).toBe('Best measured power · 20 min');
 	expect(recordValue({ ...cyclingDistance, window_kind: 'duration' }, 105)).toBe('1:45 /km');
 	expect(recordValue({ ...cyclingDistance, metric: 'power' }, 285)).toBe('285 W');
-	expect(bestEffortValue({ ...initial, metric: 'speed' }, 10)).toBe('36 km/h');
-	expect(bestEffortValue({ ...initial, metric: 'heart_rate' }, 179.6)).toBe('179.6 bpm');
+	expect(recordValue({ ...initial, metric: 'speed' }, 10)).toBe('36 km/h');
+	expect(recordValue({ ...initial, metric: 'heart_rate' }, 179.6)).toBe('179.6 bpm');
 });
 
 it.each([0, -1, NaN, Infinity])('handles invalid distance or pace (%s)', (invalid) => {

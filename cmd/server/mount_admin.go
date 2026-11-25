@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/opencairn-org/cairn-core/internal/adapter/primary/rest"
-	"github.com/opencairn-org/cairn-core/internal/config"
 )
 
 // mountRestAdmin mounts the session+admin gated /api/admin/* surface.
@@ -36,9 +35,4 @@ func mountRestHealthMetrics(mux *http.ServeMux, app *App, logger *slog.Logger) {
 		return
 	}
 	(&rest.HealthMetricsHandlers{Auth: restAuth(app), Health: app.HealthViews, Log: logger}).Mount(mux)
-}
-
-func mountRestInstanceFeatures(mux *http.ServeMux, cfg *config.Config, logger *slog.Logger) {
-	(&rest.InstanceFeaturesHandlers{Federation: cfg.Federation.Enabled}).Mount(mux)
-	logger.Info("instance features endpoint mounted", "federation", cfg.Federation.Enabled)
 }

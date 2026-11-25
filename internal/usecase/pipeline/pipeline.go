@@ -18,15 +18,9 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/activity"
 	"github.com/opencairn-org/cairn-core/internal/usecase/besteffort"
 	"github.com/opencairn-org/cairn-core/internal/usecase/match"
-	"github.com/opencairn-org/cairn-core/internal/usecase/notification"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segment"
 	"github.com/opencairn-org/cairn-core/internal/usecase/trainingload"
 )
-
-// FederationMaxAge bounds which new activities get announced, so a historical
-// backfill does not flood followers. An explicit "make public" edit federates
-// through the edit path without this gate.
-const FederationMaxAge = 48 * time.Hour
 
 // Training load is recomputed over a fixed window anchored at now (plus a
 // warm-up), so recent CTL/ATL never reset when an activity lands.
@@ -41,7 +35,7 @@ type pipelineActivityStore interface {
 	port.SourceWriter
 }
 
-// The stages, each satisfied by its use case (activity, match, besteffort, segment, trainingload, notification).
+// The stages, each satisfied by its use case (activity, match, besteffort, segment, trainingload).
 type (
 	Ingester interface {
 		Execute(ctx context.Context, in activity.IngestInput) (activity.IngestResult, error)
@@ -61,9 +55,6 @@ type (
 	TrainingLoadComputer interface {
 		Execute(ctx context.Context, in trainingload.Input) (trainingload.Result, error)
 	}
-	PRNotifier interface {
-		Execute(ctx context.Context, in notification.Input) (notification.Result, error)
-	}
 )
 
 // Pipeline wires the stages. Every follow-up stage is optional (nil → skipped).
@@ -73,13 +64,12 @@ type Pipeline struct {
 	Recluster  Reclusterer // nil → no re-clustering
 	Recompute  Recomputer
 
-	Streams      port.StreamRepo
-	BestEfforts  BestEffortComputer
-	Segments     SegmentMatcher
-	TrainingLoad TrainingLoadComputer
-	PRs          PRNotifier
-	Federation   port.FederationPublisher
-	Events       port.ActivityEventSink
+	Streams        port.StreamRepo
+	BestEfforts    BestEffortComputer
+	Segments       SegmentMatcher
+	TrainingLoad   TrainingLoadComputer
+	SegmentEfforts port.SegmentReader
+	Events         port.ActivityEventSink
 
 	// BorrowFrom's writes: pins, one transaction, the owner's regrouping lock.
 	FieldOverrides port.FieldOverrideRepo
@@ -155,7 +145,7 @@ func (p *Pipeline) followSource(ctx context.Context, out activity.IngestResult) 
 	moved := out.ActivityID != act.ID
 	out.ActivityID, out.Activity = act.ID, act
 	if moved && out.Action == activity.IngestActionImportedNew {
-		out.Action = activity.IngestActionMergedIntoExisting // not a new activity: no created event, no federation
+		out.Action = activity.IngestActionMergedIntoExisting // not a new activity: no created event
 	}
 	return out
 }
@@ -262,3 +252,18 @@ func recovered(fn func() error) (err error) {
 }
 
 var _ activity.Remerger = (*Pipeline)(nil)
+
+func (p *Pipeline) publishSegmentRecords(ctx context.Context, activityID domain.ActivityID, sourceID domain.SourceID) error {
+	efforts, err := p.SegmentEfforts.ListEffortsForActivity(ctx, activityID)
+	if err != nil {
+		return fmt.Errorf("list segment efforts for %s: %w", activityID, err)
+	}
+	for _, effort := range efforts {
+		if effort.ActivitySourceID == sourceID && effort.IsPersonalRecord {
+			p.Events.Publish(domain.NewActivityEvent(domain.ActivityEventSegmentPR, effort.UserID, "activity.segment_pr").
+				For(effort.ActivityID, effort.ActivitySourceID).With("segment_id", effort.SegmentID.String()).
+				With("elapsed_s", strconv.Itoa(int(effort.ElapsedS))))
+		}
+	}
+	return nil
+}

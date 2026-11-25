@@ -16,7 +16,7 @@ func mountRestShare(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	if app.ShareLinks == nil {
 		return
 	}
-	(&rest.ShareHandlers{Auth: restAuth(app), Links: app.Shares, Feeds: app.Feeds, Log: logger}).Mount(mux)
+	(&rest.ShareHandlers{Auth: restAuth(app), Links: app.Shares, Shares: app.ActivityShares, Log: logger}).Mount(mux)
 	logger.Info("share-link endpoints mounted")
 }
 

@@ -206,7 +206,7 @@ func TestProcessWorkerEvent_GearUpsertsByRef(t *testing.T) {
 	repo := inmem.NewGearRepo()
 	userID, acctID := domain.UserID(uuid.New()), domain.ExternalAccountID(uuid.New())
 	accounts := fakeAccountLookup{acctID: {ID: acctID, UserID: userID, Provider: "strava"}}
-	app := &App{Gear: gearuc.NewService(repo, accounts, passTx{}, nil, nil, nil, nil)}
+	app := &App{Gear: gearuc.NewService(repo, accounts, passTx{}, nil, nil, nil)}
 	user, acct := userID.String(), acctID.String()
 	ev := &workerv1.WorkerEvent{
 		Type: workerv1.WorkerEventType_WORKER_EVENT_TYPE_GEAR,

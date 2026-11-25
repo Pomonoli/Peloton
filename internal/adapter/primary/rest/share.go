@@ -17,10 +17,10 @@ import (
 //	DELETE /api/shares/{token}          owner: revoke
 //	GET    /api/shared/{token}          authenticated: read-only projected activity
 type ShareHandlers struct {
-	Auth  *Auth
-	Links *sharing.Links
-	Feeds *view.Feeds
-	Log   *slog.Logger
+	Auth   *Auth
+	Links  *sharing.Links
+	Shares *view.ActivityShares
+	Log    *slog.Logger
 }
 
 // Mount registers the routes.
@@ -100,7 +100,7 @@ func (h *ShareHandlers) read(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, owner, err := h.Feeds.Shared(r.Context(), h.Links.Repo, r.PathValue("token"), &me)
+	p, owner, err := h.Shares.Shared(r.Context(), h.Links.Repo, r.PathValue("token"), &me)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			http.Error(w, "link not found or revoked", http.StatusNotFound)

@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const streamHeartbeat = 30 * time.Second
+
 // pumpStream runs a server stream until the client goes away or the feed
 // closes: every heartbeat interval it sends a keepalive, and forwards each
 // item of events through forward. A send error ends the stream.

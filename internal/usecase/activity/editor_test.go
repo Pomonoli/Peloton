@@ -12,17 +12,6 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/port"
 )
 
-// fedRec records both federation calls.
-type fedRec struct{ created, deleted []domain.ActivityID }
-
-func (f *fedRec) PublishCreate(_ context.Context, a domain.Activity) {
-	f.created = append(f.created, a.ID)
-}
-
-func (f *fedRec) PublishDelete(_ context.Context, _ domain.UserID, id domain.ActivityID) {
-	f.deleted = append(f.deleted, id)
-}
-
 type memOverlays struct {
 	port.ClassificationOverrideRepo
 	set map[domain.ActivityID]domain.ClassificationOverride

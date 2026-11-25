@@ -9,19 +9,18 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
-// ProfileHandlers serve member profiles, privacy zones and legacy settings responses.
+// ProfileHandlers serve member profiles and privacy zones.
 type ProfileHandlers struct {
 	Auth     *Auth
 	Profiles *view.Profiles
+	Shares   *view.ActivityShares
 	Privacy  *social.Privacy
 }
 
 // Mount registers the profile routes.
 func (h *ProfileHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/profiles/{username}", h.getProfile)
-	mux.HandleFunc("PUT /api/profile/public", h.setPublic)
-	mux.HandleFunc("GET /api/profile/visibility", h.getVisibility)
-	mux.HandleFunc("PUT /api/profile/visibility", h.putVisibility)
+	mux.HandleFunc("GET /api/activities/{id}/projected", h.projected)
 }
 
 // MountPrivacyZones registers the owner-only location masking settings.
@@ -46,68 +45,11 @@ func (h *ProfileHandlers) getProfile(w http.ResponseWriter, r *http.Request) {
 		acts = append(acts, projectedJSON(p))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user":            userCardJSON(pv.User),
-		"is_public":       true,
-		"is_self":         pv.IsOwner,
-		"is_following":    pv.IsFollowing,
-		"followers_count": pv.Counts.Followers,
-		"following_count": pv.Counts.Following,
-		"activities":      acts,
-		"has_more":        pv.HasMore,
+		"user":       userCardJSON(pv.User),
+		"is_self":    pv.IsOwner,
+		"activities": acts,
+		"has_more":   pv.HasMore,
 	})
-}
-
-// Legacy clients can continue calling the former sharing settings endpoints.
-// Every authenticated member now receives the same access.
-func (h *ProfileHandlers) setPublic(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.Auth.requireUser(w, r); !ok {
-		return
-	}
-	var body struct {
-		Public bool `json:"public"`
-	}
-	if err := decodeJSONBody(r, &body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"public": true})
-}
-
-func (h *ProfileHandlers) getVisibility(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.Auth.requireUser(w, r); !ok {
-		return
-	}
-	audiences := []string{"public", "followers", "link"}
-	categories := socialCategoryStrings()
-	policy := fixedVisibilityPolicy(audiences, categories)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"policy": policy, "default_policy": policy,
-		"all_categories": categories, "all_audiences": audiences,
-	})
-}
-
-func (h *ProfileHandlers) putVisibility(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.Auth.requireUser(w, r); !ok {
-		return
-	}
-	var body struct {
-		Policy map[string][]string `json:"policy"`
-	}
-	if err := decodeJSONBody(r, &body); err != nil || body.Policy == nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"policy": fixedVisibilityPolicy([]string{"public", "followers", "link"}, socialCategoryStrings()),
-	})
-}
-
-func fixedVisibilityPolicy(audiences, categories []string) map[string][]string {
-	policy := make(map[string][]string, len(audiences))
-	for _, audience := range audiences {
-		policy[audience] = categories
-	}
-	return policy
 }
 
 func (h *ProfileHandlers) listZones(w http.ResponseWriter, r *http.Request) {
@@ -176,10 +118,24 @@ func (h *ProfileHandlers) deleteZone(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func socialCategoryStrings() []string {
-	out := make([]string, len(domain.AllCategories))
-	for i, c := range domain.AllCategories {
-		out[i] = string(c)
+func (h *ProfileHandlers) projected(w http.ResponseWriter, r *http.Request) {
+	me, ok := h.Auth.requireUser(w, r)
+	if !ok {
+		return
 	}
-	return out
+	actID, err := domain.ParseUUID[domain.ActivityID](r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	p, owner, isOwner, err := h.Shares.Projected(r.Context(), actID, &me, false)
+	if err != nil {
+		writeActionError(w, err, "load failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"activity": projectedJSON(p),
+		"owner":    userCardJSON(owner),
+		"is_owner": isOwner,
+	})
 }

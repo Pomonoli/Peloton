@@ -556,7 +556,7 @@ message UserRecord {
   string best_effort_id = 10;
   google.protobuf.Timestamp ts = 11;
 
-  // Recent improvement context — for "you set a new PR" notifications.
+  // Recent improvement context — for live personal-record events.
   optional double previous_value = 12;
   optional google.protobuf.Timestamp previous_ts = 13;
 }
@@ -701,20 +701,6 @@ service ActivityService {
   // channel across the activity's sources on a common 5 s grid.
   // Scope: activities:read.
   rpc GetMergedStream(GetMergedStreamRequest) returns (GetMergedStreamResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
-  }
-
-  // Kudos on an activity; the caller must be the owner or hold the "social"
-  // visibility category (PermissionDenied otherwise).
-  // Scope: activities:read.
-  rpc ListKudos(ListKudosRequest) returns (ListKudosResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
-  }
-
-  // Comments on an activity, oldest first, federated replies included. Same
-  // gate as ListKudos.
-  // Scope: activities:read.
-  rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
 
@@ -1247,32 +1233,6 @@ message GetMergedStreamResponse {
   repeated int64 grid_unix_s = 1;
   // Channel name (StreamChannel enum string, lower case) → values.
   map<string, MergedChannel> channels = 2;
-}
-
-message ListKudosRequest {
-  string activity_id = 1;
-}
-message ListKudosResponse {
-  int32 count = 1;
-  // The caller gave kudos.
-  bool has_kudos = 2;
-  // Local users first, then federated actors (remote = true); capped.
-  repeated UserCard kudosers = 3;
-}
-
-message ListCommentsRequest {
-  string activity_id = 1;
-}
-message Comment {
-  // A local comment id, or the ActivityPub id of a federated reply.
-  string id = 1;
-  string body = 2;
-  google.protobuf.Timestamp created_at = 3;
-  UserCard author = 4;
-}
-message ListCommentsResponse {
-  // Oldest first.
-  repeated Comment comments = 1;
 }
 
 message GetActivityManageInfoRequest {

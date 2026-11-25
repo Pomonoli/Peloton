@@ -1,8 +1,7 @@
-# Running Cairn locally
+# Running Peloton locally
 
 Local development runs the **supporting services in Docker Compose** and the
-**Cairn server and web app on the host**. See [Phase 1](../PROJECT_PLAN.md#1-start-the-unchanged-application-locally)
-for the toolchain and startup checks. File uploads work without a provider worker.
+**Peloton server and web app on the host**. File uploads work without a provider worker. [Development prerequisites](../CONTRIBUTING.md#development-setup)
 
 ## 1. Supporting services (compose)
 
@@ -22,7 +21,7 @@ make dev-down      # stop, keep data   (make dev-down ARGS=-v to wipe volumes)
 | Postgres | `localhost:5432` | `cairn` / `cairn` / db `cairn` |
 | NATS | `localhost:4222` (mon `:8222`) | JetStream; `/varz`, `/jsz` |
 | Silo (`minio`) | `localhost:9000` (console `:9001`) | `cairn` / `cairn-secret` |
-| Mailpit | SMTP `localhost:1025` (UI `:8025`) | read notification emails |
+| Mailpit | SMTP `localhost:1025` (UI `:8025`) | read account verification and password-reset emails |
 
 ## 2. Env
 

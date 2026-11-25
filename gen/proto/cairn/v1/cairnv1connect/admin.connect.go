@@ -167,13 +167,6 @@ const (
 	AdminServiceSetActivityHiddenProcedure = "/cairn.v1.AdminService/SetActivityHidden"
 	// AdminServiceSetUserQuotaProcedure is the procedure name of the AdminService's SetUserQuota RPC.
 	AdminServiceSetUserQuotaProcedure = "/cairn.v1.AdminService/SetUserQuota"
-	// AdminServiceListBlockedDomainsProcedure is the procedure name of the AdminService's
-	// ListBlockedDomains RPC.
-	AdminServiceListBlockedDomainsProcedure = "/cairn.v1.AdminService/ListBlockedDomains"
-	// AdminServiceBlockDomainProcedure is the procedure name of the AdminService's BlockDomain RPC.
-	AdminServiceBlockDomainProcedure = "/cairn.v1.AdminService/BlockDomain"
-	// AdminServiceUnblockDomainProcedure is the procedure name of the AdminService's UnblockDomain RPC.
-	AdminServiceUnblockDomainProcedure = "/cairn.v1.AdminService/UnblockDomain"
 	// AdminServiceGetInstanceMergeDefaultsProcedure is the procedure name of the AdminService's
 	// GetInstanceMergeDefaults RPC.
 	AdminServiceGetInstanceMergeDefaultsProcedure = "/cairn.v1.AdminService/GetInstanceMergeDefaults"
@@ -510,27 +503,6 @@ var (
 			Procedure:  AdminServiceSetUserQuotaProcedure,
 		}
 	})
-	adminServiceListBlockedDomainsSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_cairn_v1_admin_proto.Services().ByName("AdminService").Methods().ByName("ListBlockedDomains"),
-			Procedure:  AdminServiceListBlockedDomainsProcedure,
-		}
-	})
-	adminServiceBlockDomainSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_cairn_v1_admin_proto.Services().ByName("AdminService").Methods().ByName("BlockDomain"),
-			Procedure:  AdminServiceBlockDomainProcedure,
-		}
-	})
-	adminServiceUnblockDomainSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_cairn_v1_admin_proto.Services().ByName("AdminService").Methods().ByName("UnblockDomain"),
-			Procedure:  AdminServiceUnblockDomainProcedure,
-		}
-	})
 	adminServiceGetInstanceMergeDefaultsSpec = sync.OnceValue(func() connect.Spec {
 		return connect.Spec{
 			StreamType: connect.StreamTypeUnary,
@@ -718,13 +690,6 @@ type AdminServiceClient interface {
 	// ---- Quotas (twin of PUT /api/admin/users/{id}/quota) ----
 	// Scope: admin cookie session only (OAuth tokens are refused).
 	SetUserQuota(context.Context, *v1.SetUserQuotaRequest) (*v1.SetUserQuotaResponse, error)
-	// ---- Federation blocks (twins of /api/admin/federation/blocks) ----
-	// Scope: admin cookie session only (OAuth tokens are refused).
-	ListBlockedDomains(context.Context, *v1.ListBlockedDomainsRequest) (*v1.ListBlockedDomainsResponse, error)
-	// Scope: admin cookie session only (OAuth tokens are refused).
-	BlockDomain(context.Context, *v1.BlockDomainRequest) (*v1.BlockDomainResponse, error)
-	// Scope: admin cookie session only (OAuth tokens are refused).
-	UnblockDomain(context.Context, *v1.UnblockDomainRequest) (*v1.UnblockDomainResponse, error)
 	// ---- Instance merge defaults (twins of /api/admin/instance/merge-defaults) ----
 	// Scope: admin cookie session only (OAuth tokens are refused).
 	GetInstanceMergeDefaults(context.Context, *v1.GetInstanceMergeDefaultsRequest) (*v1.GetInstanceMergeDefaultsResponse, error)
@@ -913,13 +878,6 @@ type AdminServiceHandler interface {
 	// ---- Quotas (twin of PUT /api/admin/users/{id}/quota) ----
 	// Scope: admin cookie session only (OAuth tokens are refused).
 	SetUserQuota(context.Context, *v1.SetUserQuotaRequest) (*v1.SetUserQuotaResponse, error)
-	// ---- Federation blocks (twins of /api/admin/federation/blocks) ----
-	// Scope: admin cookie session only (OAuth tokens are refused).
-	ListBlockedDomains(context.Context, *v1.ListBlockedDomainsRequest) (*v1.ListBlockedDomainsResponse, error)
-	// Scope: admin cookie session only (OAuth tokens are refused).
-	BlockDomain(context.Context, *v1.BlockDomainRequest) (*v1.BlockDomainResponse, error)
-	// Scope: admin cookie session only (OAuth tokens are refused).
-	UnblockDomain(context.Context, *v1.UnblockDomainRequest) (*v1.UnblockDomainResponse, error)
 	// ---- Instance merge defaults (twins of /api/admin/instance/merge-defaults) ----
 	// Scope: admin cookie session only (OAuth tokens are refused).
 	GetInstanceMergeDefaults(context.Context, *v1.GetInstanceMergeDefaultsRequest) (*v1.GetInstanceMergeDefaultsResponse, error)
@@ -987,9 +945,6 @@ func RegisterAdminServiceHandler(server *connect.Server, svc AdminServiceHandler
 		connect.Method{Spec: adminServiceResolveReportSpec(), Handler: adapter.resolveReport},
 		connect.Method{Spec: adminServiceSetActivityHiddenSpec(), Handler: adapter.setActivityHidden},
 		connect.Method{Spec: adminServiceSetUserQuotaSpec(), Handler: adapter.setUserQuota},
-		connect.Method{Spec: adminServiceListBlockedDomainsSpec(), Handler: adapter.listBlockedDomains},
-		connect.Method{Spec: adminServiceBlockDomainSpec(), Handler: adapter.blockDomain},
-		connect.Method{Spec: adminServiceUnblockDomainSpec(), Handler: adapter.unblockDomain},
 		connect.Method{Spec: adminServiceGetInstanceMergeDefaultsSpec(), Handler: adapter.getInstanceMergeDefaults},
 		connect.Method{Spec: adminServiceUpdateInstanceMergeDefaultsSpec(), Handler: adapter.updateInstanceMergeDefaults},
 		connect.Method{Spec: adminServiceRunGeocodeBackfillSpec(), Handler: adapter.runGeocodeBackfill},
@@ -1196,18 +1151,6 @@ func (UnimplementedAdminServiceHandler) SetActivityHidden(context.Context, *v1.S
 
 func (UnimplementedAdminServiceHandler) SetUserQuota(context.Context, *v1.SetUserQuotaRequest) (*v1.SetUserQuotaResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "cairn.v1.AdminService.SetUserQuota is not implemented")
-}
-
-func (UnimplementedAdminServiceHandler) ListBlockedDomains(context.Context, *v1.ListBlockedDomainsRequest) (*v1.ListBlockedDomainsResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "cairn.v1.AdminService.ListBlockedDomains is not implemented")
-}
-
-func (UnimplementedAdminServiceHandler) BlockDomain(context.Context, *v1.BlockDomainRequest) (*v1.BlockDomainResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "cairn.v1.AdminService.BlockDomain is not implemented")
-}
-
-func (UnimplementedAdminServiceHandler) UnblockDomain(context.Context, *v1.UnblockDomainRequest) (*v1.UnblockDomainResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "cairn.v1.AdminService.UnblockDomain is not implemented")
 }
 
 func (UnimplementedAdminServiceHandler) GetInstanceMergeDefaults(context.Context, *v1.GetInstanceMergeDefaultsRequest) (*v1.GetInstanceMergeDefaultsResponse, error) {
@@ -1593,30 +1536,6 @@ func (c *adminServiceClient) SetActivityHidden(ctx context.Context, req *v1.SetA
 func (c *adminServiceClient) SetUserQuota(ctx context.Context, req *v1.SetUserQuotaRequest) (*v1.SetUserQuotaResponse, error) {
 	var res v1.SetUserQuotaResponse
 	if err := c.client.CallUnary(ctx, adminServiceSetUserQuotaSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *adminServiceClient) ListBlockedDomains(ctx context.Context, req *v1.ListBlockedDomainsRequest) (*v1.ListBlockedDomainsResponse, error) {
-	var res v1.ListBlockedDomainsResponse
-	if err := c.client.CallUnary(ctx, adminServiceListBlockedDomainsSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *adminServiceClient) BlockDomain(ctx context.Context, req *v1.BlockDomainRequest) (*v1.BlockDomainResponse, error) {
-	var res v1.BlockDomainResponse
-	if err := c.client.CallUnary(ctx, adminServiceBlockDomainSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *adminServiceClient) UnblockDomain(ctx context.Context, req *v1.UnblockDomainRequest) (*v1.UnblockDomainResponse, error) {
-	var res v1.UnblockDomainResponse
-	if err := c.client.CallUnary(ctx, adminServiceUnblockDomainSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -2202,42 +2121,6 @@ func (h adminServiceHandler) setUserQuota(ctx context.Context, _ connect.Spec, s
 		return err
 	}
 	res, err := h.svc.SetUserQuota(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h adminServiceHandler) listBlockedDomains(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.ListBlockedDomainsRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.ListBlockedDomains(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h adminServiceHandler) blockDomain(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.BlockDomainRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.BlockDomain(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h adminServiceHandler) unblockDomain(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.UnblockDomainRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.UnblockDomain(ctx, &req)
 	if err != nil {
 		return err
 	}

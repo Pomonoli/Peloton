@@ -27,16 +27,12 @@ type AccountLookup interface {
 // Recompute re-derives one activity (usecase/activity.RecomputeActivityFromSources).
 type Recompute func(ctx context.Context, id domain.ActivityID) error
 
-// Notifier tells the user a provider record awaits a decision.
-type Notifier func(ctx context.Context, ref domain.GearExternalRef) error
-
 // Service bundles the gear use cases.
 type Service struct {
 	gear      port.GearRepo
 	accounts  AccountLookup
 	tx        port.TxManager
 	recompute Recompute // nil → mapping changes only move the ref
-	notify    Notifier  // nil → pending refs are only listed
 	now       func() time.Time
 	newID     func() uuid.UUID
 }
@@ -48,7 +44,6 @@ func NewService(
 	accounts AccountLookup,
 	tx port.TxManager,
 	recompute Recompute,
-	notify Notifier,
 	now func() time.Time,
 	newID func() uuid.UUID,
 ) *Service {
@@ -64,7 +59,7 @@ func NewService(
 			return id
 		}
 	}
-	return &Service{gear: gear, accounts: accounts, tx: tx, recompute: recompute, notify: notify, now: now, newID: newID}
+	return &Service{gear: gear, accounts: accounts, tx: tx, recompute: recompute, now: now, newID: newID}
 }
 
 // ErrNotOwner is returned when the gear or provider record belongs to another
@@ -272,12 +267,11 @@ func (s *Service) importRef(ctx context.Context, claimedUser domain.UserID, key 
 		return domain.GearExternalRef{}, fmt.Errorf("import gear %s/%s: %w", key.Provider, key.ExternalID, ErrNotOwner)
 	}
 	var (
-		out        domain.GearExternalRef
-		newPending bool
-		followed   bool
+		out      domain.GearExternalRef
+		followed bool
 	)
 	err = s.tx.InTx(ctx, func(ctx context.Context) error {
-		out, newPending, followed, err = s.recordProviderGear(ctx, acct.UserID, key, in, onlyNew)
+		out, followed, err = s.recordProviderGear(ctx, acct.UserID, key, in, onlyNew)
 		return err
 	})
 	if err != nil {
@@ -286,43 +280,36 @@ func (s *Service) importRef(ctx context.Context, claimedUser domain.UserID, key 
 	if followed {
 		return out, s.afterMapping(ctx, acct.UserID, key)
 	}
-	if newPending && s.notify != nil {
-		if err := s.notify(ctx, out); err != nil {
-			return out, fmt.Errorf("notify gear decision: %w", err)
-		}
-	}
 	return out, nil
 }
 
 // recordProviderGear upserts the ref inside the import transaction. It
-// reports whether the ref is a new pending record, or new and mapped like a
-// sibling connection's ref of the same provider account (followed).
-func (s *Service) recordProviderGear(ctx context.Context, userID domain.UserID, key domain.GearRefKey, in domain.GearImport, onlyNew bool) (ref domain.GearExternalRef, newPending, followed bool, err error) {
+// reports whether the new ref inherited a sibling connection’s mapping.
+func (s *Service) recordProviderGear(ctx context.Context, userID domain.UserID, key domain.GearRefKey, in domain.GearImport, onlyNew bool) (ref domain.GearExternalRef, followed bool, err error) {
 	ref, err = s.gear.GetExternalRef(ctx, key)
-	newPending = errors.Is(err, domain.ErrNotFound)
 	switch {
-	case newPending:
+	case errors.Is(err, domain.ErrNotFound):
 		ref = domain.GearExternalRef{UserID: userID, Provider: key.Provider, ExternalAccountID: key.ExternalAccountID, ExternalID: key.ExternalID}
 		if gid, ok, err := s.siblingMapping(ctx, key); err != nil {
-			return domain.GearExternalRef{}, false, false, err
+			return domain.GearExternalRef{}, false, err
 		} else if ok {
-			ref.GearID, newPending, followed = &gid, false, true
+			ref.GearID, followed = &gid, true
 		}
 	case err != nil:
-		return domain.GearExternalRef{}, false, false, err
+		return domain.GearExternalRef{}, false, err
 	case onlyNew:
-		return ref, false, false, nil
+		return ref, false, nil
 	}
 	ref.Describe(in, s.now())
 	if ref.GearID != nil && in.Retired {
 		if err := s.retireFromProvider(ctx, *ref.GearID); err != nil {
-			return domain.GearExternalRef{}, false, false, err
+			return domain.GearExternalRef{}, false, err
 		}
 	}
 	if err := s.gear.UpsertExternalRef(ctx, ref); err != nil {
-		return domain.GearExternalRef{}, false, false, err
+		return domain.GearExternalRef{}, false, err
 	}
-	return ref, newPending, followed, nil
+	return ref, followed, nil
 }
 
 // siblingMapping is the gear a sibling connection already mapped this

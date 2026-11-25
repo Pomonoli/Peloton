@@ -49,24 +49,6 @@ func (f *fakeUsers) GetUser(_ context.Context, id domain.UserID) (domain.User, e
 	return domain.User{}, domain.ErrNotFound
 }
 
-type fakeBlocks struct {
-	port.FederationBlockRepo
-	blocked map[string]string
-}
-
-func (f *fakeBlocks) List(context.Context) ([]domain.BlockedDomain, error) {
-	var out []domain.BlockedDomain
-	for d, r := range f.blocked {
-		out = append(out, domain.BlockedDomain{Domain: d, Reason: r})
-	}
-	return out, nil
-}
-func (f *fakeBlocks) Block(_ context.Context, d, reason string) error {
-	f.blocked[d] = reason
-	return nil
-}
-func (f *fakeBlocks) Unblock(_ context.Context, d string) error { delete(f.blocked, d); return nil }
-
 func kindOf(t *testing.T, err error) port.ActionErrorKind {
 	t.Helper()
 	var ae *port.ActionError
@@ -76,7 +58,7 @@ func kindOf(t *testing.T, err error) port.ActionErrorKind {
 	return ae.Kind
 }
 
-func TestReportsAndBlocks(t *testing.T) {
+func TestReports(t *testing.T) {
 	reporter := domain.UserID(uuid.New())
 	open := domain.ContentReportID(uuid.New())
 	reps := &fakeReports{rows: []domain.ContentReport{{ID: open, ReporterID: reporter, Status: domain.ReportOpen, TargetKind: domain.ReportTargetActivity, TargetID: uuid.New()}}, updated: map[domain.ContentReportID]domain.ReportStatus{}}
@@ -97,26 +79,6 @@ func TestReportsAndBlocks(t *testing.T) {
 		t.Fatalf("no moderation repo: %v", err)
 	}
 
-	b := &Blocks{Repo: &fakeBlocks{blocked: map[string]string{}}}
-	if _, err := b.Block(ctx, audit.Actor{}, "https://evil.example/", "spam"); kindOf(t, err) != port.ActionErrorInvalid {
-		t.Fatalf("url instead of host: %v", err)
-	}
-	d, err := b.Block(ctx, audit.Actor{}, " Evil.Example ", "spam")
-	if err != nil || d != "evil.example" {
-		t.Fatalf("block: %v %q", err, d)
-	}
-	if list, _ := b.List(ctx); len(list) != 1 || list[0].Reason != "spam" {
-		t.Fatalf("list: %+v", list)
-	}
-	if err := b.Unblock(ctx, audit.Actor{}, "evil.example"); err != nil {
-		t.Fatal(err)
-	}
-	if list, _ := b.List(ctx); len(list) != 0 {
-		t.Fatalf("still blocked: %+v", list)
-	}
-	if _, err := (&Blocks{}).List(ctx); kindOf(t, err) != port.ActionErrorUnavailable {
-		t.Fatalf("no federation: %v", err)
-	}
 }
 
 func TestReportsFile(t *testing.T) {

@@ -21,7 +21,6 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/adapter/secondary/postgres"
 	s3adapter "github.com/opencairn-org/cairn-core/internal/adapter/secondary/s3"
 	waasadapter "github.com/opencairn-org/cairn-core/internal/adapter/secondary/waas"
-	webhookadapter "github.com/opencairn-org/cairn-core/internal/adapter/secondary/webhook"
 	"github.com/opencairn-org/cairn-core/internal/auth"
 	"github.com/opencairn-org/cairn-core/internal/config"
 	"github.com/opencairn-org/cairn-core/internal/domain"
@@ -50,7 +49,6 @@ import (
 	matchuc "github.com/opencairn-org/cairn-core/internal/usecase/match"
 	metricsuc "github.com/opencairn-org/cairn-core/internal/usecase/metrics"
 	"github.com/opencairn-org/cairn-core/internal/usecase/moderation"
-	"github.com/opencairn-org/cairn-core/internal/usecase/notification"
 	"github.com/opencairn-org/cairn-core/internal/usecase/pipeline"
 	"github.com/opencairn-org/cairn-core/internal/usecase/providerlink"
 	"github.com/opencairn-org/cairn-core/internal/usecase/quota"
@@ -80,42 +78,25 @@ type App struct {
 	// DefaultPollInterval is the instance-wide reconcile cadence
 	// (SchedulerConfig.PollingInterval) — surfaced to the UI so the
 	// per-connection override setting can say what "instance default" means.
-	DefaultPollInterval    time.Duration
-	Tx                     *postgres.TxManager
-	Activities             *postgres.ActivityRepo
-	UserSettings           *postgres.UserSettingsRepo
-	Users                  *postgres.UserRepo
-	Streams                *postgres.StreamRepo
-	BestEfforts            *postgres.BestEffortRepo
-	CustomBestEffortRepo   *postgres.CustomBestEffortRepo
-	SourcePreviewRepo      *postgres.SourcePreviewRepo
-	Segments               *postgres.SegmentRepo
-	Metrics                *postgres.MetricRepo
-	Notifications          port.NotificationRepo // postgres repo wrapped by notification.BroadcastRepo
-	NotificationHub        *notification.Hub
-	NotificationPrefs      *postgres.NotificationPreferenceRepo
-	WebhookEndpoints       *postgres.WebhookEndpointRepo
-	QuietHours             *postgres.QuietHoursRepo
-	NotificationDeliveries *postgres.NotificationDeliveryRepo
-	Follows                *postgres.FollowRepo
-	FederationKeys         *postgres.FederationKeyRepo
-	FederationActors       *postgres.FederationActorRepo
-	FederationFollows      *postgres.FederationFollowRepo
-	FederationDeliveries   *postgres.FederationDeliveryRepo
-	FederationBlocks       *postgres.FederationBlockRepo
-	InboxDedup             *postgres.InboxDedupRepo
-	FederationFeed         *postgres.FederationFeedRepo
-	Visibility             *postgres.VisibilityRepo
-	ShareLinks             *postgres.ShareLinkRepo
-	Engagement             *postgres.EngagementRepo
-	Blocks                 *postgres.BlockRepo
-	Reports                *postgres.ReportRepo
-	Moderation             *postgres.ModerationRepo
-	Quotas                 *postgres.QuotaRepo
-	Clubs                  *postgres.ClubRepo
-	ExternalAccounts       *postgres.ExternalAccountRepo
-	WorkerEnrollments      *postgres.WorkerEnrollmentRepo
-	WorkerPools            port.WorkerPoolRepo
+	DefaultPollInterval  time.Duration
+	Tx                   *postgres.TxManager
+	Activities           *postgres.ActivityRepo
+	UserSettings         *postgres.UserSettingsRepo
+	Users                *postgres.UserRepo
+	Streams              *postgres.StreamRepo
+	BestEfforts          *postgres.BestEffortRepo
+	CustomBestEffortRepo *postgres.CustomBestEffortRepo
+	SourcePreviewRepo    *postgres.SourcePreviewRepo
+	Segments             *postgres.SegmentRepo
+	Metrics              *postgres.MetricRepo
+	Visibility           *postgres.VisibilityRepo
+	ShareLinks           *postgres.ShareLinkRepo
+	Reports              *postgres.ReportRepo
+	Moderation           *postgres.ModerationRepo
+	Quotas               *postgres.QuotaRepo
+	ExternalAccounts     *postgres.ExternalAccountRepo
+	WorkerEnrollments    *postgres.WorkerEnrollmentRepo
+	WorkerPools          port.WorkerPoolRepo
 	// Providers is the worker-declared provider meta; providers caches it.
 	Providers port.ProviderRegistry
 	providers providerCache
@@ -163,34 +144,32 @@ type App struct {
 	Email port.EmailSender
 
 	// Use cases
-	RecomputeActivity       *activity.RecomputeActivityFromSources
-	Pipeline                *pipeline.Pipeline // ingest → re-cluster → follow-ups; edits' follow-ups
-	Callers                 *authuc.Callers    // credential → user, shared by REST and Connect
-	Shares                  *sharing.Links
-	IngestActivity          *activity.IngestActivityFromWorker
-	ReclusterBucket         *matchuc.ReclusterBucket
-	SourceActions           *activity.SourceActions
-	ActivityEditor          *activity.Editor
-	SourceLinks             *matchuc.SourceLinks
-	Visibility2             *view.Visibility // shared visibility resolver (REST + Connect)
-	Exports                 *activityexport.Exports
-	Overviews               *dashboard.Overviews
-	Searches                *dashboard.Searches
-	Feeds                   *view.Feeds
-	Details                 *view.Details
-	Stats                   *dashboard.Stats
-	PerformanceMaps         *dashboard.PerformanceMaps
-	SegmentViews            *segmentview.Segments
-	HealthViews             *dashboard.Health
-	MetricStore             *metricsuc.Store
-	Accounts                *providerlink.Accounts
-	AccountRemover          *accountsuc.Remover
-	ClubViews               *view.Clubs
-	ProfileViews            *view.Profiles
-	FriendViews             *view.Friends
-	QuotaViews              *quota.Policy
-	NotificationPreferences *notification.Preferences
-	AttachmentVariants      *attachmentuc.Variants
+	RecomputeActivity  *activity.RecomputeActivityFromSources
+	Pipeline           *pipeline.Pipeline // ingest → re-cluster → follow-ups; edits' follow-ups
+	Callers            *authuc.Callers    // credential → user, shared by REST and Connect
+	Shares             *sharing.Links
+	IngestActivity     *activity.IngestActivityFromWorker
+	ReclusterBucket    *matchuc.ReclusterBucket
+	SourceActions      *activity.SourceActions
+	ActivityEditor     *activity.Editor
+	SourceLinks        *matchuc.SourceLinks
+	Visibility2        *view.Visibility // shared visibility resolver (REST + Connect)
+	Exports            *activityexport.Exports
+	Overviews          *dashboard.Overviews
+	Searches           *dashboard.Searches
+	ActivityShares     *view.ActivityShares
+	Details            *view.Details
+	Stats              *dashboard.Stats
+	PerformanceMaps    *dashboard.PerformanceMaps
+	SegmentViews       *segmentview.Segments
+	HealthViews        *dashboard.Health
+	MetricStore        *metricsuc.Store
+	Accounts           *providerlink.Accounts
+	AccountRemover     *accountsuc.Remover
+	ProfileViews       *view.Profiles
+	FriendViews        *view.Friends
+	QuotaViews         *quota.Policy
+	AttachmentVariants *attachmentuc.Variants
 	// ActivityEvents is the per-user live feed behind StreamActivityEvents.
 	ActivityEvents *livefeed.Hub[domain.UserID, domain.ActivityEvent]
 	// AdminEvents is the operator channel behind StreamAdminEvents.
@@ -225,7 +204,6 @@ type App struct {
 	Orphans              *jobs.Orphans
 	Fleet                *fleet.Fleet
 	ModReports           *moderation.Reports
-	FedBlocks            *moderation.Blocks
 	MergeDefaults        *instance.MergeDefaults
 	Ops                  *instance.Ops
 	// WebhookTokens lists and rotates the per-account webhook signing secrets.
@@ -239,36 +217,31 @@ type App struct {
 	DBPing func(ctx context.Context) error
 	// Content mints the signed URLs binary content is delivered under; set by
 	// mountContent (needs the HTTP config).
-	Content                  port.ContentSigner
-	FieldOverrides           port.FieldOverrideRepo
-	ClassOverrides           port.ClassificationOverrideRepo
-	Attachments              port.AttachmentRepo
-	SourceDenylist           port.SourceDenylistRepo
-	Health                   port.HealthRepo
-	Gear                     *gearuc.Service
-	ComputeBestEfforts       *besteffort.ComputeBestEffortsForSource
-	CustomBestEfforts        *besteffort.Customs
-	SourcePreviews           *activity.SourcePreviews
-	SegmentAuthoring         *segment.Authoring
-	ProviderSegments         *segment.ProviderSegments
-	MatchSegments            *segment.MatchSegmentsForActivity
-	DiscoverSegments         *segment.DiscoverSegments
-	ComputeSegmentRanks      *segmentrank.ComputeSegmentRanks
-	ComputeTrainingLoad      *trainingload.ComputeTrainingLoadForUser
-	DispatchPR               *notification.DispatchPRNotifications
-	DeliverNotifications     *notification.DeliverNotifications
-	NotifyAccountNeedsReauth *notification.NotifyAccountNeedsReauth
-	NotifyWorkerOffline      *notification.NotifyWorkerOffline
-	NotifyGearDecision       *notification.NotifyGearDecision
-	ComputeStartPlace        *geocodeuc.ComputeStartPlace
-	CreateUser               *admin.CreateUser
-	BootstrapAdmin           *admin.BootstrapAdmin
-	Invites                  *postgres.InviteRepo
-	CreateInvite             *invite.CreateInvite
-	RedeemInvite             *invite.RedeemInvite
-	PATs                     *postgres.PATRepo
-	AuthTokens               *postgres.AuthTokenRepo
-	OAuth                    *postgres.OAuthServerRepo
+	Content             port.ContentSigner
+	FieldOverrides      port.FieldOverrideRepo
+	ClassOverrides      port.ClassificationOverrideRepo
+	Attachments         port.AttachmentRepo
+	SourceDenylist      port.SourceDenylistRepo
+	Health              port.HealthRepo
+	Gear                *gearuc.Service
+	ComputeBestEfforts  *besteffort.ComputeBestEffortsForSource
+	CustomBestEfforts   *besteffort.Customs
+	SourcePreviews      *activity.SourcePreviews
+	SegmentAuthoring    *segment.Authoring
+	ProviderSegments    *segment.ProviderSegments
+	MatchSegments       *segment.MatchSegmentsForActivity
+	DiscoverSegments    *segment.DiscoverSegments
+	ComputeSegmentRanks *segmentrank.ComputeSegmentRanks
+	ComputeTrainingLoad *trainingload.ComputeTrainingLoadForUser
+	ComputeStartPlace   *geocodeuc.ComputeStartPlace
+	CreateUser          *admin.CreateUser
+	BootstrapAdmin      *admin.BootstrapAdmin
+	Invites             *postgres.InviteRepo
+	CreateInvite        *invite.CreateInvite
+	RedeemInvite        *invite.RedeemInvite
+	PATs                *postgres.PATRepo
+	AuthTokens          *postgres.AuthTokenRepo
+	OAuth               *postgres.OAuthServerRepo
 
 	// ReconcileAccount is nil until a JobBus adapter (NATS) is wired.
 	// The reconcile scheduler goroutine in serve.go checks for nil
@@ -292,14 +265,9 @@ type App struct {
 	// stay unregistered.
 	OIDCLogin *authuc.OIDCLogin
 
-	// Federation publishing context (Phase 3). PublicBaseURL is the
-	// externally-visible origin used to build actor + object URLs;
-	// FederationEnabled mirrors the instance flag so the post-ingest
-	// publish step can short-circuit when federation is off.
 	PublicBaseURL string
 	// SessionTTL bounds every session this instance issues.
-	SessionTTL        time.Duration
-	FederationEnabled bool
+	SessionTTL time.Duration
 	// OAuthEnabled mirrors CAIRN_AUTH_OAUTH_ENABLED for GetInstanceInfo.
 	OAuthEnabled bool
 }
@@ -315,7 +283,6 @@ func newApp(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, logger 
 		StorageAdapter:      "minio",
 		DBPing:              pool.Ping,
 		OAuthEnabled:        cfg.Auth.OAuthEnabled,
-		FederationEnabled:   cfg.Federation.Enabled,
 	}
 	wireAppCoreRepos(app, pool, cfg)
 
@@ -333,13 +300,12 @@ func newApp(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, logger 
 	}
 
 	wireAppSecondaryRepos(app, pool, secretBox)
-	// Notifications before ingest: the gear use cases notify on pending
-	// provider records.
-	if err := wireAppNotifications(app, pool, cfg, secretBox, logger); err != nil {
+	app.Email, err = wireAppEmail(cfg, logger)
+	if err != nil {
 		return nil, err
 	}
 	wireAppIngestUseCases(app, pool, logger)
-	wireActivityEditor(app, logger)
+	wireActivityEditor(app)
 	wireAppAccountUseCases(app, pool)
 	wireAccount(app)
 	if err := wireAppNATS(ctx, app, cfg, logger); err != nil {
@@ -412,9 +378,9 @@ func wireRestUseCases(app *App, logger *slog.Logger) {
 func wirePipeline(app *App, logger *slog.Logger) {
 	p := &pipeline.Pipeline{
 		Activities: app.Activities, Ingester: app.IngestActivity, Recluster: app.ReclusterBucket, Recompute: app.RecomputeActivity,
-		BestEfforts: app.ComputeBestEfforts, Segments: app.MatchSegments, TrainingLoad: app.ComputeTrainingLoad, PRs: app.DispatchPR,
-		Federation: newFederationPublisher(app, logger), Log: logger,
-		Tx: app.Tx, Lock: app.Tx,
+		BestEfforts: app.ComputeBestEfforts, Segments: app.MatchSegments, TrainingLoad: app.ComputeTrainingLoad, SegmentEfforts: app.Segments,
+		Log: logger,
+		Tx:  app.Tx, Lock: app.Tx,
 	}
 	if app.FieldOverrides != nil {
 		p.FieldOverrides = app.FieldOverrides
@@ -456,19 +422,13 @@ func wireAppCoreRepos(app *App, pool *pgxpool.Pool, cfg *config.Config) {
 	app.SourcePreviewRepo = postgres.NewSourcePreviewRepo(pool)
 	app.Segments = postgres.NewSegmentRepo(pool)
 	app.Metrics = postgres.NewMetricRepo(pool)
-	app.NotificationHub = notification.NewHub()
 	app.ActivityEvents = livefeed.New(func(e domain.ActivityEvent) domain.UserID { return e.UserID })
 	app.AdminEvents = connectadapter.NewAdminEventHub()
-	app.Notifications = notification.NewBroadcastRepo(postgres.NewNotificationRepo(pool), app.NotificationHub)
-	app.Follows = postgres.NewFollowRepo(pool)
 	app.Visibility = postgres.NewVisibilityRepo(pool)
 	app.ShareLinks = postgres.NewShareLinkRepo(pool)
-	app.Engagement = postgres.NewEngagementRepo(pool)
-	app.Blocks = postgres.NewBlockRepo(pool)
 	app.Reports = postgres.NewReportRepo(pool)
 	app.Moderation = postgres.NewModerationRepo(pool)
 	app.Quotas = postgres.NewQuotaRepo(pool)
-	app.Clubs = postgres.NewClubRepo(pool)
 	app.ExternalAccounts = postgres.NewExternalAccountRepo(
 		pool,
 		cfg.Scheduler.PollingInterval,
@@ -485,13 +445,6 @@ func wireAppCoreRepos(app *App, pool *pgxpool.Pool, cfg *config.Config) {
 // wireAppSecondaryRepos builds the repositories created after the secretbox.
 func wireAppSecondaryRepos(app *App, pool *pgxpool.Pool, secretBox *auth.SecretBox) {
 	app.OAuthTokens = postgres.NewOAuthTokenRepo(pool, secretBox)
-	app.FederationKeys = postgres.NewFederationKeyRepo(pool, secretBox)
-	app.FederationActors = postgres.NewFederationActorRepo(pool)
-	app.FederationFollows = postgres.NewFederationFollowRepo(pool)
-	app.FederationDeliveries = postgres.NewFederationDeliveryRepo(pool)
-	app.FederationBlocks = postgres.NewFederationBlockRepo(pool)
-	app.InboxDedup = postgres.NewInboxDedupRepo(pool)
-	app.FederationFeed = postgres.NewFederationFeedRepo(pool)
 	app.DeadLetters = postgres.NewDeadLetterRepo(pool)
 	app.ImportQueue = postgres.NewImportQueueRepo(pool)
 	app.UserProviderConfigs = postgres.NewUserProviderConfigRepo(pool, secretBox)
@@ -569,7 +522,6 @@ func wireAppIngestUseCases(app *App, pool *pgxpool.Pool, logger *slog.Logger) {
 			_, err := app.RecomputeActivity.Execute(ctx, id)
 			return err
 		},
-		app.NotifyGearDecision.Execute,
 		nil, // default time.Now
 		nil, // default uuid.NewV7
 	)
@@ -596,7 +548,7 @@ func wireAppIngestUseCases(app *App, pool *pgxpool.Pool, logger *slog.Logger) {
 	}
 	wireAppViews(app, logger)
 	// The owner-facing source actions, shared by REST and Connect.
-	app.SourceActions = activity.NewSourceActions(app.Activities, app.SourceDenylist, app.RecomputeActivity, newFederationPublisher(app, logger), nil)
+	app.SourceActions = activity.NewSourceActions(app.Activities, app.SourceDenylist, app.RecomputeActivity, nil)
 	app.SourceLinks = matchuc.NewSourceLinks(app.Activities, app.ReclusterBucket)
 	app.SourceActions.Events = app.ActivityEvents
 	app.SourceActions.Tx, app.SourceActions.Lock = app.Tx, app.Tx
@@ -635,7 +587,7 @@ func wireSegmentWriters(app *App) {
 }
 
 // wireActivityEditor builds the owner edit use case; wirePipeline adds its follow-ups.
-func wireActivityEditor(app *App, logger *slog.Logger) {
+func wireActivityEditor(app *App) {
 	app.ActivityEditor = activity.NewEditor(app.Activities, app.RecomputeActivity)
 	app.ActivityEditor.ClassOverrides = app.ClassOverrides
 	app.ActivityEditor.Gear = app.Gear
@@ -658,57 +610,6 @@ func wireAppEmail(cfg *config.Config, logger *slog.Logger) (port.EmailSender, er
 		logger.Warn("email adapter not implemented; disabling", "adapter", cfg.Email.Adapter)
 	}
 	return nil, nil
-}
-
-// wireAppNotifications builds email + notification side-channel delivery and
-// the notification use cases. Built here so DispatchPR can fan PR notifications out to email.
-func wireAppNotifications(app *App, pool *pgxpool.Pool, cfg *config.Config, secretBox *auth.SecretBox, logger *slog.Logger) error {
-	emailSender, err := wireAppEmail(cfg, logger)
-	if err != nil {
-		return err
-	}
-	app.Email = emailSender
-	app.NotificationPrefs = postgres.NewNotificationPreferenceRepo(pool)
-	app.WebhookEndpoints = postgres.NewWebhookEndpointRepo(pool, secretBox)
-	app.QuietHours = postgres.NewQuietHoursRepo(pool)
-	app.NotificationDeliveries = postgres.NewNotificationDeliveryRepo(pool)
-	app.DeliverNotifications = notification.NewDeliverNotifications(
-		app.Users, app.Notifications, app.NotificationPrefs, emailSender, app.WebhookEndpoints, webhookadapter.New(), app.QuietHours, app.NotificationDeliveries, cfg.HTTP.PublicBaseURL, logger,
-	)
-
-	app.DispatchPR = notification.NewDispatchPRNotifications(
-		app.Segments,
-		app.Notifications,
-		app.Tx,
-		app.DeliverNotifications,
-		nil, // default time.Now
-		nil, // default uuid.NewV7
-	)
-	app.DispatchPR.Events = app.ActivityEvents
-	app.NotifyAccountNeedsReauth = notification.NewNotifyAccountNeedsReauth(
-		app.ExternalAccounts,
-		app.Notifications,
-		app.Tx,
-		app.DeliverNotifications,
-		nil, // default time.Now
-		nil, // default uuid.NewV7
-	)
-	app.NotifyWorkerOffline = notification.NewNotifyWorkerOffline(
-		app.Users,
-		app.Notifications,
-		app.Tx,
-		app.DeliverNotifications,
-		nil, // default time.Now
-		nil, // default uuid.NewV7
-	)
-	app.NotifyGearDecision = notification.NewNotifyGearDecision(
-		app.Notifications,
-		app.Tx,
-		app.DeliverNotifications,
-		nil, // default time.Now
-		nil, // default uuid.NewV7
-	)
-	return nil
 }
 
 // wireAppAccountUseCases builds user/invite/token repos and use cases plus worker enrollment.
@@ -890,15 +791,11 @@ func wireAppGeocoder(app *App, cfg *config.Config, logger *slog.Logger) {
 
 // wireAppViews builds the read-side use cases REST and Connect both render from.
 func wireAppViews(app *App, logger *slog.Logger) {
-	app.Visibility2 = &view.Visibility{Zones: app.Visibility, Blocks: app.Blocks}
+	app.Visibility2 = &view.Visibility{Zones: app.Visibility}
+	app.ActivityShares = view.NewActivityShares(app.Activities, app.Users, app.Visibility2)
 	app.Exports = activityexport.NewExports(app.Streams)
 	app.Overviews = dashboard.NewOverviews(app.Activities, nil)
 	app.Searches = dashboard.NewSearches(app.Activities, app.Gear)
-	var fedFeed port.FederationFeedRepo
-	if app.FederationFeed != nil {
-		fedFeed = app.FederationFeed
-	}
-	app.Feeds = view.NewFeeds(app.Activities, app.Users, app.Visibility2, fedFeed, app.FederationEnabled)
 	var metrics port.MetricRepo
 	if app.Metrics != nil {
 		metrics = app.Metrics
@@ -934,35 +831,22 @@ func wireAppViews(app *App, logger *slog.Logger) {
 	if app.UserProviderConfigs != nil {
 		conns = app.UserProviderConfigs
 	}
-	var clubs port.ClubRepo
-	if app.Clubs != nil {
-		clubs = app.Clubs
-	}
-	app.ClubViews = view.NewClubs(clubs, app.Users, app.Feeds)
-	app.ProfileViews = view.NewProfiles(app.Users, app.Activities, app.Follows, app.Blocks, app.Visibility2)
+	app.ProfileViews = view.NewProfiles(app.Users, app.Activities, app.Visibility2)
 	if app.Activities != nil {
 		app.FriendViews = &view.Friends{Directory: app.Activities}
 	}
 	wireUserViews(app)
 	app.Accounts = providerlink.NewAccounts(app.ExternalAccounts, app.Activities, queue, events, conns, syncInsight{app: app, logger: logger}, nil)
-	app.Details = view.NewDetails(app.Activities, app.Streams, nilIfNilSegments(app), app.AthleteProfiles, nilIfNilEngagement(app),
-		app.Users, app.FieldOverrides, workerPresence{app: app, logger: logger}, app.Visibility2)
+	app.Details = view.NewDetails(app.Activities, app.Streams, nilIfNilSegments(app), app.AthleteProfiles,
+		app.FieldOverrides, workerPresence{app: app, logger: logger})
 }
 
-// nilIfNilSegments / nilIfNilEngagement keep a nil pointer from becoming a
-// non-nil interface.
+// nilIfNilSegments keeps a nil pointer from becoming a non-nil interface.
 func nilIfNilSegments(app *App) port.SegmentRepo {
 	if app.Segments == nil {
 		return nil
 	}
 	return app.Segments
-}
-
-func nilIfNilEngagement(app *App) port.EngagementRepo {
-	if app.Engagement == nil {
-		return nil
-	}
-	return app.Engagement
 }
 
 // wireAccount builds the self-service account use cases (after the account
@@ -1041,7 +925,7 @@ func wireAdmin(app *App) {
 	wireModerationAdmin(app)
 }
 
-// wireModerationAdmin builds the moderation, block and merge-default use cases.
+// wireModerationAdmin builds the moderation and merge-default use cases.
 func wireModerationAdmin(app *App) {
 	rep := &moderation.Reports{Users: app.Users, Audit: app.AuditLog}
 	if app.Reports != nil {
@@ -1051,11 +935,6 @@ func wireModerationAdmin(app *App) {
 		rep.Moderation = app.Moderation
 	}
 	app.ModReports = rep
-	blocks := &moderation.Blocks{Audit: app.AuditLog}
-	if app.FederationBlocks != nil {
-		blocks.Repo = app.FederationBlocks
-	}
-	app.FedBlocks = blocks
 	md := &instance.MergeDefaults{Audit: app.AuditLog}
 	if app.UserSettings != nil {
 		md.Settings = app.UserSettings
@@ -1233,8 +1112,5 @@ func wireUserViews(app *App) {
 		quotas = app.Quotas
 	}
 	app.QuotaViews = quota.NewPolicy(app.Activities, quotas, app.QuotaMaxActivities)
-	app.NotificationPreferences = &notification.Preferences{}
-	if app.NotificationPrefs != nil {
-		app.NotificationPreferences.Repo = app.NotificationPrefs
-	}
+
 }

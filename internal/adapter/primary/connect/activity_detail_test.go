@@ -31,33 +31,6 @@ func (f *fakeSegmentsD) FindSimilarActivities(context.Context, domain.SimilarRou
 	return nil, nil
 }
 
-type fakeEngagementD struct {
-	port.EngagementRepo
-	kudosers []domain.UserID
-}
-
-func (f *fakeEngagementD) CountKudos(context.Context, domain.ActivityID) (int, error) {
-	return len(f.kudosers), nil
-}
-func (f *fakeEngagementD) HasKudos(context.Context, domain.ActivityID, domain.UserID) (bool, error) {
-	return false, nil
-}
-func (f *fakeEngagementD) ListKudosers(context.Context, domain.ActivityID, int) ([]domain.UserID, error) {
-	return f.kudosers, nil
-}
-func (f *fakeEngagementD) CountRemoteKudos(context.Context, domain.ActivityID) (int, error) {
-	return 0, nil
-}
-func (f *fakeEngagementD) ListRemoteKudosers(context.Context, domain.ActivityID, int) ([]domain.RemoteKudoser, error) {
-	return nil, nil
-}
-func (f *fakeEngagementD) ListComments(context.Context, domain.ActivityID, int, int) ([]domain.Comment, error) {
-	return []domain.Comment{{ID: domain.CommentID(uuid.New()), Body: "hi", CreatedAt: actNow}}, nil
-}
-func (f *fakeEngagementD) ListRemoteComments(context.Context, domain.ActivityID, int) ([]domain.RemoteComment, error) {
-	return nil, nil
-}
-
 func detailFixture(t *testing.T) (*actFixture, domain.ActivityID, domain.SourceID) {
 	t.Helper()
 	f := newActFixture(t)
@@ -82,8 +55,7 @@ func detailFixture(t *testing.T) (*actFixture, domain.ActivityID, domain.SourceI
 		efforts: []domain.SegmentEffort{{SegmentID: segID, ActivitySourceID: sid, StartOffset: 5, EndOffset: 60, ElapsedS: 55}},
 		segs:    map[domain.SegmentID]domain.Segment{segID: {ID: segID, Name: "Hill", ClimbCategory: domain.ClimbCategoryHorsCategorie}},
 	}
-	users := &fakeUsers{users: map[domain.UserID]domain.User{f.user: {ID: f.user, Username: "me"}}}
-	f.srv.Details = view.NewDetails(f.repo, &fakeStreams{samples: samples}, segs, nil, &fakeEngagementD{kudosers: []domain.UserID{f.user}}, users, nil, nil, view.NewVisibility())
+	f.srv.Details = view.NewDetails(f.repo, &fakeStreams{samples: samples}, segs, nil, nil, nil)
 	return f, aid, sid
 }
 
@@ -143,27 +115,6 @@ func TestZonesEffortsMergedManage(t *testing.T) {
 	if s := mi.GetSources()[0]; !s.GetIsPrimary() || s.GetParserVersion() != "1.1" || s.GetDatasetVersion() != "1" || s.GetLapCount() != 2 || !s.GetHasStream() || s.GetReparseEligible() {
 		t.Fatalf("insight %v", s)
 	}
-}
-
-func TestKudosAndCommentsGate(t *testing.T) {
-	f, aid, _ := detailFixture(t)
-	k, err := f.srv.ListKudos(f.ctx, &v1.ListKudosRequest{ActivityId: aid.String()})
-	if err != nil || k.GetCount() != 1 || len(k.GetKudosers()) != 1 || k.GetKudosers()[0].GetUsername() != "me" {
-		t.Fatalf("kudos %v %v", k, err)
-	}
-	c, err := f.srv.ListComments(f.ctx, &v1.ListCommentsRequest{ActivityId: aid.String()})
-	if err != nil || len(c.GetComments()) != 1 || c.GetComments()[0].GetBody() != "hi" {
-		t.Fatalf("comments %v %v", c, err)
-	}
-	other := context.WithValue(t.Context(), ctxKeyUserID, domain.UserID(uuid.New()))
-	if _, err = f.srv.ListKudos(other, &v1.ListKudosRequest{ActivityId: aid.String()}); err != nil {
-		t.Fatal(err)
-	}
-	_, err = f.srv.ListComments(t.Context(), &v1.ListCommentsRequest{ActivityId: aid.String()})
-	wantCode(t, err, connectrpc.CodeUnauthenticated)
-	f.srv.Details = nil
-	_, err = f.srv.ListKudos(f.ctx, &v1.ListKudosRequest{ActivityId: aid.String()})
-	wantCode(t, err, connectrpc.CodeUnavailable)
 }
 
 func TestMergedStreamNaN(t *testing.T) {

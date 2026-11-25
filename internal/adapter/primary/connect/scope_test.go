@@ -24,7 +24,6 @@ func TestIsMutatingProcedure(t *testing.T) {
 		"/cairn.v1.ActivityService/UpdateActivity",
 		"/cairn.v1.ActivityService/DeleteActivity",
 		"/cairn.v1.ActivityService/CreateManualActivity",
-		"/cairn.v1.EngagementService/PostComment",
 	}
 	for _, p := range writes {
 		if !isMutatingProcedure(p) {
@@ -45,8 +44,6 @@ func TestScopeCheckFamilies(t *testing.T) {
 		{"/cairn.v1.ActivityService/GetActivity", []string{"activities:write"}, 0},
 		{"/cairn.v1.GearService/ListGear", []string{"activities:read"}, connectrpc.CodePermissionDenied},
 		{"/cairn.v1.GearService/ListGear", []string{"gear:read"}, 0},
-		{"/cairn.v1.NotificationService/MarkNotificationRead", []string{"notifications:read"}, connectrpc.CodePermissionDenied},
-		{"/cairn.v1.NotificationService/MarkNotificationRead", []string{"notifications:write"}, 0},
 		{"/cairn.v1.AuthService/GetCurrentUser", nil, 0},
 		{"/cairn.v1.AuthService/GetQuota", []string{"gear:read"}, 0},
 		{"/cairn.v1.AuthService/GetInstanceInfo", nil, 0},

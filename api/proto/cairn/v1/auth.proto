@@ -113,7 +113,7 @@ service AuthService {
   rpc GetLoginMethods(GetLoginMethodsRequest) returns (GetLoginMethodsResponse);
 
   // Instance identity and feature flags for a client's server picker:
-  // release, commit, build time, federation/OAuth availability, signup
+  // release, commit, build time, OAuth availability, signup
   // policy and the scope catalog. Public; no auth required.
   // Scope: none (public).
   rpc GetInstanceInfo(GetInstanceInfoRequest) returns (GetInstanceInfoResponse) {
@@ -299,8 +299,8 @@ message GetInstanceInfoResponse {
   string commit = 2;
   // Build time; unset when the binary carries no build metadata.
   google.protobuf.Timestamp build_time = 3;
-  // ActivityPub federation is switched on for this instance.
-  bool federation_enabled = 4;
+  reserved 4;
+  reserved "federation_enabled";
   // The OAuth 2.1 authorization server (PKCE, dynamic registration) is available.
   bool oauth_enabled = 5;
   // Self-service signup without an invite is allowed. False means invite-only.

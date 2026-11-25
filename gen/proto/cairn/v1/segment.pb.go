@@ -15,7 +15,7 @@
 // Segment matching runs on every activity import — irrespective of the
 // activity's source — using PostGIS ST_DWithin to filter candidates and a
 // Hausdorff-distance + direction check to confirm matches. Matched
-// efforts are recorded in segment_efforts and trigger PR notifications
+// efforts are recorded in segment_efforts and drive live PR events
 // when they beat the user's prior best.
 //
 // Records (fastest 5k, max 5min power, etc.) are NOT segment-scoped;
@@ -657,7 +657,7 @@ type SegmentEffort struct {
 	// Where this effort ranks instance-wide (only for SCOPE_INSTANCE segments).
 	InstanceRank int32 `protobuf:"varint,17,opt,name=instance_rank,json=instanceRank,proto3" json:"instance_rank,omitempty"`
 	// True if this effort newly set the user's PR. Used to suppress
-	// duplicate PR notifications when reimporting.
+	// duplicate PR events when reimporting.
 	IsPersonalRecord bool `protobuf:"varint,18,opt,name=is_personal_record,json=isPersonalRecord,proto3" json:"is_personal_record,omitempty"`
 	// True if this effort newly set the instance KOM.
 	IsInstanceRecord bool `protobuf:"varint,19,opt,name=is_instance_record,json=isInstanceRecord,proto3" json:"is_instance_record,omitempty"`

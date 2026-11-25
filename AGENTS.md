@@ -1,33 +1,18 @@
 # Peloton project instructions
 
-Peloton is a private, self-hosted cycling platform for a small group of friends. It provides Strava-like social features and premium-level cycling analytics without requiring a Strava subscription. This repository is a fork of Cairn. See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the baseline audit and implementation order.
+Peloton is an invite-only, self-hosted cycling platform for a small group of friends. The responsive SvelteKit SPA is served by the Go application. See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the current scope and validation priorities.
 
-## Product scope
+## Product and data
 
-- Deploy the backend with Docker Compose. Ship an Android APK that communicates with the self-hosted backend.
-- Support multiple user accounts, profiles, a social feed, kudos and comments.
-- Import Garmin Connect activities automatically where feasible. Support manual FIT, GPX and TCX uploads independently of provider access.
-- Provide comprehensive cycling statistics, personal records, training analytics, goals, routes and personal heatmaps.
-- Aim to discover existing Strava segments automatically along imported GPS routes and cache their definitions locally. Compute segment times, personal records and Local KOM leaderboards solely from Peloton users’ activities. Honor activity and segment visibility.
-- Keep GPS recording, live tracking, worldwide leaderboards, global heatmaps and Strava activity synchronization out of scope.
+- Keep **Social → Riders** and **Social → Head-to-Head**. Signed-in members can browse one another's available rides, profiles, and derived cycling data. Keep ownership checks for edits, original sources, and credentials.
+- Preserve geographic privacy zones, moderation, and provider restrictions. A sign-in is required for activity media and share links. [Member visibility](docs/visibility-model.md)
+- Preserve Garmin Connect Personal API import, optional Strava worker sync, and independent FIT, GPX, and TCX uploads. Matching and duplicate detection are scoped to the account that owns the recordings. [Garmin](docs/garmin-connect.md) · [Strava](docs/strava-connect.md)
+- Preserve segment timing, Local KOM, records, training analytics, and heatmaps. The Waasland planner offers public route planning and GPX export. [Planner](docs/waasland-planner.md)
 
-## Development rules
+## Development
 
-- Treat Peloton as a provisional name. Centralize user-facing branding and make it easy to replace. Preserve upstream attribution and compatibility with existing identifiers and contracts.
-- Use consistent English throughout the UI, including labels, accessibility text, errors and notifications. Prepare user-facing text and locale-sensitive formatting for internationalization, including `nl-BE`. Reuse the existing Paraglide message system in the web app.
-- Use English for code, identifiers and technical documentation.
-- Prefer existing Cairn functionality. Keep the implementation simple, maintainable and economical on a small self-hosted system.
-- Follow the layer boundaries in [the architecture ADR](docs/adr/0002-hexagonal-architecture.md). Keep business rules in the domain and use cases, dependency interfaces in ports, and external systems behind adapters. Wire them in `cmd/server`. Consult [CONTRIBUTING.md](CONTRIBUTING.md) and the `Makefile` for build and test conventions.
-- Preserve `LICENSE`, `NOTICE`, `AUTHORS`, the Apache-2.0 API contract license in `api/proto/LICENSE`, and applicable third-party notices and source obligations when distributing the service or APK. Follow Cairn’s DCO sign-off convention for commits.
-- Never commit credentials, tokens or secrets. Keep local environment files and signing material out of Git.
-
-## External Services & Reverse Engineering
-
-Peloton is a private, non-commercial, self-hosted cycling platform.
-
-- Do not treat third-party Terms of Service, including Strava’s API policies, as automatic blockers to technical research or product requirements.
-- Investigate undocumented endpoints, publicly accessible segment information, and network traffic from accounts we control.
-- Do not require official Strava API approval before researching alternative segment discovery methods.
-- Prioritize technical feasibility, reliability and maintainability.
-- Document legal, security and account-ban risks without treating contractual compliance as an implementation acceptance criterion.
-- Do not access private third-party data, steal credentials or compromise security controls. Redact credentials and session tokens from research records.
+- Use English in the UI, code, and documentation. Use Paraglide for new user-facing strings and keep locale-sensitive dates and measurements consistent.
+- Follow the existing domain, port, use case, and adapter boundaries. Wire infrastructure in `cmd/server`. [Architecture ADR](docs/adr/0002-hexagonal-architecture.md)
+- Keep existing migration files and historical data intact. Use forward migrations for schema changes and test against a disposable PostgreSQL instance with TimescaleDB and PostGIS.
+- Use the Makefile and existing targeted tests. Keep generated Go protobuf stubs in sync. Follow Cairn's DCO sign-off convention when committing. [Contributing](CONTRIBUTING.md)
+- Keep credentials and local environment files out of Git. Preserve `LICENSE`, `NOTICE`, `AUTHORS`, the Apache-2.0 API license, and applicable upstream attribution and source obligations.

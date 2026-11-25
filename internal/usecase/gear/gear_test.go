@@ -33,7 +33,6 @@ type harness struct {
 	accounts   fakeAccounts
 	user       domain.UserID
 	recomputed []domain.ActivityID
-	notified   []domain.GearExternalRef
 }
 
 func newHarness() *harness {
@@ -42,10 +41,6 @@ func newHarness() *harness {
 	h.svc = NewService(h.repo, h.accounts, fakeTx{},
 		func(_ context.Context, id domain.ActivityID) error {
 			h.recomputed = append(h.recomputed, id)
-			return nil
-		},
-		func(_ context.Context, ref domain.GearExternalRef) error {
-			h.notified = append(h.notified, ref)
 			return nil
 		},
 		func() time.Time { return t0 }, uuid.New)
@@ -90,15 +85,9 @@ func TestImportFromProvider_PendingUntilDecided(t *testing.T) {
 	if !ref.Pending() || h.repo.Count() != 0 {
 		t.Fatalf("unknown provider gear must stay pending, got ref=%+v gear=%d", ref, h.repo.Count())
 	}
-	if len(h.notified) != 1 || h.notified[0].ProviderName != "Canyon" || h.notified[0].UserID != h.user {
-		t.Fatalf("decision notification = %+v", h.notified)
-	}
-	// Re-sent with the next activity: refreshed, no second notification.
+	// Re-sent with the next activity: the same pending ref is refreshed.
 	if _, err := h.svc.ImportFromProvider(ctx, h.user, key, in); err != nil {
 		t.Fatal(err)
-	}
-	if len(h.notified) != 1 {
-		t.Fatalf("re-import notified again: %d", len(h.notified))
 	}
 	if pending, _ := h.svc.ListPending(ctx, h.user); len(pending) != 1 {
 		t.Fatalf("pending = %d", len(pending))
@@ -169,8 +158,8 @@ func TestImportFromProvider_OwnerComesFromTheAccount(t *testing.T) {
 	if _, err := h.svc.ImportFromProvider(ctx, h.user, h.key("strava", domain.ExternalAccountID(uuid.New()), "b1"), domain.GearImport{Name: "x"}); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("unknown account: %v", err)
 	}
-	if len(h.notified) != 0 {
-		t.Fatalf("rejected imports must not notify: %d", len(h.notified))
+	if pending, err := h.svc.ListPending(ctx, h.user); err != nil || len(pending) != 0 {
+		t.Fatalf("rejected imports left pending gear: %v, %v", pending, err)
 	}
 
 	key := h.key("strava", acct, "b1")
@@ -191,8 +180,8 @@ func TestNoteActivityGear_PendingOnlyWhenUnknown(t *testing.T) {
 	if err := h.svc.NoteActivityGear(ctx, h.user, key, ""); err != nil {
 		t.Fatalf("note: %v", err)
 	}
-	if pending, _ := h.svc.ListPending(ctx, h.user); len(pending) != 1 || len(h.notified) != 1 {
-		t.Fatalf("pending = %d, notified = %d", len(pending), len(h.notified))
+	if pending, _ := h.svc.ListPending(ctx, h.user); len(pending) != 1 {
+		t.Fatalf("pending = %d", len(pending))
 	}
 
 	// A described ref is not clobbered by the activity's sparse view.
@@ -203,8 +192,8 @@ func TestNoteActivityGear_PendingOnlyWhenUnknown(t *testing.T) {
 		t.Fatal(err)
 	}
 	pending, _ := h.svc.ListPending(ctx, h.user)
-	if len(pending) != 1 || pending[0].ProviderName != "Canyon" || pending[0].Kind != domain.GearKindBike || len(h.notified) != 1 {
-		t.Fatalf("pending = %+v, notified = %d", pending, len(h.notified))
+	if len(pending) != 1 || pending[0].ProviderName != "Canyon" || pending[0].Kind != domain.GearKindBike {
+		t.Fatalf("pending = %+v", pending)
 	}
 
 	if err := h.svc.NoteActivityGear(ctx, domain.UserID(uuid.New()), key, ""); !errors.Is(err, ErrNotOwner) {
@@ -389,12 +378,11 @@ func TestSiblingConnections_ShareOneDecision(t *testing.T) {
 	// A third connection of the same account follows without asking.
 	lateAcct := h.account("garmin")
 	h.repo.SetProviderAccount(lateAcct, "123")
-	notified := len(h.notified)
 	ref, err := h.svc.ImportFromProvider(ctx, h.user, h.key("garmin", lateAcct, "g1"), in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ref.GearID == nil || *ref.GearID != g.ID || len(h.notified) != notified {
-		t.Fatalf("late sibling = %+v, notified %d→%d", ref, notified, len(h.notified))
+	if ref.GearID == nil || *ref.GearID != g.ID {
+		t.Fatalf("late sibling = %+v", ref)
 	}
 }

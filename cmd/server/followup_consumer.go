@@ -36,7 +36,6 @@ func followUpHandler(p *pipeline.Pipeline, log *slog.Logger) port.MessageHandler
 			log.Warn("decode activity-changed event failed", "error", err)
 			return &port.TerminalError{Reason: "bad_payload", Cause: err}
 		}
-		ev.Redelivery = msg.DeliveryAttempt > 1
 		return p.RunFollowUps(ctx, ev)
 	}
 }

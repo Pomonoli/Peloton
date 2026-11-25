@@ -1,7 +1,7 @@
-# Contributing to Cairn
+# Contributing to Peloton
 
-Thank you for your interest in Cairn. This document covers what you need to
-know to file a useful issue or open a PR that has a chance of being merged.
+See the [project plan](PROJECT_PLAN.md) for Peloton's current scope and the
+[member visibility model](docs/visibility-model.md) for data-access rules.
 
 ## TL;DR
 
@@ -32,8 +32,8 @@ Quick start:
 
 ```sh
 # Clone and bring up infra
-git clone https://github.com/opencairn-org/cairn-core
-cd cairn
+git clone https://github.com/Pomonoli/Peloton.git
+cd Peloton
 make dev-up        # docker compose -f docker-compose.dev.yml up -d
 
 # Build the server binary
@@ -46,8 +46,8 @@ make build
 ./bin/cairn serve
 ```
 
-The README's "Smoketest" section walks through end-to-end usage with `curl`
-once the server is up.
+See the [local development guide](docs/run-local.md) for environment settings,
+sign-in, and starting the web app.
 
 ## Code style and architecture
 
@@ -149,11 +149,27 @@ suites together and gates `COVER_MIN`; without it, it runs the unit suite only
 against the lower `COVER_MIN_UNIT` and says so. CI always provides the database
 (a service container in `.github/workflows/check.yml`) and fails if it is missing.
 
+The `proto-breaking` step in `make check` also requires a reachable `v*`
+release tag. `make lint`, `make test`, and `make test-integration` can run
+independently in a checkout without one.
+
+For browser regressions, generate the web dependencies with `make web-deps`,
+then run the suites from `web/` with their fixture API.
+
+```sh
+npx playwright-core install chromium
+npm run build:static
+npm run test:views
+npm run test:head-to-head
+npm run test:heatmap
+npm run test:segment-detail
+```
+
 ## Reporting bugs
 
 Use the **Bug Report** issue template. Include:
 
-- Cairn version (`./bin/cairn version`)
+- Peloton version (`./bin/cairn version`)
 - Go version (`go version`)
 - Postgres / TimescaleDB / PostGIS versions
 - Minimal reproduction (curl commands or a short Go program)

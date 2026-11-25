@@ -125,8 +125,6 @@ export function recordValue(bucket: RecordBucket, value: number): string {
 	}
 }
 
-export const bestEffortValue = recordValue;
-
 export function recordSport(type: string) {
 	return (
 		(

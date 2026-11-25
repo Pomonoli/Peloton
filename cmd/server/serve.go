@@ -104,7 +104,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 
 	mux := http.NewServeMux()
 	secureCookiesAlways = strings.HasPrefix(strings.ToLower(cfg.HTTP.PublicBaseURL), "https://")
-	serveMountCore(ctx, mux, app, pool, cfg, logger)
+	serveMountCore(mux, app, pool, cfg, logger)
 	serveMountFeatures(mux, app, cfg, logger)
 	serveMountPlatform(mux, app, logger)
 	srv := serveNewHTTPServer(ctx, cfg, mux)
@@ -222,8 +222,8 @@ func serveReadyzChecks(ctx context.Context, pool *pgxpool.Pool, app *App) (map[s
 	return checks, ok
 }
 
-// serveMountCore mounts health, admin ops, webhooks, sign-in and federation.
-func serveMountCore(ctx context.Context, mux *http.ServeMux, app *App, pool *pgxpool.Pool, cfg *config.Config, logger *slog.Logger) {
+// serveMountCore mounts health, admin ops, webhooks and sign-in.
+func serveMountCore(mux *http.ServeMux, app *App, pool *pgxpool.Pool, cfg *config.Config, logger *slog.Logger) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintln(w, "ok")
@@ -253,18 +253,6 @@ func serveMountCore(ctx context.Context, mux *http.ServeMux, app *App, pool *pgx
 	// OIDC sign-in endpoints. Providers come from CAIRN_OIDC_* env vars
 	// (parsed in newApp); gated on app.OIDCLogin being non-nil.
 	mountAcctOIDC(mux, app, cfg.Auth.SessionTTL, logger)
-
-	// ActivityPub federation (phase 1: read-only actor + discovery). Off unless
-	// CAIRN_FEDERATION_ENABLED; per-user opt-in gates each actor.
-	if cfg.Federation.Enabled {
-		mountRestFederation(mux, app, cfg, logger)
-		// Drain the durable outbound delivery queue (Phase 3 push fan-out).
-		if app.FederationDeliveries != nil {
-			goSupervised(ctx, logger, "runFederationDeliveryScheduler", func(ctx context.Context) { runFederationDeliveryScheduler(ctx, logger, app) })
-		}
-	} else {
-		logger.Info("federation disabled (CAIRN_FEDERATION_ENABLED=false)")
-	}
 
 	// Username/email + password sign-in plus password reset and email
 	// verification. The /login page posts here and
@@ -309,15 +297,8 @@ func serveMountFeatures(mux *http.ServeMux, app *App, cfg *config.Config, logger
 	mountRestSegments(mux, app, logger)
 	mountRestAccountJobs(mux, app, logger)
 	mountRestHealthMetrics(mux, app, logger)
-	mountRestInstanceFeatures(mux, cfg, logger)
 	mountWaasPlanner(mux, app)
-	serveMountSocial(mux, app, logger)
-}
-
-// serveMountSocial mounts social, moderation, club and notification endpoints.
-func serveMountSocial(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	mountRestSocial(mux, app, logger)
-	mountAcctNotifications(mux, app, logger)
 }
 
 // serveMountPlatform mounts admin API, sync, version, metrics, Connect-RPC and the web UI.
@@ -469,11 +450,6 @@ func serveStartBusHandlers(ctx context.Context, app *App, logger *slog.Logger, c
 		"start creds handler: %w", "creds handler: close error"); err != nil {
 		return err
 	}
-	// Reauth notifier: turns needs_reauth events into user notifications.
-	if err := serveStartOptionalSub(ctx, app, logger, cleanup, startReauthNotifier,
-		"start reauth notifier: %w", "reauth notifier: close error"); err != nil {
-		return err
-	}
 	// Follow-up consumer: runs the pipeline's follow-ups off activity-changed events.
 	if err := serveStartOptionalSub(ctx, app, logger, cleanup, startFollowUpConsumer,
 		"start follow-up consumer: %w", "follow-up consumer: close error"); err != nil {
@@ -609,10 +585,8 @@ func serveStartBackgroundLoops(ctx context.Context, app *App, cfg *config.Config
 		goSupervised(ctx, logger, "runImportQueueProcessor", func(ctx context.Context) { runImportQueueProcessor(ctx, logger, app) })
 	}
 
-	// Worker-presence watcher: notifies admins when a previously-seen worker
-	// stops heartbeating (its presence KV key expires). Gated on NATS + the
-	// notifier.
-	if app.NATSBus != nil && app.NotifyWorkerOffline != nil {
+	// Worker presence drives admin events and cleanup of stale manifests.
+	if app.NATSBus != nil {
 		goSupervised(ctx, logger, "runWorkerPresenceWatcher", func(ctx context.Context) { runWorkerPresenceWatcher(ctx, logger, app) })
 	}
 
@@ -631,14 +605,6 @@ func serveStartBackgroundLoops(ctx context.Context, app *App, cfg *config.Config
 	// OSM). Gated on the geocoder being wired (CAIRN_GEOCODER_ENABLED).
 	if app.ComputeStartPlace != nil {
 		goSupervised(ctx, logger, "runStartPlaceBackfiller", func(ctx context.Context) { runStartPlaceBackfiller(ctx, logger, app, cfg.Geocoder) })
-	}
-
-	// Notification-delivery retry processor: re-sends email/webhook deliveries
-	// that failed transiently (failed_retryable rows whose next_retry_at has
-	// elapsed), with capped exponential backoff. RetryDue is itself gated on
-	// the deliveries + notifications repos being wired.
-	if app.DeliverNotifications != nil {
-		goSupervised(ctx, logger, "runNotificationRetryScheduler", func(ctx context.Context) { runNotificationRetryScheduler(ctx, logger, app) })
 	}
 
 	if app.Garmin != nil {
@@ -914,25 +880,6 @@ func runReconcileScheduler(
 	}
 }
 
-// runNotificationRetryScheduler ticks every minute and re-attempts due
-// side-channel notification deliveries. The backoff schedule lives in the
-// domain (NextDeliveryRetryAt); this just paces the polling. Stops with ctx.
-func runNotificationRetryScheduler(ctx context.Context, logger *slog.Logger, app *App) {
-	log := logger.With("component", "notification_retry")
-	const tick = time.Minute
-	ticker := time.NewTicker(tick)
-	defer ticker.Stop()
-	log.Info("notification retry scheduler started", "interval", tick.String())
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			app.DeliverNotifications.RetryDue(ctx)
-		}
-	}
-}
-
 // runWorkerPresenceWatcher polls the worker-presence KV and notifies admins
 // when a worker that was previously online stops heartbeating (its presence
 // key expires past the TTL). It tracks the set of live worker keys between
@@ -994,9 +941,6 @@ func (w *workerPresenceWatcher) tick(ctx context.Context) {
 	for key, name := range w.seen {
 		if _, stillLive := live[key]; !stillLive {
 			w.log.Info("worker went offline", "worker_key", key, "worker", name)
-			if err := w.app.NotifyWorkerOffline.Execute(ctx, key, name); err != nil {
-				w.log.Warn("notify worker offline failed", "worker_key", key, "error", err)
-			}
 			publishAdminEvent(w.app, domain.NewAdminEvent(domain.AdminEventWorkerOffline, domain.AuditWarn, "admin.worker_offline").AboutWorker(name).With("worker_key", key))
 		}
 	}

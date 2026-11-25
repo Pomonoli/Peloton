@@ -9,7 +9,6 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/adapter/primary/rest"
 	"github.com/opencairn-org/cairn-core/internal/usecase/account"
 	authuc "github.com/opencairn-org/cairn-core/internal/usecase/auth"
-	"github.com/opencairn-org/cairn-core/internal/usecase/notification"
 )
 
 // acctSessions issues and ends cookie sessions; nil without a session store.
@@ -120,26 +119,4 @@ func mountAcctLifecycle(mux *http.ServeMux, app *App, logger *slog.Logger) {
 		Auth: restAuth(app), Accounts: app.Accounts, Remover: app.AccountRemover, Tokens: app.WebhookTokens,
 	}).Mount(mux)
 	logger.Info("account lifecycle endpoints mounted")
-}
-
-func mountAcctNotifications(mux *http.ServeMux, app *App, logger *slog.Logger) {
-	// Only set the ports that exist: a nil repo in an interface would read as present.
-	settings := &notification.Settings{Mail: app.Email}
-	if app.Users != nil {
-		settings.Users = app.Users
-	}
-	if app.QuietHours != nil {
-		settings.QuietHours = app.QuietHours
-	}
-	if app.NotificationDeliveries != nil {
-		settings.Deliveries = app.NotificationDeliveries
-	}
-	h := &rest.NotificationSettingsHandlers{
-		Auth: restAuth(app), Preferences: app.NotificationPreferences, Settings: settings, Log: logger,
-	}
-	if app.WebhookEndpoints != nil {
-		h.Webhooks = &notification.Webhooks{Repo: app.WebhookEndpoints, Deliver: app.DeliverNotifications}
-	}
-	h.Mount(mux)
-	logger.Info("notification settings endpoints mounted")
 }

@@ -19,12 +19,11 @@ import (
 // InstanceInfo is the static identity of the running instance, filled by
 // package main from the build metadata and config.
 type InstanceInfo struct {
-	Version           string
-	Commit            string
-	BuildTime         time.Time // zero when unknown
-	FederationEnabled bool
-	OAuthEnabled      bool
-	RegistrationOpen  bool
+	Version          string
+	Commit           string
+	BuildTime        time.Time // zero when unknown
+	OAuthEnabled     bool
+	RegistrationOpen bool
 }
 
 // InviteRedeemer creates a user from an invite code (usecase/invite.RedeemInvite).
@@ -35,12 +34,11 @@ type InviteRedeemer interface {
 // GetInstanceInfo is public: a client's server picker calls it before login.
 func (s *AuthServer) GetInstanceInfo(context.Context, *v1.GetInstanceInfoRequest) (*v1.GetInstanceInfoResponse, error) {
 	out := &v1.GetInstanceInfoResponse{
-		Version:           s.Instance.Version,
-		Commit:            s.Instance.Commit,
-		FederationEnabled: s.Instance.FederationEnabled,
-		OauthEnabled:      s.Instance.OAuthEnabled,
-		RegistrationOpen:  s.Instance.RegistrationOpen,
-		SupportedScopes:   append([]string(nil), domain.SupportedScopes...),
+		Version:          s.Instance.Version,
+		Commit:           s.Instance.Commit,
+		OauthEnabled:     s.Instance.OAuthEnabled,
+		RegistrationOpen: s.Instance.RegistrationOpen,
+		SupportedScopes:  append([]string(nil), domain.SupportedScopes...),
 	}
 	if !s.Instance.BuildTime.IsZero() {
 		out.BuildTime = timestamppb.New(s.Instance.BuildTime)

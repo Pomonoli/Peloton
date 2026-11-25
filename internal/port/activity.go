@@ -196,9 +196,8 @@ type ActivityReader interface {
 		filter ActivityListFilter,
 	) (activities []domain.Activity, matched int, err error)
 
-	// ListCommunityActivities pages live community activities, optionally for
-	// one member. Only the viewer's own administratively hidden rows are included.
-	ListCommunityActivities(ctx context.Context, viewerID domain.UserID, ownerID *domain.UserID, limit, offset int) ([]domain.Activity, error)
+	// ListMemberActivities pages the selected rider’s activity history.
+	ListMemberActivities(ctx context.Context, viewerID, ownerID domain.UserID, limit, offset int) ([]domain.Activity, error)
 }
 
 // ActivityWriter persists the merged activity row.

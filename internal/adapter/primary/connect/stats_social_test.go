@@ -13,7 +13,6 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 	"github.com/opencairn-org/cairn-core/internal/usecase/dashboard"
-	"github.com/opencairn-org/cairn-core/internal/usecase/view"
 )
 
 type fakeUsers struct {
@@ -115,67 +114,5 @@ func TestGetOverview(t *testing.T) {
 	}
 	if _, err := s.GetOverview(t.Context(), &v1.GetOverviewRequest{}); connectrpc.CodeOf(err) != connectrpc.CodeUnauthenticated {
 		t.Fatalf("anonymous: %v", err)
-	}
-}
-
-func TestListHomeFeed(t *testing.T) {
-	repo := inmem.NewActivityRepo()
-	me, friend := domain.UserID(uuid.New()), domain.UserID(uuid.New())
-	users := &fakeUsers{users: map[domain.UserID]domain.User{me: {ID: me, Username: "me"}, friend: {ID: friend, Username: "friend", DisplayName: "F"}}}
-	seedPlain(repo, me, domain.ActivityTypeRide, actNow.Add(-2*time.Hour), domain.PrivacyPrivate)
-	theirs := seedPlain(repo, friend, domain.ActivityTypeRun, actNow.Add(-time.Hour), domain.PrivacyPublic)
-	feeds := view.NewFeeds(repo, users, view.NewVisibility(), nil, false)
-	s := NewSocialServer(feeds, &fakeContent{}, nil, func(domain.Activity) string { return "e" })
-	ctx := context.WithValue(t.Context(), ctxKeyUserID, me)
-
-	res, err := s.ListHomeFeed(ctx, &v1.ListHomeFeedRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.GetItems()) != 2 {
-		t.Fatalf("items %d", len(res.GetItems()))
-	}
-	first := res.GetItems()[0]
-	if first.GetSource() != v1.FeedItem_SOURCE_FOLLOWING || first.GetProjected().GetId() != theirs.String() || first.GetOwner().GetUsername() != "friend" {
-		t.Fatalf("first %v", first)
-	}
-	if first.GetProjected().GetStartPlace() != "Darmstadt" && len(first.GetProjected().GetVisibleCategories()) == 0 {
-		t.Fatalf("projection carries nothing: %v", first.GetProjected())
-	}
-	second := res.GetItems()[1]
-	if second.GetSource() != v1.FeedItem_SOURCE_SELF || second.GetOwn() == nil || second.GetOwner().GetUsername() != "me" {
-		t.Fatalf("second %v", second)
-	}
-	if res.GetPage().GetNextCursor() != "" {
-		t.Fatal("short page must have no cursor")
-	}
-	// Paging: limit 1 yields a cursor.
-	res, _ = s.ListHomeFeed(ctx, &v1.ListHomeFeedRequest{Page: &v1.PageRequest{Limit: 1}})
-	if len(res.GetItems()) != 1 || res.GetPage().GetNextCursor() != "1" {
-		t.Fatalf("paged %v", res)
-	}
-	if _, err := s.ListHomeFeed(t.Context(), &v1.ListHomeFeedRequest{}); connectrpc.CodeOf(err) != connectrpc.CodeUnauthenticated {
-		t.Fatalf("anonymous: %v", err)
-	}
-}
-
-func TestProjectedAndFederatedToProto(t *testing.T) {
-	lat, lng := 49.9, 8.6
-	p := domain.ProjectedActivity{ID: domain.ActivityID(uuid.New()), Type: domain.ActivityTypeRun, StartTime: actNow, StartLat: &lat, StartLng: &lng,
-		Visible: []domain.Category{domain.CategorySummary, domain.CategoryLocation}, MapVisible: true, PhotosVisible: true}
-	out := projectedActivityToProto(p)
-	if out.GetStart().GetLatitude() != 49.9 || !out.GetHasPhotos() || len(out.GetVisibleCategories()) != 2 || out.GetType() != v1.ActivityType_ACTIVITY_TYPE_RUN {
-		t.Fatalf("projected %v", out)
-	}
-	d := 3600
-	f := federatedToProto(domain.FederatedFeedItem{ActivityAPID: "https://o/a/1", Name: "n", Sport: "Run", Published: actNow, ImageURL: "https://o/i.png", DurationS: &d})
-	if f.GetId() != "https://o/a/1" || f.GetMapImage().GetUrl() != "https://o/i.png" || f.GetElapsedDurationS() != 3600 {
-		t.Fatalf("federated %v", f)
-	}
-	if c := remoteCardToProto("https://o.test/users/bob"); !c.GetRemote() || c.GetUsername() != "@bob@o.test" {
-		t.Fatalf("remote card %v", c)
-	}
-	if userCardToProto(domain.User{}) != nil {
-		t.Fatal("zero user → nil card")
 	}
 }

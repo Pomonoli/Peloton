@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@inlang/plugin-message-format": "4.6.2",
     "@sveltejs/adapter-node": "6.0.2",
     "@sveltejs/adapter-static": "4.0.1",
     "@sveltejs/kit": "3.2.0",

@@ -2,7 +2,7 @@
 	import { memberURL } from '#lib/member.js';
 
 	import { formatDateOnly } from '#lib/format.js';
-	import { bestEffortValue, recordLabel } from '#lib/records.js';
+	import { recordValue, recordLabel } from '#lib/records.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -111,7 +111,7 @@
 			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
 				<dt class="text-xs uppercase tracking-wide text-zinc-500">All-time best</dt>
 				<dd class="mt-1 text-2xl font-semibold tabular-nums text-emerald-300">
-					{bestEffortValue(bucket, payload.best)}
+					{recordValue(bucket, payload.best)}
 				</dd>
 			</div>
 			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
@@ -141,7 +141,7 @@
 							class={b.item.is_best ? 'fill-emerald-500' : 'fill-zinc-600'}
 						>
 							<title
-								>{formatDateOnly(b.item.start_time)} · {bestEffortValue(
+								>{formatDateOnly(b.item.start_time)} · {recordValue(
 									bucket,
 									b.item.achieved_value
 								)}</title
@@ -179,7 +179,7 @@
 									</a>
 								</td>
 								<td class="px-3 py-2 text-right font-medium tabular-nums">
-									{bestEffortValue(bucket, it.achieved_value)}
+									{recordValue(bucket, it.achieved_value)}
 									{#if it.is_best}<span class="ml-1 text-emerald-400">★</span>{/if}
 								</td>
 							</tr>

@@ -5,11 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"image"
@@ -34,9 +30,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/config"
 	"github.com/opencairn-org/cairn-core/internal/db"
 	"github.com/opencairn-org/cairn-core/internal/domain"
-	"github.com/opencairn-org/cairn-core/internal/httpsig"
 	"github.com/opencairn-org/cairn-core/internal/port"
-	"github.com/opencairn-org/cairn-core/internal/usecase/federation"
 )
 
 // The API suite drives the real mux (all REST + Connect-RPC mounts, real Postgres, no NATS/S3)
@@ -138,8 +132,6 @@ func newITestEnvWithOverrides(t *testing.T, overrides map[string]string) *itestE
 		"CAIRN_AUTH_ARGON2_TIME":                  "1",
 		"CAIRN_GEOCODER_ENABLED":                  "false",
 		"CAIRN_MAP_TILE_URL":                      tiles.URL + "/{z}/{x}/{y}.png",
-		"CAIRN_FEDERATION_ENABLED":                "true",
-		"CAIRN_FEDERATION_ALLOW_PRIVATE_HOSTS":    "true",
 		"CAIRN_EMAIL_ADAPTER":                     "none",
 		"CAIRN_NATS_URL":                          "",
 		"CAIRN_STORAGE_DRIVER":                    "none",
@@ -172,7 +164,7 @@ func newITestEnvWithOverrides(t *testing.T, overrides map[string]string) *itestE
 	if err := serveBootstrapAdmin(ctx, app, cfg, testLogger()); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	serveMountCore(ctx, mux, app, pool, cfg, testLogger())
+	serveMountCore(mux, app, pool, cfg, testLogger())
 	serveMountFeatures(mux, app, cfg, testLogger())
 	serveMountPlatform(mux, app, testLogger())
 	if app.NATSBus != nil {
@@ -381,14 +373,14 @@ func TestAPI_EndToEnd(t *testing.T) {
 	adm := env.user("itadmin", domain.UserRoleAdmin)
 	alice := env.user("italice", domain.UserRoleUser)
 	bob := env.user("itbob", domain.UserRoleUser)
+	bobID := bob.userID.String()
 	anon := env.anon()
 
 	// Public surface.
 	for _, p := range []string{
-		"/healthz", "/readyz", "/api/version", "/metrics", "/api/instance/features",
+		"/healthz", "/readyz", "/api/version", "/metrics",
 		"/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource",
 		"/.well-known/oauth-protected-resource/mcp",
-		"/.well-known/nodeinfo", "/nodeinfo/2.1",
 	} {
 		anon.do(http.MethodGet, p, nil, http.StatusOK)
 	}
@@ -397,6 +389,9 @@ func TestAPI_EndToEnd(t *testing.T) {
 	anon.do(http.MethodGet, "/api/overview", nil, http.StatusUnauthorized)
 	anon.rpc("/cairn.v1.AuthService/GetLoginMethods", nil, http.StatusOK)
 	anon.rpc("/cairn.v1.ActivityService/ListActivities", nil, http.StatusUnauthorized)
+	for _, path := range []string{"/api/instance/features", "/api/feed/home", "/api/clubs", "/api/notifications/preferences", "/api/profile/visibility"} {
+		alice.do(http.MethodGet, path, nil, http.StatusNotFound)
+	}
 
 	// Uploads: alice twice (two rides), bob once on the same route.
 	start := time.Date(2026, 5, 3, 7, 0, 0, 0, time.UTC)
@@ -414,14 +409,13 @@ func TestAPI_EndToEnd(t *testing.T) {
 	act2, src2 := str(up2, "activity_id"), str(up2, "source_id")
 	bobAct := str(bob.upload("bob.gpx", gpxRide(start.Add(24*time.Hour))), "activity_id")
 
-	// The uploads retain the default Cairn privacy values and nobody follows
-	// anyone yet. Both sessions can read the other member's stored rides.
+	// Both sessions can read the other member's stored rides.
 	for _, check := range []struct {
 		client *itestClient
 		user   string
 		ride   string
 	}{{bob, "italice", actID}, {alice, "itbob", bobAct}} {
-		for _, path := range []string{"/api/feed/home", "/api/feed/following", "/api/profiles/" + check.user} {
+		for _, path := range []string{"/api/profiles/" + check.user} {
 			if body := check.client.do(http.MethodGet, path, nil, http.StatusOK); !bytes.Contains(body, []byte(check.ride)) {
 				t.Errorf("%s: member ride %s missing from %s", check.client.name, check.ride, path)
 			}
@@ -449,14 +443,7 @@ func TestAPI_EndToEnd(t *testing.T) {
 	bob.rpc(procedure+"ListBestEfforts", map[string]any{"activityId": actID}, http.StatusOK)
 	bob.rpc(procedure+"GetParsedSource", map[string]any{"activityId": actID, "sourceId": srcID}, http.StatusNotFound)
 	bob.do(http.MethodGet, "/api/activities/"+actID+"/manage", nil, http.StatusOK)
-	bob.do(http.MethodPost, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
-	firstComment := bob.post("/api/activities/"+actID+"/comments", map[string]any{"body": "Great route!"}, http.StatusOK)
-	if body := alice.do(http.MethodGet, "/api/activities/"+actID+"/comments", nil, http.StatusOK); !bytes.Contains(body, []byte("Great route!")) {
-		t.Errorf("owner did not receive the member's comment: %s", body)
-	}
-	bob.do(http.MethodDelete, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
-	bob.do(http.MethodDelete, "/api/comments/"+str(firstComment, "id"), nil)
-	for _, path := range []string{"/api/feed/home", "/api/feed/following", "/api/profiles/italice", "/api/activities/" + actID + "/projected"} {
+	for _, path := range []string{"/api/profiles/italice", "/api/activities/" + actID + "/projected"} {
 		anon.do(http.MethodGet, path, nil, http.StatusUnauthorized)
 	}
 	anon.do(http.MethodGet, "/api/activities/"+actID+"/map.png", nil, http.StatusNotFound)
@@ -479,7 +466,7 @@ func TestAPI_EndToEnd(t *testing.T) {
 	// Owner reads of the activity.
 	for _, p := range []string{
 		"", "/projected", "/laps", "/zones", "/similar", "/merged-stream", "/field-sources", "/manage",
-		"/segment-efforts", "/kudos", "/comments", "/attachments", "/shares", "/export/options",
+		"/segment-efforts", "/attachments", "/shares", "/export/options",
 		"/export.gpx", "/export.tcx", "/export.fit", "/map.png", "/sources/" + srcID + "/parsed",
 	} {
 		alice.do(http.MethodGet, "/api/activities/"+actID+p, nil)
@@ -491,12 +478,11 @@ func TestAPI_EndToEnd(t *testing.T) {
 	// Owner lists and dashboards.
 	for _, p := range []string{
 		"/api/overview", "/api/stats", "/api/records", "/api/analysis", "/api/activities/feed",
-		"/api/activities/heatmap", "/api/feed/home", "/api/feed/following",
+		"/api/activities/heatmap",
 		"/api/best-efforts/history?type=ride&metric=power&window_kind=duration&window_value=60",
 		"/api/review-queue", "/api/quota", "/api/health?type=RestingHR&days=30", "/api/segments", "/api/athlete/metrics",
-		"/api/settings/merge-policy", "/api/profile/visibility", "/api/profile/privacy-zones",
-		"/api/notifications/preferences", "/api/notifications/quiet-hours", "/api/notifications/webhooks",
-		"/api/notifications/deliveries", "/api/connections", "/api/webhook-endpoints", "/api/pats", "/api/blocks", "/api/clubs", "/api/profiles/italice",
+		"/api/settings/merge-policy", "/api/profile/privacy-zones",
+		"/api/connections", "/api/webhook-endpoints", "/api/pats", "/api/profiles/italice",
 	} {
 		alice.do(http.MethodGet, p, nil, http.StatusOK)
 	}
@@ -527,22 +513,15 @@ func TestAPI_EndToEnd(t *testing.T) {
 	bob.rpc("/cairn.v1.ActivityService/UpdateActivity", map[string]any{"id": bobAct, "field_mask": []string{"privacy"}, "privacy": "PRIVACY_FOLLOWERS"}, http.StatusOK)
 	bob.rpc("/cairn.v1.ActivityService/UpdateActivity", map[string]any{"id": actID, "field_mask": []string{"title"}, "title": "hijack"}, http.StatusNotFound, http.StatusForbidden, http.StatusUnauthorized)
 	alice.rpc("/cairn.v1.AuthService/GetCurrentUser", nil, http.StatusOK)
-	alice.rpc("/cairn.v1.NotificationService/ListNotifications", nil, http.StatusOK)
-	alice.rpc("/cairn.v1.NotificationService/MarkAllNotificationsRead", nil)
 	alice.rpc("/cairn.v1.AdminService/ListUsers", nil, http.StatusForbidden)
 
 	// Privacy, profile and settings.
-	alice.do(http.MethodPut, "/api/profile/public", map[string]any{"public": true}, http.StatusOK)
-	alice.do(http.MethodPut, "/api/profile/visibility", map[string]any{"policy": map[string][]string{"followers": {"summary", "map", "location", "hr", "power", "social", "segments", "best_efforts", "zones"}, "public": {"summary", "social"}}}, http.StatusOK)
 	zone := alice.post("/api/profile/privacy-zones", map[string]any{"label": "home", "lat": 47.0, "lng": 8.0, "radius_m": 200}, http.StatusOK, http.StatusCreated)
 	alice.do(http.MethodGet, "/api/activities/"+actID+"/projected", nil, http.StatusOK)
 	if id := str(zone, "id"); id != "" {
 		alice.do(http.MethodDelete, "/api/profile/privacy-zones/"+id, nil)
 	}
-	alice.do(http.MethodPut, "/api/notifications/preferences", map[string]any{"preferences": []any{}})
-	alice.do(http.MethodPut, "/api/notifications/quiet-hours", map[string]any{"enabled": true, "start": "22:00", "end": "06:00", "timezone": "UTC"})
 	alice.do(http.MethodPut, "/api/settings/merge-policy", map[string]any{"policy": map[string]any{}})
-	alice.do(http.MethodPut, "/api/profile/federation", map[string]any{"enabled": true})
 
 	// PATs: create, use, revoke.
 	pat := alice.post("/api/pats", map[string]any{"name": "cli", "expires_in_days": 7}, http.StatusCreated)
@@ -553,24 +532,7 @@ func TestAPI_EndToEnd(t *testing.T) {
 	alice.do(http.MethodDelete, "/api/pats/"+str(pat, "id"), nil, http.StatusOK)
 	cli.do(http.MethodGet, "/api/overview", nil, http.StatusUnauthorized)
 
-	// Social: follow, kudos, comments, feed, blocks, reports.
-	bobID, aliceID := bob.userID.String(), alice.userID.String()
-	bob.do(http.MethodPost, "/api/users/"+aliceID+"/follow", nil, http.StatusOK)
-	alice.do(http.MethodPost, "/api/users/"+bobID+"/follow", nil, http.StatusOK)
-	for _, p := range []string{"/followers", "/following", "/follow-state"} {
-		bob.do(http.MethodGet, "/api/users/"+aliceID+p, nil, http.StatusOK)
-	}
-	bob.do(http.MethodGet, "/api/activities/"+actID+"/projected", nil, http.StatusOK)
-	bob.do(http.MethodGet, "/api/feed/following", nil, http.StatusOK)
-	bob.do(http.MethodGet, "/api/profiles/italice", nil, http.StatusOK)
-	bob.do(http.MethodPost, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
-	bob.do(http.MethodGet, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
-	cm := bob.post("/api/activities/"+actID+"/comments", map[string]any{"body": "Nice ride!"}, http.StatusOK)
-	alice.do(http.MethodGet, "/api/activities/"+actID+"/comments", nil, http.StatusOK)
-	alice.rpc("/cairn.v1.NotificationService/ListNotifications", nil, http.StatusOK)
-	bob.do(http.MethodDelete, "/api/activities/"+actID+"/kudos", nil, http.StatusOK)
-	rep := alice.post("/api/reports", map[string]any{"target_kind": "comment", "target_id": str(cm, "id"), "reason": "spam"}, http.StatusOK, http.StatusCreated)
-	bob.do(http.MethodDelete, "/api/comments/"+str(cm, "id"), nil)
+	rep := alice.post("/api/reports", map[string]any{"target_kind": "activity", "target_id": bobAct, "reason": "spam"}, http.StatusOK, http.StatusCreated)
 	alice.do(http.MethodGet, "/api/activities/"+bobAct+"/projected", nil)
 
 	// Share links.
@@ -580,36 +542,10 @@ func TestAPI_EndToEnd(t *testing.T) {
 	alice.do(http.MethodGet, "/api/activities/"+actID+"/shares", nil, http.StatusOK)
 	alice.do(http.MethodDelete, "/api/shares/"+str(sh, "token"), nil, http.StatusOK, http.StatusNoContent)
 
-	// Clubs.
-	club := alice.post("/api/clubs", map[string]any{"name": "Itest Riders", "description": "d"}, http.StatusOK)
-	slug := str(club, "slug")
-	bob.do(http.MethodPost, "/api/clubs/"+slug+"/join", nil, http.StatusOK)
-	for _, p := range []string{"", "/members", "/feed"} {
-		bob.do(http.MethodGet, "/api/clubs/"+slug+p, nil, http.StatusOK)
-	}
-	bob.do(http.MethodDelete, "/api/clubs/"+slug+"/leave", nil, http.StatusOK)
-
-	// Federation (read side + local follow of a remote handle that does not resolve).
-	for _, p := range []string{
-		"/.well-known/webfinger?resource=acct:italice@" + strings.Replace(strings.TrimPrefix(env.srv.URL, "http://"), "127.0.0.1", "localhost", 1),
-		"/users/italice", "/users/italice/outbox", "/users/italice/followers", "/users/italice/following",
-	} {
-		anon.do(http.MethodGet, p, nil, http.StatusNotFound)
-		alice.do(http.MethodGet, p, nil, http.StatusOK)
-	}
-	alice.do(http.MethodPost, "/api/federation/follow", map[string]any{"handle": "nobody@127.0.0.1:1"})
-
-	itestFederation(t, env, alice, actID)
-
-	// Blocks.
-	alice.do(http.MethodPost, "/api/users/"+bobID+"/block", nil, http.StatusOK)
-	bob.do(http.MethodGet, "/api/activities/"+actID+"/projected", nil)
-	alice.do(http.MethodDelete, "/api/users/"+bobID+"/block", nil, http.StatusOK)
-
 	// Admin surface.
 	for _, p := range []string{
 		"/api/admin/invites", "/api/admin/reports", "/api/admin/worker-enrollments", "/api/admin/workers",
-		"/api/admin/dlq", "/api/admin/federation/blocks", "/api/admin/instance/merge-defaults",
+		"/api/admin/dlq", "/api/admin/instance/merge-defaults",
 	} {
 		adm.do(http.MethodGet, p, nil)
 		bob.do(http.MethodGet, p, nil, http.StatusForbidden, http.StatusUnauthorized, http.StatusServiceUnavailable)
@@ -643,8 +579,6 @@ func TestAPI_EndToEnd(t *testing.T) {
 	}
 	adm.do(http.MethodPost, "/api/admin/reports/"+str(rep, "id")+"/resolve", map[string]any{"status": "resolved"})
 	adm.do(http.MethodPost, "/api/admin/activities/"+bobAct+"/hide", map[string]any{"hidden": true})
-	adm.do(http.MethodPost, "/api/admin/federation/blocks", map[string]any{"domain": "evil.example", "reason": "spam"})
-	adm.do(http.MethodDelete, "/api/admin/federation/blocks/evil.example", nil)
 	adm.do(http.MethodPut, "/api/admin/users/"+bobID+"/role", map[string]any{"role": "moderator"})
 	adm.do(http.MethodPut, "/api/admin/users/"+bobID+"/quota", map[string]any{"max_activities": 100})
 	adm.do(http.MethodPut, "/api/admin/instance/merge-defaults", map[string]any{"policy": map[string]any{}})
@@ -670,13 +604,13 @@ func TestAPI_EndToEnd(t *testing.T) {
 	adm.rpc("/cairn.v1.AdminService/ListDeadLetterJobs", map[string]any{}, http.StatusOK)
 	adm.rpc("/cairn.v1.AdminService/ListOrphanedSources", map[string]any{}, http.StatusOK)
 	adm.rpc("/cairn.v1.AdminService/GetJob", map[string]any{"id": uuid.NewString()}, http.StatusNotFound)
-	// Fleet, moderation, quota, federation blocks, merge defaults and ops twins.
-	for _, proc := range []string{"ListWorkers", "ListWorkerPools", "ListWorkerEnrollments", "ListReports", "ListBlockedDomains", "GetInstanceMergeDefaults"} {
+	// Fleet, moderation, quota, merge defaults and ops twins.
+	for _, proc := range []string{"ListWorkers", "ListWorkerPools", "ListWorkerEnrollments", "ListReports", "GetInstanceMergeDefaults"} {
 		adm.rpc("/cairn.v1.AdminService/"+proc, map[string]any{}, http.StatusOK)
 		bob.rpc("/cairn.v1.AdminService/"+proc, map[string]any{}, http.StatusForbidden, http.StatusUnauthorized)
 	}
-	adm.rpc("/cairn.v1.AdminService/BlockDomain", map[string]any{"domain": "Bad.Example", "reason": "rpc"}, http.StatusOK)
-	adm.rpc("/cairn.v1.AdminService/UnblockDomain", map[string]any{"domain": "bad.example"}, http.StatusOK)
+	adm.rpc("/cairn.v1.AdminService/BlockDomain", nil, http.StatusNotImplemented)
+	adm.rpc("/cairn.v1.AdminService/UnblockDomain", nil, http.StatusNotImplemented)
 	adm.rpc("/cairn.v1.AdminService/SetUserQuota", map[string]any{"userId": bobID, "maxActivities": 50}, http.StatusOK)
 	adm.rpc("/cairn.v1.AdminService/SetUserQuota", map[string]any{"userId": bobID}, http.StatusOK)
 	adm.rpc("/cairn.v1.AdminService/UpdateInstanceMergeDefaults", map[string]any{"policies": map[string]any{"ride": map[string]any{"defaultProviders": []string{"strava"}}}}, http.StatusOK)
@@ -810,20 +744,6 @@ func TestAPI_EndToEnd(t *testing.T) {
 		}
 	}
 
-	// Notification webhooks.
-	wh := alice.post("/api/notifications/webhooks", map[string]any{
-		"name": "hook", "url": "https://hooks.example/cairn", "event_types": []int{1, 2}, "min_severity": "info",
-	}, http.StatusCreated)
-	if id := str(wh, "id"); id != "" {
-		alice.do(http.MethodPut, "/api/notifications/webhooks/"+id, map[string]any{"name": "hook2", "url": "https://hooks.example/cairn2", "enabled": false}, http.StatusOK)
-		alice.do(http.MethodPost, "/api/notifications/webhooks/"+id+"/rotate-secret", nil, http.StatusOK)
-		alice.do(http.MethodPost, "/api/notifications/webhooks/"+id+"/test", nil, http.StatusOK, http.StatusBadGateway, http.StatusBadRequest)
-		alice.do(http.MethodGet, "/api/notifications/webhooks", nil, http.StatusOK)
-		bob.do(http.MethodDelete, "/api/notifications/webhooks/"+id, nil, http.StatusNotFound, http.StatusForbidden)
-		alice.do(http.MethodDelete, "/api/notifications/webhooks/"+id, nil, http.StatusOK, http.StatusNoContent)
-	}
-	alice.do(http.MethodPost, "/api/notifications/webhooks", map[string]any{"name": "ssrf", "url": "http://127.0.0.1/x"}, http.StatusBadRequest)
-
 	// Worker enrollments: provider is required and format-checked, not limited to built-ins.
 	for _, p := range []string{"", "polar.>", "*", "po.lar", "Polar", strings.Repeat("p", 49)} {
 		msg := adm.do(http.MethodPost, "/api/admin/worker-enrollments", map[string]any{"name": "itest-worker", "provider": p}, http.StatusBadRequest)
@@ -898,106 +818,6 @@ func TestAPI_EndToEnd(t *testing.T) {
 	// Deletions last.
 	alice.do(http.MethodPost, "/auth/logout", nil)
 	alice.do(http.MethodGet, "/api/overview", nil, http.StatusUnauthorized)
-}
-
-// pubKeyPEM is the PKIX PEM of k's public half.
-func pubKeyPEM(t *testing.T, k *rsa.PrivateKey) string {
-	t.Helper()
-	der, err := x509.MarshalPKIXPublicKey(&k.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
-}
-
-// itestFederation plays a remote ActivityPub server against alice: outbound follow via WebFinger,
-// then signed inbound Follow, Create, Like, reply, Undo and Delete.
-func itestFederation(t *testing.T, env *itestEnv, alice *itestClient, actID string) {
-	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var actor string
-	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/.well-known/webfinger":
-			w.Header().Set("Content-Type", "application/jrd+json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"links": []any{
-				map[string]any{"rel": "self", "type": "application/activity+json", "href": actor},
-			}})
-		case r.URL.Path == "/users/rbob":
-			w.Header().Set("Content-Type", "application/activity+json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"@context": []any{"https://www.w3.org/ns/activitystreams"}, "type": "Person", "id": actor,
-				"preferredUsername": "rbob", "inbox": actor + "/inbox",
-				"publicKey": map[string]any{"id": actor + "#main-key", "owner": actor, "publicKeyPem": pubKeyPEM(t, key)},
-			})
-		case r.URL.Path == "/users/rbob/inbox" && r.Method == http.MethodPost:
-			w.WriteHeader(http.StatusAccepted)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(remote.Close)
-	actor = remote.URL + "/users/rbob"
-	host := strings.TrimPrefix(remote.URL, "http://")
-
-	alice.do(http.MethodPost, "/api/federation/follow", map[string]any{"handle": "@rbob@" + host}, http.StatusOK)
-
-	base := strings.Replace(env.srv.URL, "127.0.0.1", "localhost", 1)
-	aliceActor := base + "/users/italice"
-	objURL := aliceActor + "/activities/" + actID
-	send := func(activity map[string]any, want ...int) {
-		t.Helper()
-		activity["@context"] = "https://www.w3.org/ns/activitystreams"
-		activity["actor"] = actor
-		body, _ := json.Marshal(activity)
-		req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/users/italice/inbox", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/activity+json")
-		if err := httpsig.Sign(req, actor+"#main-key", key, body); err != nil {
-			t.Fatal(err)
-		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = resp.Body.Close()
-		if !slices.Contains(want, resp.StatusCode) {
-			t.Errorf("inbox %v: status %d, want %v", activity["type"], resp.StatusCode, want)
-		}
-	}
-	id := func(s string) string { return actor + "/" + s + "/" + uuid.NewString() }
-	follow := map[string]any{"id": id("follows"), "type": "Follow", "object": aliceActor}
-	send(follow, http.StatusAccepted)
-	send(map[string]any{"id": id("accepts"), "type": "Accept", "object": map[string]any{"type": "Follow", "actor": aliceActor, "object": actor}}, http.StatusAccepted)
-	note := federation.BuildCreate(remote.URL, actor, actor+"/activities/"+uuid.NewString(), domain.Activity{
-		ID: domain.ActivityID(uuid.New()), Type: domain.ActivityTypeRun, Title: "Remote run",
-		StartTime: time.Now().UTC().Add(-time.Hour), MovingDuration: 30 * time.Minute, Privacy: domain.PrivacyPublic,
-	}, domain.ActivityCategories())
-	send(map[string]any{"id": id("creates"), "type": "Create", "object": note["object"]}, http.StatusAccepted)
-	like := map[string]any{"id": id("likes"), "type": "Like", "object": objURL}
-	send(like, http.StatusAccepted)
-	send(like, http.StatusAccepted)
-	send(map[string]any{"id": id("creates"), "type": "Create", "object": map[string]any{
-		"id": id("notes"), "type": "Note", "inReplyTo": objURL, "content": "<p>Great ride!</p>",
-	}}, http.StatusAccepted)
-	alice.do(http.MethodGet, "/api/activities/"+actID+"/comments", nil, http.StatusOK)
-	alice.do(http.MethodGet, "/api/feed/home", nil, http.StatusOK)
-	send(map[string]any{"id": id("undos"), "type": "Undo", "object": map[string]any{"type": "Like", "object": objURL}}, http.StatusAccepted)
-	send(map[string]any{"id": id("undos"), "type": "Undo", "object": map[string]any{"type": "Follow", "object": aliceActor}}, http.StatusAccepted)
-	send(map[string]any{"id": id("deletes"), "type": "Delete", "object": actor}, http.StatusAccepted)
-	send(map[string]any{"id": id("follows"), "type": "Follow", "object": base + "/users/nobody"}, http.StatusNotFound, http.StatusBadRequest)
-
-	// Unsigned and badly signed requests are refused.
-	resp, err := http.Post(env.srv.URL+"/users/italice/inbox", "application/activity+json", strings.NewReader(`{"type":"Follow"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("unsigned inbox post: %d", resp.StatusCode)
-	}
 }
 
 // itestConnections links a Strava account through a fake token endpoint and a Garmin credential account.

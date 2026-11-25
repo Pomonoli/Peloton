@@ -20,14 +20,13 @@ const (
 	CategorySegments    Category = "segments"     // segment efforts + placement
 	CategoryBestEfforts Category = "best_efforts" // best-effort curves
 	CategoryZones       Category = "zones"        // time-in-zone
-	CategorySocial      Category = "social"       // may kudos/comment (a gate, not data)
 )
 
 // AllCategories is the canonical iteration order.
 var AllCategories = []Category{
 	CategorySummary, CategoryMap, CategoryPhotos, CategoryLocation, CategoryHR, CategoryPower,
 	CategoryCadence, CategoryPaceSpeed, CategorySegments, CategoryBestEfforts,
-	CategoryZones, CategorySocial,
+	CategoryZones,
 }
 
 // CategorySet is a set of allowed categories.

@@ -2,7 +2,6 @@ package connect
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -14,92 +13,9 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
 	accountsuc "github.com/opencairn-org/cairn-core/internal/usecase/accounts"
-	notificationuc "github.com/opencairn-org/cairn-core/internal/usecase/notification"
 	"github.com/opencairn-org/cairn-core/internal/usecase/providerlink"
 	"github.com/opencairn-org/cairn-core/internal/usecase/webhooks"
 )
-
-type fakeNotifRepo struct {
-	port.NotificationRepo
-	unread int
-}
-
-func (f *fakeNotifRepo) CountUnreadForUser(context.Context, domain.UserID) (int, error) {
-	return f.unread, nil
-}
-func (f *fakeNotifRepo) SaveNotifications(context.Context, []domain.Notification) error { return nil }
-
-// fakeStream records what the handler sends.
-type fakeStream struct {
-	mu   sync.Mutex
-	sent []*v1.NotificationEvent
-}
-
-func (f *fakeStream) SendHeaders() error { return nil }
-
-func (f *fakeStream) Send(e *v1.NotificationEvent) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.sent = append(f.sent, e)
-	return nil
-}
-func (f *fakeStream) count() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.sent)
-}
-
-func TestCountUnreadAndStreamNotifications(t *testing.T) {
-	user := domain.UserID(uuid.New())
-	hub := notificationuc.NewHub()
-	repo := notificationuc.NewBroadcastRepo(&fakeNotifRepo{unread: 3}, hub)
-	s := NewNotificationServer(repo)
-	s.Hub = hub
-	ctx := context.WithValue(t.Context(), ctxKeyUserID, user)
-
-	cnt, err := s.CountUnreadNotifications(ctx, &v1.CountUnreadNotificationsRequest{})
-	if err != nil || cnt.GetCount() != 3 {
-		t.Fatalf("count %v %v", cnt, err)
-	}
-
-	sctx, cancel := context.WithCancel(ctx)
-	stream := &fakeStream{}
-	done := make(chan error, 1)
-	go func() {
-		done <- s.streamNotifications(sctx, &v1.StreamNotificationsRequest{MinSeverity: v1.NotificationSeverity_NOTIFICATION_SEVERITY_WARN}, stream)
-	}()
-	// Wait for the subscription, then save: the warn event streams, the info one is filtered.
-	for i := 0; i < 100 && hub.Subscribers(user) == 0; i++ {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if err := repo.SaveNotifications(ctx, []domain.Notification{
-		{UserID: user, Severity: domain.NotificationSeverityInfo, DedupKey: "quiet"},
-		{UserID: user, Severity: domain.NotificationSeverityError, DedupKey: "loud"},
-		{UserID: domain.UserID(uuid.New()), Severity: domain.NotificationSeverityError, DedupKey: "other"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 100 && stream.count() == 0; i++ {
-		time.Sleep(5 * time.Millisecond)
-	}
-	cancel()
-	if err := <-done; err != nil {
-		t.Fatalf("stream ended with %v", err)
-	}
-	if stream.count() != 1 || stream.sent[0].GetDedupKey() != "loud" {
-		t.Fatalf("sent %v", stream.sent)
-	}
-	if hub.Subscribers(user) != 0 {
-		t.Fatal("stream must unsubscribe on exit")
-	}
-	s.Hub = nil
-	if err := s.streamNotifications(ctx, &v1.StreamNotificationsRequest{}, &fakeStream{}); connectrpc.CodeOf(err) != connectrpc.CodeUnavailable {
-		t.Fatalf("no hub: %v", err)
-	}
-	if err := s.streamNotifications(t.Context(), &v1.StreamNotificationsRequest{}, &fakeStream{}); connectrpc.CodeOf(err) != connectrpc.CodeUnauthenticated {
-		t.Fatalf("anonymous: %v", err)
-	}
-}
 
 type fakeAcctRepo struct {
 	port.ExternalAccountRepo

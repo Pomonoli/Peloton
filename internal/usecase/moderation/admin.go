@@ -1,5 +1,5 @@
 // Package moderation holds the admin-side moderation use cases: content
-// reports, hiding activities and federation domain blocks.
+// reports and hiding activities.
 package moderation
 
 import (
@@ -108,64 +108,5 @@ func (r *Reports) SetActivityHidden(ctx context.Context, actor audit.Actor, acti
 		return internalErr("hide activity", err)
 	}
 	r.Audit.High(ctx, actor, domain.AuditActivityHidden, "activity", activityID.String(), map[string]string{"hidden": fmt.Sprint(hidden)})
-	return nil
-}
-
-// Blocks manages defederated domains.
-type Blocks struct {
-	Repo  port.FederationBlockRepo
-	Audit *audit.Recorder
-}
-
-// List returns the blocked domains.
-func (b *Blocks) List(ctx context.Context) ([]domain.BlockedDomain, error) {
-	if b.Repo == nil {
-		return nil, port.NewActionError(port.ActionErrorUnavailable, "federation is not enabled")
-	}
-	list, err := b.Repo.List(ctx)
-	if err != nil {
-		return nil, internalErr("list blocked domains", err)
-	}
-	return list, nil
-}
-
-// NormaliseDomain lowercases and validates a host name.
-func NormaliseDomain(raw string) (string, error) {
-	d := strings.ToLower(strings.TrimSpace(raw))
-	if d == "" || strings.ContainsAny(d, "/ :@?#") {
-		return "", errors.New("domain must be a bare host name")
-	}
-	return d, nil
-}
-
-// Block defederates a domain (idempotent; refreshes the reason).
-func (b *Blocks) Block(ctx context.Context, actor audit.Actor, rawDomain, reason string) (string, error) {
-	if b.Repo == nil {
-		return "", port.NewActionError(port.ActionErrorUnavailable, "federation is not enabled")
-	}
-	d, err := NormaliseDomain(rawDomain)
-	if err != nil {
-		return "", port.NewActionError(port.ActionErrorInvalid, err.Error())
-	}
-	if err := b.Repo.Block(ctx, d, reason); err != nil {
-		return "", internalErr("block domain", err)
-	}
-	b.Audit.High(ctx, actor, domain.AuditFederationBlocked, "federation_domain", d, map[string]string{"reason": reason})
-	return d, nil
-}
-
-// Unblock lifts a block.
-func (b *Blocks) Unblock(ctx context.Context, actor audit.Actor, rawDomain string) error {
-	if b.Repo == nil {
-		return port.NewActionError(port.ActionErrorUnavailable, "federation is not enabled")
-	}
-	d, err := NormaliseDomain(rawDomain)
-	if err != nil {
-		return port.NewActionError(port.ActionErrorInvalid, err.Error())
-	}
-	if err := b.Repo.Unblock(ctx, d); err != nil {
-		return internalErr("unblock domain", err)
-	}
-	b.Audit.High(ctx, actor, domain.AuditFederationUnblocked, "federation_domain", d, nil)
 	return nil
 }

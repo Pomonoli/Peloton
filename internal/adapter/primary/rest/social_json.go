@@ -88,14 +88,6 @@ func projectedLocationJSON(out map[string]any, p domain.ProjectedActivity) {
 	}
 }
 
-func userCardsJSON(users []domain.User) []map[string]any {
-	out := make([]map[string]any, 0, len(users))
-	for _, u := range users {
-		out = append(out, userCardJSON(u))
-	}
-	return out
-}
-
 func userCardJSON(u domain.User) map[string]any {
 	return map[string]any{
 		"id":           u.ID.String(),

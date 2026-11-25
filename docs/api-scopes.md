@@ -14,12 +14,11 @@ Every family has a read and a write scope. A read RPC accepts `family:read` or
 |---|---|
 | `activities` | ActivityService: activities, sources, streams, uploads, records |
 | `gear` | GearService |
-| `notifications` | NotificationService: list, mark read, preferences, webhooks |
 | `connections` | ExternalAccountService: provider connections, sync status |
 | `segments` | SegmentService |
 | `training` | MetricsService: training load, best-effort history, health and athlete metrics |
 | `profile` | SettingsService and the AuthService profile/preferences RPCs |
-| `social` | SocialService: home feed; follows, kudos, comments, clubs |
+| `social` | SocialService: member profiles and activity projections |
 | `devices` | Approving another device's sign-in (RFC 8628): `AuthService.LookupDeviceAuthorization` / `DecideDeviceAuthorization` |
 
 The default grant for a dynamically registered client is every `:read` scope
@@ -42,11 +41,10 @@ follow that rule.
 | `profile:read` / `profile:write` | `AuthService.ListLinkedIdentities` / `UpdateProfile`, `UpdateUserPreferences`, `StartOIDCLink`, `UnlinkOIDCIdentity`; `SettingsService` |
 | `activities:read` / `activities:write` | `ActivityService` reads / writes; `StatsService` (reads) |
 | `gear:read` / `gear:write` | `GearService` reads / writes |
-| `notifications:read` / `notifications:write` | `NotificationService` reads / writes |
 | `connections:read` / `connections:write` | `ExternalAccountService` reads / writes |
 | `segments:read` / `segments:write` | `SegmentService` reads / writes |
 | `training:read` / `training:write` | `MetricsService` reads / writes |
-| `social:read` / `social:write` | `SocialService` reads / writes |
+| `social:read` / `social:write` | Member profile, activity projection, share link, and review queue reads. |
 | `devices:read` / `devices:write` | `AuthService.LookupDeviceAuthorization` / `DecideDeviceAuthorization`; an OAuth approver can grant at most its own scopes |
 
 A service without a family is closed to OAuth tokens until it gets one.
@@ -54,7 +52,7 @@ A service without a family is closed to OAuth tokens until it gets one.
 ## REST (`/api/*`)
 
 REST handlers only distinguish read from write for OAuth tokens: a token with
-no `:write` scope may use `GET`/`HEAD` only; any `:write` scope unlocks the
+no supported `:write` scope may use `GET`/`HEAD` only. Any supported `:write` scope unlocks the
 mutating methods. Family checks apply to Connect only. Cookie sessions and PATs
 are unrestricted on both surfaces.
 

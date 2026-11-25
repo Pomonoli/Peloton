@@ -152,7 +152,6 @@ const (
 var scopeFamilies = map[string]string{
 	"cairn.v1.ActivityService":        "activities",
 	"cairn.v1.GearService":            "gear",
-	"cairn.v1.NotificationService":    "notifications",
 	"cairn.v1.ExternalAccountService": "connections",
 	"cairn.v1.SegmentService":         "segments",
 	"cairn.v1.MetricsService":         "training",

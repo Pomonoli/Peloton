@@ -103,11 +103,6 @@ const (
 	// ActivityServiceGetMergedStreamProcedure is the procedure name of the ActivityService's
 	// GetMergedStream RPC.
 	ActivityServiceGetMergedStreamProcedure = "/cairn.v1.ActivityService/GetMergedStream"
-	// ActivityServiceListKudosProcedure is the procedure name of the ActivityService's ListKudos RPC.
-	ActivityServiceListKudosProcedure = "/cairn.v1.ActivityService/ListKudos"
-	// ActivityServiceListCommentsProcedure is the procedure name of the ActivityService's ListComments
-	// RPC.
-	ActivityServiceListCommentsProcedure = "/cairn.v1.ActivityService/ListComments"
 	// ActivityServiceGetActivityManageInfoProcedure is the procedure name of the ActivityService's
 	// GetActivityManageInfo RPC.
 	ActivityServiceGetActivityManageInfoProcedure = "/cairn.v1.ActivityService/GetActivityManageInfo"
@@ -305,22 +300,6 @@ var (
 			IdempotencyLevel: connect.IdempotencyNoSideEffects,
 		}
 	})
-	activityServiceListKudosSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType:       connect.StreamTypeUnary,
-			Schema:           v1.File_cairn_v1_activity_proto.Services().ByName("ActivityService").Methods().ByName("ListKudos"),
-			Procedure:        ActivityServiceListKudosProcedure,
-			IdempotencyLevel: connect.IdempotencyNoSideEffects,
-		}
-	})
-	activityServiceListCommentsSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType:       connect.StreamTypeUnary,
-			Schema:           v1.File_cairn_v1_activity_proto.Services().ByName("ActivityService").Methods().ByName("ListComments"),
-			Procedure:        ActivityServiceListCommentsProcedure,
-			IdempotencyLevel: connect.IdempotencyNoSideEffects,
-		}
-	})
 	activityServiceGetActivityManageInfoSpec = sync.OnceValue(func() connect.Spec {
 		return connect.Spec{
 			StreamType:       connect.StreamTypeUnary,
@@ -497,14 +476,6 @@ type ActivityServiceClient interface {
 	// channel across the activity's sources on a common 5 s grid.
 	// Scope: activities:read.
 	GetMergedStream(context.Context, *v1.GetMergedStreamRequest) (*v1.GetMergedStreamResponse, error)
-	// Kudos on an activity; the caller must be the owner or hold the "social"
-	// visibility category (PermissionDenied otherwise).
-	// Scope: activities:read.
-	ListKudos(context.Context, *v1.ListKudosRequest) (*v1.ListKudosResponse, error)
-	// Comments on an activity, oldest first, federated replies included. Same
-	// gate as ListKudos.
-	// Scope: activities:read.
-	ListComments(context.Context, *v1.ListCommentsRequest) (*v1.ListCommentsResponse, error)
 	// The technical manage view: every source (detached included) with its
 	// parser provenance, re-parse eligibility and offered upgrade, and the
 	// per-field merge provenance.
@@ -668,14 +639,6 @@ type ActivityServiceHandler interface {
 	// channel across the activity's sources on a common 5 s grid.
 	// Scope: activities:read.
 	GetMergedStream(context.Context, *v1.GetMergedStreamRequest) (*v1.GetMergedStreamResponse, error)
-	// Kudos on an activity; the caller must be the owner or hold the "social"
-	// visibility category (PermissionDenied otherwise).
-	// Scope: activities:read.
-	ListKudos(context.Context, *v1.ListKudosRequest) (*v1.ListKudosResponse, error)
-	// Comments on an activity, oldest first, federated replies included. Same
-	// gate as ListKudos.
-	// Scope: activities:read.
-	ListComments(context.Context, *v1.ListCommentsRequest) (*v1.ListCommentsResponse, error)
 	// The technical manage view: every source (detached included) with its
 	// parser provenance, re-parse eligibility and offered upgrade, and the
 	// per-field merge provenance.
@@ -748,8 +711,6 @@ func RegisterActivityServiceHandler(server *connect.Server, svc ActivityServiceH
 		connect.Method{Spec: activityServiceListActivitySegmentEffortsSpec(), Handler: adapter.listActivitySegmentEfforts},
 		connect.Method{Spec: activityServiceListSimilarActivitiesSpec(), Handler: adapter.listSimilarActivities},
 		connect.Method{Spec: activityServiceGetMergedStreamSpec(), Handler: adapter.getMergedStream},
-		connect.Method{Spec: activityServiceListKudosSpec(), Handler: adapter.listKudos},
-		connect.Method{Spec: activityServiceListCommentsSpec(), Handler: adapter.listComments},
 		connect.Method{Spec: activityServiceGetActivityManageInfoSpec(), Handler: adapter.getActivityManageInfo},
 		connect.Method{Spec: activityServiceGetParsedSourceSpec(), Handler: adapter.getParsedSource},
 		connect.Method{Spec: activityServiceListAttachmentsSpec(), Handler: adapter.listAttachments},
@@ -869,14 +830,6 @@ func (UnimplementedActivityServiceHandler) ListSimilarActivities(context.Context
 
 func (UnimplementedActivityServiceHandler) GetMergedStream(context.Context, *v1.GetMergedStreamRequest) (*v1.GetMergedStreamResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "cairn.v1.ActivityService.GetMergedStream is not implemented")
-}
-
-func (UnimplementedActivityServiceHandler) ListKudos(context.Context, *v1.ListKudosRequest) (*v1.ListKudosResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "cairn.v1.ActivityService.ListKudos is not implemented")
-}
-
-func (UnimplementedActivityServiceHandler) ListComments(context.Context, *v1.ListCommentsRequest) (*v1.ListCommentsResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "cairn.v1.ActivityService.ListComments is not implemented")
 }
 
 func (UnimplementedActivityServiceHandler) GetActivityManageInfo(context.Context, *v1.GetActivityManageInfoRequest) (*v1.GetActivityManageInfoResponse, error) {
@@ -1098,22 +1051,6 @@ func (c *activityServiceClient) ListSimilarActivities(ctx context.Context, req *
 func (c *activityServiceClient) GetMergedStream(ctx context.Context, req *v1.GetMergedStreamRequest) (*v1.GetMergedStreamResponse, error) {
 	var res v1.GetMergedStreamResponse
 	if err := c.client.CallUnary(ctx, activityServiceGetMergedStreamSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *activityServiceClient) ListKudos(ctx context.Context, req *v1.ListKudosRequest) (*v1.ListKudosResponse, error) {
-	var res v1.ListKudosResponse
-	if err := c.client.CallUnary(ctx, activityServiceListKudosSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *activityServiceClient) ListComments(ctx context.Context, req *v1.ListCommentsRequest) (*v1.ListCommentsResponse, error) {
-	var res v1.ListCommentsResponse
-	if err := c.client.CallUnary(ctx, activityServiceListCommentsSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -1463,30 +1400,6 @@ func (h activityServiceHandler) getMergedStream(ctx context.Context, _ connect.S
 		return err
 	}
 	res, err := h.svc.GetMergedStream(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h activityServiceHandler) listKudos(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.ListKudosRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.ListKudos(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h activityServiceHandler) listComments(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.ListCommentsRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.ListComments(ctx, &req)
 	if err != nil {
 		return err
 	}

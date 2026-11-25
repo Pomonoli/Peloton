@@ -149,53 +149,6 @@ func (r *UserRepo) GetUser(ctx context.Context, id domain.UserID) (domain.User, 
 	return wrapNotFound(u, err, fmt.Sprintf("get user %s", id))
 }
 
-// SetFederationEnabled toggles the user's per-user ActivityPub opt-in.
-func (r *UserRepo) SetFederationEnabled(ctx context.Context, id domain.UserID, enabled bool) error {
-	db := dbtx(ctx, r.pool)
-	_, err := db.Exec(ctx,
-		`UPDATE users SET federation_enabled = $2, updated_at = now() WHERE id = $1`,
-		id.UUID(), enabled)
-	if err != nil {
-		return fmt.Errorf("set federation enabled: %w", err)
-	}
-	return nil
-}
-
-// IsFederationEnabled reports whether the user opted into federation.
-func (r *UserRepo) IsFederationEnabled(ctx context.Context, id domain.UserID) (bool, error) {
-	db := dbtx(ctx, r.pool)
-	var enabled bool
-	if err := db.QueryRow(ctx,
-		`SELECT federation_enabled FROM users WHERE id = $1`, id.UUID()).Scan(&enabled); err != nil {
-		return false, fmt.Errorf("get federation enabled: %w", err)
-	}
-	return enabled, nil
-}
-
-// ListAdmins returns every active admin user — recipients for instance-level
-// notifications (e.g. a worker going offline).
-func (r *UserRepo) ListAdmins(ctx context.Context) ([]domain.User, error) {
-	db := dbtx(ctx, r.pool)
-	rows, err := db.Query(ctx,
-		`SELECT `+userColumns+` FROM users
-		  WHERE role = 'admin' AND status = 'active'
-		  ORDER BY created_at ASC`,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list admins: %w", err)
-	}
-	defer rows.Close()
-	var out []domain.User
-	for rows.Next() {
-		u, err := scanUserRow(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan admin row: %w", err)
-		}
-		out = append(out, u)
-	}
-	return out, rows.Err()
-}
-
 func (r *UserRepo) GetUserByUsername(ctx context.Context, username string) (domain.User, error) {
 	db := dbtx(ctx, r.pool)
 	row := db.QueryRow(ctx,

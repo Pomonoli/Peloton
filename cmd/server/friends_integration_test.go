@@ -30,6 +30,7 @@ func TestAPI_FriendsDirectory(t *testing.T) {
 	record := func(kind domain.ActivityType, distance float64, day int) string {
 		t.Helper()
 		start := time.Date(2026, 8, day, 10, 0, 0, 0, time.UTC)
+		latitude := 49.0 + float64(day)
 		act := domain.Activity{
 			ID: domain.ActivityID(uuid.New()), UserID: bob.userID, Type: kind, Title: "Directory activity",
 			StartTime: start, EndTime: start.Add(time.Hour), MovingDuration: time.Hour, ElapsedDuration: time.Hour,
@@ -38,9 +39,12 @@ func TestAPI_FriendsDirectory(t *testing.T) {
 		if err := env.app.Activities.SaveActivity(ctx, act); err != nil {
 			t.Fatal(err)
 		}
+		if err := env.app.Activities.SetStartLocation(ctx, act.ID, &latitude, new(4.0), "Recorded start"); err != nil {
+			t.Fatal(err)
+		}
 		return act.ID.String()
 	}
-	record(domain.ActivityTypeRide, 12000, 1)
+	maskedRide := record(domain.ActivityTypeRide, 12000, 1)
 	lastRide := record(domain.ActivityTypeRide, 24000, 2)
 	record(domain.ActivityTypeRun, 3000, 3)
 	hidden := record(domain.ActivityTypeRide, 48000, 4)
@@ -94,42 +98,44 @@ func TestAPI_FriendsDirectory(t *testing.T) {
 		self.LatestRide == nil || self.LatestRide.ID != hidden {
 		t.Fatalf("owner directory projection: %+v", self)
 	}
-	profile := string(alice.do(http.MethodGet, "/api/profiles/directory-bob", nil, http.StatusOK))
-	if !strings.Contains(profile, lastRide) || strings.Contains(profile, hidden) || strings.Contains(profile, deleted) {
-		t.Fatalf("profile history diverged from Friends visibility: %s", profile)
+	bob.post("/api/profile/privacy-zones", map[string]any{"lat": 50, "lng": 4, "radius_m": 200}, http.StatusOK)
+	alice.post("/api/profile/privacy-zones", map[string]any{"lat": 51, "lng": 4, "radius_m": 200}, http.StatusOK)
+	for _, client := range []*itestClient{alice, bob} {
+		profile := client.do(http.MethodGet, "/api/profiles/directory-bob", nil, http.StatusOK)
+		var data struct {
+			Activities []struct {
+				ID       string
+				Redacted bool     `json:"start_location_redacted"`
+				Latitude *float64 `json:"start_lat"`
+				Place    string   `json:"start_place"`
+			}
+		}
+		if err := json.Unmarshal(profile, &data); err != nil {
+			t.Fatal(err)
+		}
+		seen := map[string]bool{}
+		for _, ride := range data.Activities {
+			seen[ride.ID] = true
+			if ride.ID != maskedRide && ride.ID != lastRide {
+				continue
+			}
+			mask := client == alice && ride.ID == maskedRide
+			if ride.Redacted != mask || (ride.Latitude == nil) != mask || (ride.Place == "") != mask {
+				t.Fatalf("%s saw incorrect location for ride %s: %+v", client.name, ride.ID, ride)
+			}
+		}
+		if !seen[maskedRide] || !seen[lastRide] || seen[deleted] || seen[hidden] != (client == bob) {
+			t.Fatalf("%s profile history diverged from rider visibility: %s", client.name, profile)
+		}
 	}
 }
 
-func TestAPI_MemberSharingAndLegacyWrites(t *testing.T) {
+func TestAPI_MemberSharing(t *testing.T) {
 	env := newITDiscoveryEnv(t)
 	owner := env.user("visibility-owner", domain.UserRoleUser)
 	viewer := env.user("visibility-viewer", domain.UserRoleUser)
 	profilePath := "/api/profiles/" + owner.name
-	var profile struct {
-		Public bool `json:"is_public"`
-	}
-	if err := json.Unmarshal(viewer.do(http.MethodGet, profilePath, nil, http.StatusOK), &profile); err != nil || !profile.Public {
-		t.Fatalf("new account profile = %+v, err = %v", profile, err)
-	}
-
-	var visibility struct {
-		Policy     map[string][]string `json:"policy"`
-		Categories []string            `json:"all_categories"`
-		Audiences  []string            `json:"all_audiences"`
-	}
-	const policyPath = "/api/profile/visibility"
-	if err := json.Unmarshal(owner.do(http.MethodGet, policyPath, nil, http.StatusOK), &visibility); err != nil {
-		t.Fatal(err)
-	}
-	if len(visibility.Categories) != len(domain.AllCategories) || len(visibility.Audiences) != 3 {
-		t.Fatalf("unexpected settings options: %+v", visibility)
-	}
-	for _, audience := range visibility.Audiences {
-		if len(visibility.Policy[audience]) != len(domain.AllCategories) {
-			t.Fatalf("%s is not open by default: %v", audience, visibility.Policy[audience])
-		}
-	}
-	ride := owner.upload("public-default.gpx", gpxRide(time.Date(2021, 8, 1, 9, 0, 0, 0, time.UTC)))
+	ride := owner.upload("member-shared.gpx", gpxRide(time.Date(2021, 8, 1, 9, 0, 0, 0, time.UTC)))
 	id := str(ride, "activity_id")
 	aid, err := domain.ParseUUID[domain.ActivityID](id)
 	if err != nil {
@@ -141,16 +147,6 @@ func TestAPI_MemberSharingAndLegacyWrites(t *testing.T) {
 	}
 	laps := "/api/activities/" + id + "/laps"
 	viewer.do(http.MethodGet, laps, nil, http.StatusOK)
-	owner.do(http.MethodPut, policyPath, map[string]any{"policy": map[string][]string{}}, http.StatusOK)
-	viewer.do(http.MethodGet, laps, nil, http.StatusOK)
-	owner.do(http.MethodGet, laps, nil, http.StatusOK)
-	var saved struct {
-		Policy map[string][]string `json:"policy"`
-	}
-	if err := json.Unmarshal(owner.do(http.MethodGet, policyPath, nil, http.StatusOK), &saved); err != nil || len(saved.Policy["public"]) != len(domain.AllCategories) {
-		t.Fatalf("fixed policy after legacy write = %+v, err = %v", saved, err)
-	}
-	owner.do(http.MethodPut, "/api/profile/public", map[string]bool{"public": false}, http.StatusOK)
 	viewer.do(http.MethodGet, profilePath, nil, http.StatusOK)
 	env.anon().do(http.MethodGet, profilePath, nil, http.StatusUnauthorized)
 }

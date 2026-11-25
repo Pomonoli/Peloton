@@ -15,7 +15,7 @@
 // Segment matching runs on every activity import — irrespective of the
 // activity's source — using PostGIS ST_DWithin to filter candidates and a
 // Hausdorff-distance + direction check to confirm matches. Matched
-// efforts are recorded in segment_efforts and trigger PR notifications
+// efforts are recorded in segment_efforts and drive live PR events
 // when they beat the user's prior best.
 //
 // Records (fastest 5k, max 5min power, etc.) are NOT segment-scoped;
@@ -178,7 +178,7 @@ message SegmentEffort {
   int32 instance_rank = 17;
 
   // True if this effort newly set the user's PR. Used to suppress
-  // duplicate PR notifications when reimporting.
+  // duplicate PR events when reimporting.
   bool is_personal_record = 18;
   // True if this effort newly set the instance KOM.
   bool is_instance_record = 19;

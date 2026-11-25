@@ -62,6 +62,9 @@ func TestScopeHelpers(t *testing.T) {
 	if ScopesHaveAnyWrite("activities:read profile:read") {
 		t.Fatal("should not detect a write scope among read-only")
 	}
+	if ScopesHaveAnyWrite("activities:read notifications:write") {
+		t.Fatal("a retired scope must not authorize writes")
+	}
 	if !ScopesContain("a:read b:read", "b:read") || ScopesContain("a:read", "b:read") {
 		t.Fatal("ScopesContain wrong")
 	}

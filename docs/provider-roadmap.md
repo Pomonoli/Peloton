@@ -79,7 +79,7 @@ Changes:
    core): `no_llm` (exclude from MCP — Strava API agreement Nov 2024, Oura
    §4(d)), `no_raw_archive` / retention (WHOOP §4.2, Oura §3(m)),
    `attribution` (Polar "Polar Ecosystem", Wahoo logos). Core enforces in MCP,
-   export, federation, archive.
+   export and archive.
 7. Backlog #2/#3 (deauth, `deleted_upstream`) before the first new OAuth provider.
 
 **Pilot: file-drop worker** (Go). Watches a folder (fsnotify + periodic

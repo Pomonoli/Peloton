@@ -53,7 +53,7 @@ func newSAFixture(t *testing.T, n int) *saFixture {
 		f.srcs = append(f.srcs, sid)
 	}
 	recompute := NewRecomputeActivityFromSources(f.repo, inmem.DefaultSettings{}, nil, nil, nil, nil, inmem.PassTx{}, func() time.Time { return saNow })
-	f.uc = NewSourceActions(f.repo, f.deny, recompute, f.fed, func() time.Time { return saNow })
+	f.uc = NewSourceActions(f.repo, f.deny, recompute, func() time.Time { return saNow })
 	return f
 }
 
@@ -72,12 +72,12 @@ func TestSourceActions_DetachKeepsActivityWhenSourcesRemain(t *testing.T) {
 	if len(f.deny.Entries) != 1 || f.deny.Entries[0].ExternalID != f.repo.Sources[f.srcs[0]].ExternalID {
 		t.Fatalf("denylist %+v", f.deny.Entries)
 	}
-	if f.repo.Activities[f.act].DeletedAt != nil || len(f.fed.deleted) != 0 {
+	if f.repo.Activities[f.act].DeletedAt != nil {
 		t.Fatal("activity must survive with one source left")
 	}
 }
 
-func TestSourceActions_DetachLastSourceSoftDeletesAndFederates(t *testing.T) {
+func TestSourceActions_DetachLastSourceSoftDeletes(t *testing.T) {
 	f := newSAFixture(t, 1)
 	res, err := f.uc.Detach(t.Context(), f.user, f.act, f.srcs[0], "wrong_match")
 	if err != nil {
@@ -85,9 +85,6 @@ func TestSourceActions_DetachLastSourceSoftDeletesAndFederates(t *testing.T) {
 	}
 	if !res.SoftDeleted || f.repo.Activities[f.act].DeletedAt == nil {
 		t.Fatalf("expected soft delete, got %+v", res)
-	}
-	if len(f.fed.deleted) != 1 || f.fed.deleted[0] != f.act {
-		t.Fatalf("federation delete not published: %v", f.fed.deleted)
 	}
 	if f.deny.Entries[0].Reason != "wrong_match" {
 		t.Fatalf("reason not propagated: %+v", f.deny.Entries[0])
@@ -126,8 +123,8 @@ func TestSourceActions_DeleteDetachesAllAndSoftDeletes(t *testing.T) {
 	if f.repo.Activities[f.act].DeletedAt == nil {
 		t.Fatal("activity not soft-deleted")
 	}
-	if len(f.deny.Entries) != 3 || len(f.fed.deleted) != 1 {
-		t.Fatalf("denylist=%d federated=%d", len(f.deny.Entries), len(f.fed.deleted))
+	if len(f.deny.Entries) != 3 {
+		t.Fatalf("denylist=%d", len(f.deny.Entries))
 	}
 	// Deleting again is NotFound, not a second retraction.
 	if err := f.uc.Delete(t.Context(), f.user, f.act); !errors.Is(err, domain.ErrNotFound) {
@@ -155,7 +152,7 @@ func (failingDenylist) Add(context.Context, domain.SourceDenylistEntry) error {
 func TestSourceActions_DetachFailsWhenDenylistFails(t *testing.T) {
 	f := newSAFixture(t, 2)
 	recompute := NewRecomputeActivityFromSources(f.repo, inmem.DefaultSettings{}, nil, nil, nil, nil, inmem.PassTx{}, func() time.Time { return saNow })
-	uc := NewSourceActions(f.repo, failingDenylist{}, recompute, f.fed, func() time.Time { return saNow })
+	uc := NewSourceActions(f.repo, failingDenylist{}, recompute, func() time.Time { return saNow })
 	if _, err := uc.Detach(context.Background(), f.user, f.act, f.srcs[0], ""); err == nil {
 		t.Fatal("a detach whose denylist entry failed must fail, or the next sync resurrects it")
 	}

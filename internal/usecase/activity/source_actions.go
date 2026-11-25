@@ -33,7 +33,6 @@ type SourceActions struct {
 	activities sourceActionStore
 	denylist   port.SourceDenylistRepo // optional; nil → detaches are not durable against re-push
 	recompute  *RecomputeActivityFromSources
-	federation port.FederationPublisher // optional; nil → no remote retraction
 	// Events receives live events for the owner's open streams (optional).
 	Events port.ActivityEventSink
 	// FollowUps re-merges and runs the follow-ups an edit owes (optional;
@@ -52,18 +51,17 @@ type Remerger interface {
 	Remerge(ctx context.Context, id domain.ActivityID) (RecomputeResult, error)
 }
 
-// NewSourceActions wires the use case; denylist and federation may be nil.
+// NewSourceActions wires the use case; denylist may be nil.
 func NewSourceActions(
 	activities sourceActionStore,
 	denylist port.SourceDenylistRepo,
 	recompute *RecomputeActivityFromSources,
-	federation port.FederationPublisher,
 	now func() time.Time,
 ) *SourceActions {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &SourceActions{activities: activities, denylist: denylist, recompute: recompute, federation: federation, now: now}
+	return &SourceActions{activities: activities, denylist: denylist, recompute: recompute, now: now}
 }
 
 // OwnedActivity loads the caller's live activity; domain.ErrNotFound hides
@@ -136,8 +134,7 @@ type DetachResult struct {
 
 // Detach removes one source from the merge, denylists its identity so a
 // provider re-push cannot re-attach it, and re-merges the remainder (or
-// soft-deletes the activity when nothing remains, retracting it from remote
-// followers).
+// soft-deletes the activity when nothing remains).
 func (uc *SourceActions) Detach(ctx context.Context, userID domain.UserID, activityID domain.ActivityID, sourceID domain.SourceID, reason string) (DetachResult, error) {
 	act, src, err := uc.OwnedSource(ctx, userID, activityID, sourceID)
 	if err != nil {
@@ -240,8 +237,7 @@ func (uc *SourceActions) deny(ctx context.Context, userID domain.UserID, src dom
 	return nil
 }
 
-// remerge re-runs the merge over the remaining sources and federates a
-// resulting soft-delete.
+// remerge re-runs the merge over the remaining sources.
 func (uc *SourceActions) remerge(ctx context.Context, act domain.Activity) DetachResult {
 	if uc.FollowUps != nil {
 		result, err := uc.FollowUps.Remerge(ctx, act.ID)
@@ -253,9 +249,6 @@ func (uc *SourceActions) remerge(ctx context.Context, act domain.Activity) Detac
 	result, err := uc.recompute.Execute(ctx, act.ID)
 	if err != nil {
 		return DetachResult{RecomputeErr: err}
-	}
-	if result.SoftDeleted && uc.federation != nil {
-		uc.federation.PublishDelete(ctx, act.UserID, act.ID)
 	}
 	return DetachResult{Recomputed: true, SoftDeleted: result.SoftDeleted, SourceCount: len(result.SourceIDs)}
 }

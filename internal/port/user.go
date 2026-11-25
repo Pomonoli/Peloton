@@ -52,10 +52,6 @@ type UserReader interface {
 	// GetUser reads one users row by ID. Returns domain.ErrNotFound on miss.
 	GetUser(ctx context.Context, id domain.UserID) (domain.User, error)
 
-	// ListAdmins returns every active admin user (recipients for instance-level
-	// notifications like worker-offline).
-	ListAdmins(ctx context.Context) ([]domain.User, error)
-
 	// GetUserByUsername resolves the canonical lowercase username to a User.
 	// Returns domain.ErrNotFound on miss.
 	GetUserByUsername(ctx context.Context, username string) (domain.User, error)
@@ -116,14 +112,6 @@ type UserProfileWriter interface {
 	UpdateEmailVerified(ctx context.Context, id domain.UserID, verified bool) error
 }
 
-// UserFederationStore manages the per-user ActivityPub opt-in.
-type UserFederationStore interface {
-	// SetFederationEnabled / IsFederationEnabled manage the per-user ActivityPub
-	// opt-in (docs/federation-design.md). Off by default.
-	SetFederationEnabled(ctx context.Context, id domain.UserID, enabled bool) error
-	IsFederationEnabled(ctx context.Context, id domain.UserID) (bool, error)
-}
-
 // UserLifecycleStore creates and deletes users and changes their role or status.
 type UserLifecycleStore interface {
 	// CreateUser inserts a new users row (and an associated credentials
@@ -169,7 +157,6 @@ type UserRepo interface {
 	UserReader
 	UserCredentialStore
 	UserProfileWriter
-	UserFederationStore
 	UserLifecycleStore
 }
 

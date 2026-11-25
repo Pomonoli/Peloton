@@ -38,41 +38,6 @@ func (f *fakeStreams) QueryStream(_ context.Context, q domain.StreamQuery) (doma
 	return domain.Stream{ActivitySourceID: q.ActivitySourceID, Samples: f.samples}, nil
 }
 
-type fakeEngagement struct {
-	port.EngagementRepo
-	kudosers []domain.UserID
-	remote   []domain.RemoteKudoser
-	comments []domain.Comment
-	rcs      []domain.RemoteComment
-}
-
-func (f *fakeEngagement) CountKudos(context.Context, domain.ActivityID) (int, error) {
-	return len(f.kudosers), nil
-}
-func (f *fakeEngagement) HasKudos(_ context.Context, _ domain.ActivityID, me domain.UserID) (bool, error) {
-	for _, k := range f.kudosers {
-		if k == me {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-func (f *fakeEngagement) ListKudosers(context.Context, domain.ActivityID, int) ([]domain.UserID, error) {
-	return f.kudosers, nil
-}
-func (f *fakeEngagement) CountRemoteKudos(context.Context, domain.ActivityID) (int, error) {
-	return len(f.remote), nil
-}
-func (f *fakeEngagement) ListRemoteKudosers(context.Context, domain.ActivityID, int) ([]domain.RemoteKudoser, error) {
-	return f.remote, nil
-}
-func (f *fakeEngagement) ListComments(context.Context, domain.ActivityID, int, int) ([]domain.Comment, error) {
-	return f.comments, nil
-}
-func (f *fakeEngagement) ListRemoteComments(context.Context, domain.ActivityID, int) ([]domain.RemoteComment, error) {
-	return f.rcs, nil
-}
-
 type fakePresence struct{ workers []domain.LiveWorker }
 
 func (f fakePresence) LiveWorkers(context.Context) []domain.LiveWorker { return f.workers }
@@ -98,7 +63,7 @@ func TestDetailsLapsAndEfforts(t *testing.T) {
 		efforts: []domain.SegmentEffort{{SegmentID: segID, ActivityID: aid, ActivitySourceID: s1, StartOffset: 10, EndOffset: 50, ElapsedS: 40, PersonalRank: 1}},
 		segs:    map[domain.SegmentID]domain.Segment{segID: {ID: segID, Name: "Hill", DistanceM: 400, ClimbCategory: domain.ClimbCategoryNone}},
 	}
-	d := NewDetails(repo, &fakeStreams{samples: samples}, segs, nil, nil, nil, nil, nil, nil)
+	d := NewDetails(repo, &fakeStreams{samples: samples}, segs, nil, nil, nil)
 	act := repo.Activities[aid]
 
 	laps, sid, err := d.Laps(context.Background(), act)
@@ -113,7 +78,7 @@ func TestDetailsLapsAndEfforts(t *testing.T) {
 	if r.Segment.Name != "Hill" || r.StartOffsetS == nil || *r.StartOffsetS != 10 || *r.EndOffsetS != 50 || *r.StartDistanceM != 100 || *r.EndDistanceM != 500 {
 		t.Fatalf("row %+v", r)
 	}
-	if _, err := NewDetails(repo, nil, nil, nil, nil, nil, nil, nil, nil).SegmentEfforts(context.Background(), act); err == nil {
+	if _, err := NewDetails(repo, nil, nil, nil, nil, nil).SegmentEfforts(context.Background(), act); err == nil {
 		t.Fatal("no segments repo must be unavailable")
 	}
 }
@@ -136,7 +101,7 @@ func TestDetailsZonesSimilarMergedManage(t *testing.T) {
 	}
 	segs := &fakeSegments{similar: []domain.SimilarActivity{{ActivityID: domain.ActivityID(uuid.New()), StartTime: start.AddDate(0, 0, -1), DistanceM: &d10, MovingS: 2700, SharedSegments: 1, TargetSegments: 1}}}
 	presence := fakePresence{workers: []domain.LiveWorker{{Provider: "garmin", Package: "garmin", Version: "1.2", Compatible: true}}}
-	d := NewDetails(repo, &fakeStreams{samples: samples}, segs, nil, nil, nil, nil, presence, nil)
+	d := NewDetails(repo, &fakeStreams{samples: samples}, segs, nil, nil, presence)
 	act := repo.Activities[aid]
 
 	// No athlete profile → HR has no reference → no zones, but no error.
@@ -162,31 +127,5 @@ func TestDetailsZonesSimilarMergedManage(t *testing.T) {
 	}
 	if _, err := d.ParsedSource(context.Background(), act, domain.SourceID(uuid.New())); err == nil {
 		t.Fatal("unknown source must fail")
-	}
-}
-
-func TestDetailsKudosAndComments(t *testing.T) {
-	repo := inmem.NewActivityRepo()
-	me, friend := domain.UserID(uuid.New()), domain.UserID(uuid.New())
-	users := &fakeUsers{users: map[domain.UserID]domain.User{me: {ID: me, Username: "me"}, friend: {ID: friend, Username: "friend"}}}
-	aid := domain.ActivityID(uuid.New())
-	act := domain.Activity{ID: aid, UserID: me}
-	eng := &fakeEngagement{
-		kudosers: []domain.UserID{friend, me},
-		remote:   []domain.RemoteKudoser{{ActorID: "https://o/u/x", Handle: "@x@o"}},
-		comments: []domain.Comment{{ID: domain.CommentID(uuid.New()), UserID: friend, Body: "nice", CreatedAt: vNow.Add(time.Minute)}},
-		rcs:      []domain.RemoteComment{{ID: "https://o/n/1", Handle: "@x@o", ActorID: "https://o/u/x", Body: "wow", CreatedAt: vNow}},
-	}
-	d := NewDetails(repo, nil, nil, nil, eng, users, nil, nil, NewVisibility())
-	if !d.SocialAllowed(context.Background(), act, me) {
-		t.Fatal("owner is always allowed")
-	}
-	v, err := d.Kudos(context.Background(), act, me)
-	if err != nil || v.Count != 3 || !v.HasKudos || len(v.Kudosers) != 3 || !v.Kudosers[2].Remote || v.Kudosers[0].User.Username != "friend" {
-		t.Fatalf("kudos %+v %v", v, err)
-	}
-	cs, err := d.Comments(context.Background(), act)
-	if err != nil || len(cs) != 2 || cs[0].Body != "wow" || !cs[0].Author.Remote || cs[1].Author.User.Username != "friend" {
-		t.Fatalf("comments %+v %v", cs, err)
 	}
 }

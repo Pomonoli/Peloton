@@ -1071,55 +1071,6 @@ func (r *ActivityRepo) ListRecentActivitiesForUser(
 	return pgCollectRows(rows, scanActivityRow, "scan activity row", "iterate recent activities")
 }
 
-// ListPublicActivitiesForUser returns a user's public, non-hidden activities
-// newest-first — the source for their ActivityPub outbox (federation Phase 3).
-func (r *ActivityRepo) ListPublicActivitiesForUser(ctx context.Context, userID domain.UserID, limit, offset int) ([]domain.Activity, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	db := dbtx(ctx, r.pool)
-	rows, err := db.Query(ctx,
-		`SELECT `+activityColumns+`
-		   FROM activities
-		  WHERE user_id = $1 AND deleted_at IS NULL
-		    AND privacy = 'public' AND NOT hidden_by_admin AND NOT provider_restricted
-		  ORDER BY start_time DESC
-		  LIMIT $2 OFFSET $3`,
-		userID.UUID(), limit, offset,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list public activities for %s: %w", userID, err)
-	}
-	defer rows.Close()
-	var out []domain.Activity
-	for rows.Next() {
-		a, err := scanActivityRow(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan activity row: %w", err)
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
-}
-
-// CountPublicActivitiesForUser counts a user's public, non-hidden activities
-// (the outbox totalItems).
-func (r *ActivityRepo) CountPublicActivitiesForUser(ctx context.Context, userID domain.UserID) (int, error) {
-	db := dbtx(ctx, r.pool)
-	var n int
-	if err := db.QueryRow(ctx,
-		`SELECT count(*) FROM activities
-		  WHERE user_id = $1 AND deleted_at IS NULL
-		    AND privacy = 'public' AND NOT hidden_by_admin AND NOT provider_restricted`,
-		userID.UUID()).Scan(&n); err != nil {
-		return 0, fmt.Errorf("count public activities for %s: %w", userID, err)
-	}
-	return n, nil
-}
-
 // ActivityTotals returns aggregate sums across the user's non-deleted activities.
 func (r *ActivityRepo) ActivityTotals(ctx context.Context, userID domain.UserID) (port.ActivityTotalsResult, error) {
 	db := dbtx(ctx, r.pool)
@@ -1368,11 +1319,10 @@ func (r *ActivityRepo) ListActivitiesFiltered(
 	return out, matched, nil
 }
 
-// ListCommunityActivities pages the community feed or a member's activity history.
-func (r *ActivityRepo) ListCommunityActivities(
+// ListMemberActivities pages the rides visible on a member’s profile.
+func (r *ActivityRepo) ListMemberActivities(
 	ctx context.Context,
-	viewerID domain.UserID,
-	ownerID *domain.UserID,
+	viewerID, ownerID domain.UserID,
 	limit, offset int,
 ) ([]domain.Activity, error) {
 	if limit <= 0 {
@@ -1386,19 +1336,19 @@ func (r *ActivityRepo) ListCommunityActivities(
 		`SELECT `+activityColumns+`
 		   FROM activities a
 		   WHERE `+communityActivitySQL+`
-		     AND ($2::uuid IS NULL OR a.user_id = $2)
+		     AND a.user_id = $2
 		   ORDER BY a.start_time DESC, a.id DESC
 		   LIMIT $3 OFFSET $4`,
-		viewerID.UUID(), userIDParam(ownerID), limit, offset)
+		viewerID.UUID(), ownerID.UUID(), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list community activities: %w", err)
+		return nil, fmt.Errorf("list member activities: %w", err)
 	}
 	defer rows.Close()
 	var out []domain.Activity
 	for rows.Next() {
 		a, err := scanActivityRow(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan feed row: %w", err)
+			return nil, fmt.Errorf("scan member activity: %w", err)
 		}
 		out = append(out, a)
 	}

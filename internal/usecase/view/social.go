@@ -12,35 +12,20 @@ import (
 // ErrForbidden: the record exists but is not shared with this caller.
 var ErrForbidden = port.NewActionError(port.ActionErrorForbidden, "not permitted")
 
-// Project renders the feed for a member. Owner records are cached per owner.
-func (f *Feeds) Project(ctx context.Context, acts []domain.Activity, viewer *domain.UserID) []FeedItem {
-	owners := map[domain.UserID]domain.User{}
-	out := make([]FeedItem, 0, len(acts))
-	for i := range acts {
-		a := acts[i]
-		isOwner := viewer != nil && *viewer == a.UserID
-		resolved, visible := f.visibility.Resolve(ctx, a, viewer)
-		if !visible {
-			continue
-		}
-		if _, cached := owners[a.UserID]; !cached {
-			owners[a.UserID], _ = f.users.GetUser(ctx, a.UserID)
-		}
-		item := FeedItem{Source: FeedFollowing, At: a.StartTime, Owner: owners[a.UserID]}
-		if isOwner {
-			item.Source, item.Own = FeedSelf, &a
-		} else {
-			p := domain.ProjectActivity(a, domain.ActivityCategories(), resolved.Zones)
-			item.Projected = &p
-		}
-		out = append(out, item)
-	}
-	return out
+// ActivityShares provides projections for the member-scoped share routes.
+type ActivityShares struct {
+	activities port.ActivityReader
+	users      port.UserReader
+	visibility *Visibility
+}
+
+func NewActivityShares(activities port.ActivityReader, users port.UserReader, visibility *Visibility) *ActivityShares {
+	return &ActivityShares{activities: activities, users: users, visibility: visibility}
 }
 
 // Projected renders one activity for a member. Share links also exclude moderated
 // and provider-restricted rides when used by the owner.
-func (f *Feeds) Projected(ctx context.Context, id domain.ActivityID, viewer *domain.UserID, hasLink bool) (domain.ProjectedActivity, domain.User, bool, error) {
+func (f *ActivityShares) Projected(ctx context.Context, id domain.ActivityID, viewer *domain.UserID, hasLink bool) (domain.ProjectedActivity, domain.User, bool, error) {
 	a, err := f.activities.GetActivity(ctx, id)
 	if err != nil {
 		return domain.ProjectedActivity{}, domain.User{}, false, domain.ErrNotFound
@@ -57,7 +42,7 @@ func (f *Feeds) Projected(ctx context.Context, id domain.ActivityID, viewer *dom
 }
 
 // Shared resolves an active share link for an authenticated member.
-func (f *Feeds) Shared(ctx context.Context, links port.ShareLinkRepo, token string, viewer *domain.UserID) (domain.ProjectedActivity, domain.User, error) {
+func (f *ActivityShares) Shared(ctx context.Context, links port.ShareLinkRepo, token string, viewer *domain.UserID) (domain.ProjectedActivity, domain.User, error) {
 	if viewer == nil {
 		return domain.ProjectedActivity{}, domain.User{}, ErrForbidden
 	}
@@ -72,162 +57,24 @@ func (f *Feeds) Shared(ctx context.Context, links port.ShareLinkRepo, token stri
 	return p, owner, err
 }
 
-// ClubCard is a club with its member count.
-type ClubCard struct {
-	Club    domain.Club
-	Members int
-}
-
-// ClubDetail is a club as one viewer sees it.
-type ClubDetail struct {
-	ClubCard
-	IsMember bool
-	Role     domain.ClubMemberRole
-}
-
-// ClubMemberRow is a member with their user record.
-type ClubMemberRow struct {
-	Member domain.ClubMember
-	User   domain.User
-}
-
-// Clubs are the club reads (SocialService, GET /api/clubs…).
-type Clubs struct {
-	clubs port.ClubRepo
-	users port.UserReader
-	feeds *Feeds
-}
-
-// NewClubs wires the reads; clubs may be nil (→ ErrUnavailable).
-func NewClubs(clubs port.ClubRepo, users port.UserReader, feeds *Feeds) *Clubs {
-	return &Clubs{clubs: clubs, users: users, feeds: feeds}
-}
-
-// Club paging bounds.
-const (
-	ClubsDefaultLimit   = 50
-	ClubsMaxLimit       = 200
-	ClubMembersLimit    = 200
-	ClubFeedDefaultSize = 30
-	ClubFeedMaxSize     = 100
-)
-
-// List is the public clubs plus the viewer's own.
-func (c *Clubs) List(ctx context.Context, me domain.UserID, limit, offset int) ([]ClubCard, error) {
-	if c.clubs == nil {
-		return nil, ErrUnavailable
-	}
-	if limit <= 0 {
-		limit = ClubsDefaultLimit
-	}
-	if limit > ClubsMaxLimit {
-		limit = ClubsMaxLimit
-	}
-	clubs, err := c.clubs.List(ctx, me, limit, max(0, offset))
-	if err != nil {
-		return nil, fmt.Errorf("list clubs: %w", err)
-	}
-	out := make([]ClubCard, 0, len(clubs))
-	for _, cl := range clubs {
-		n, _ := c.clubs.CountMembers(ctx, cl.ID)
-		out = append(out, ClubCard{Club: cl, Members: n})
-	}
-	return out, nil
-}
-
-// Get resolves a club for viewer (nil = anonymous). A private club is
-// ErrForbidden to non-members; an unknown slug is domain.ErrNotFound.
-func (c *Clubs) Get(ctx context.Context, slug string, viewer *domain.UserID) (ClubDetail, error) {
-	if c.clubs == nil {
-		return ClubDetail{}, ErrUnavailable
-	}
-	cl, err := c.clubs.GetBySlug(ctx, slug)
-	if err != nil {
-		return ClubDetail{}, domain.ErrNotFound
-	}
-	d := ClubDetail{ClubCard: ClubCard{Club: cl}}
-	if viewer != nil {
-		if role, member, _ := c.clubs.MemberRole(ctx, cl.ID, *viewer); member {
-			d.IsMember, d.Role = true, role
-		}
-	}
-	if !cl.IsPublic && !d.IsMember {
-		return ClubDetail{}, ErrForbidden
-	}
-	d.Members, _ = c.clubs.CountMembers(ctx, cl.ID)
-	return d, nil
-}
-
-// Members lists a visible club's members with their user records.
-func (c *Clubs) Members(ctx context.Context, slug string, viewer *domain.UserID, limit, offset int) ([]ClubMemberRow, error) {
-	if viewer == nil {
-		return nil, ErrForbidden
-	}
-	d, err := c.Get(ctx, slug, viewer)
-	if err != nil {
-		return nil, err
-	}
-	if limit <= 0 || limit > ClubMembersLimit {
-		limit = ClubMembersLimit
-	}
-	members, err := c.clubs.ListMembers(ctx, d.Club.ID, limit, max(0, offset))
-	if err != nil {
-		return nil, fmt.Errorf("list members: %w", err)
-	}
-	out := make([]ClubMemberRow, 0, len(members))
-	for _, m := range members {
-		row := ClubMemberRow{Member: m}
-		row.User, _ = c.users.GetUser(ctx, m.UserID)
-		out = append(out, row)
-	}
-	return out, nil
-}
-
-// Feed lists a visible club's member activities, projected per the
-// visibility model (club membership is not an audience of its own).
-func (c *Clubs) Feed(ctx context.Context, slug string, viewer *domain.UserID, limit, offset int) ([]FeedItem, error) {
-	if viewer == nil {
-		return nil, ErrForbidden
-	}
-	d, err := c.Get(ctx, slug, viewer)
-	if err != nil {
-		return nil, err
-	}
-	if limit <= 0 {
-		limit = ClubFeedDefaultSize
-	}
-	if limit > ClubFeedMaxSize {
-		limit = ClubFeedMaxSize
-	}
-	acts, err := c.clubs.ListClubFeed(ctx, d.Club.ID, limit, max(0, offset))
-	if err != nil {
-		return nil, fmt.Errorf("club feed: %w", err)
-	}
-	return c.feeds.Project(ctx, acts, viewer), nil
-}
-
 // ProfileView is a member profile as one viewer sees it.
 type ProfileView struct {
-	User        domain.User
-	IsOwner     bool
-	IsFollowing bool
-	Counts      domain.FollowCounts
-	Activities  []domain.ProjectedActivity
-	HasMore     bool
+	User       domain.User
+	IsOwner    bool
+	Activities []domain.ProjectedActivity
+	HasMore    bool
 }
 
 // Profiles are the signed-in profile reads (SocialService.GetProfile, GET /api/profiles/{username}).
 type Profiles struct {
 	users      port.UserReader
 	activities port.ActivityReader
-	follows    port.FollowRepo
-	blocks     port.BlockRepo
 	visibility *Visibility
 }
 
-// NewProfiles wires the reads; follows and blocks may be nil.
-func NewProfiles(users port.UserReader, activities port.ActivityReader, follows port.FollowRepo, blocks port.BlockRepo, visibility *Visibility) *Profiles {
-	return &Profiles{users: users, activities: activities, follows: follows, blocks: blocks, visibility: visibility}
+// NewProfiles wires member profile reads.
+func NewProfiles(users port.UserReader, activities port.ActivityReader, visibility *Visibility) *Profiles {
+	return &Profiles{users: users, activities: activities, visibility: visibility}
 }
 
 // profileRecent is how many recent activities a profile shows.
@@ -248,112 +95,23 @@ func (p *Profiles) GetPage(ctx context.Context, username string, viewer *domain.
 		return ProfileView{}, domain.ErrNotFound
 	}
 	v := ProfileView{User: u, IsOwner: *viewer == u.ID}
-	if p.follows != nil {
-		if !v.IsOwner {
-			v.IsFollowing, _ = p.follows.IsFollowing(ctx, *viewer, u.ID)
-		}
-		v.Counts, _ = p.follows.Counts(ctx, u.ID)
-	}
-	activities, err := p.activities.ListCommunityActivities(ctx, *viewer, &u.ID, profileRecent+1, max(0, offset))
+	activities, err := p.activities.ListMemberActivities(ctx, *viewer, u.ID, profileRecent+1, max(0, offset))
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("list member activities: %w", err)
 	}
+	if len(activities) == 0 {
+		return v, nil
+	}
+	zones, err := p.visibility.zonesForMember(ctx, u.ID, v.IsOwner)
+	if err != nil {
+		return ProfileView{}, fmt.Errorf("load member privacy zones: %w", err)
+	}
+	categories := domain.ActivityCategories()
 	v.HasMore = len(activities) > profileRecent
 	for _, act := range activities[:min(len(activities), profileRecent)] {
-		resolved, visible := p.visibility.Resolve(ctx, act, viewer)
-		if visible {
-			v.Activities = append(v.Activities, domain.ProjectActivity(act, domain.ActivityCategories(), resolved.Zones))
+		if act.UserID == u.ID && memberCanView(act, viewer) {
+			v.Activities = append(v.Activities, domain.ProjectActivity(act, categories, zones))
 		}
 	}
 	return v, nil
-}
-
-// FollowState is one viewer's relation to a profile with its counts.
-type FollowState struct {
-	Following bool
-	Counts    domain.FollowCounts
-	IsSelf    bool
-}
-
-// FollowState reports whether me follows target and target's counts.
-func (p *Profiles) FollowState(ctx context.Context, me, target domain.UserID) (FollowState, error) {
-	if p.follows == nil {
-		return FollowState{}, ErrUnavailable
-	}
-	following, _ := p.follows.IsFollowing(ctx, me, target)
-	counts, err := p.follows.Counts(ctx, target)
-	if err != nil {
-		return FollowState{}, err
-	}
-	return FollowState{Following: following, Counts: counts, IsSelf: me == target}, nil
-}
-
-// Followers lists the users following target as cards; a user that cannot
-// be loaded is skipped. me must be allowed to see target's profile.
-func (p *Profiles) Followers(ctx context.Context, me, target domain.UserID, limit, offset int) ([]domain.User, error) {
-	if p.follows == nil {
-		return nil, ErrUnavailable
-	}
-	if err := p.canSeeGraph(ctx, me, target); err != nil {
-		return nil, err
-	}
-	ids, err := p.follows.ListFollowers(ctx, target, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	return p.cards(ctx, ids), nil
-}
-
-// Following lists the users target follows as cards, under the same rule as Followers.
-func (p *Profiles) Following(ctx context.Context, me, target domain.UserID, limit, offset int) ([]domain.User, error) {
-	if p.follows == nil {
-		return nil, ErrUnavailable
-	}
-	if err := p.canSeeGraph(ctx, me, target); err != nil {
-		return nil, err
-	}
-	ids, err := p.follows.ListFollowing(ctx, target, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	return p.cards(ctx, ids), nil
-}
-
-// canSeeGraph applies the block rule to followers and following lists.
-func (p *Profiles) canSeeGraph(ctx context.Context, me, target domain.UserID) error {
-	if me == target {
-		return nil
-	}
-	if _, err := p.users.GetUser(ctx, target); err != nil {
-		return domain.ErrNotFound
-	}
-	if p.blocks != nil {
-		if blocked, err := p.blocks.IsBlockedEitherWay(ctx, me, target); err != nil || blocked {
-			return domain.ErrNotFound
-		}
-	}
-	return nil
-}
-
-// Blocked lists the users me has blocked as cards.
-func (p *Profiles) Blocked(ctx context.Context, me domain.UserID) ([]domain.User, error) {
-	if p.blocks == nil {
-		return nil, ErrUnavailable
-	}
-	ids, err := p.blocks.ListBlocked(ctx, me)
-	if err != nil {
-		return nil, err
-	}
-	return p.cards(ctx, ids), nil
-}
-
-// cards resolves ids to users in order, dropping the ones that fail to load.
-func (p *Profiles) cards(ctx context.Context, ids []domain.UserID) []domain.User {
-	out := make([]domain.User, 0, len(ids))
-	for _, id := range ids {
-		if u, err := p.users.GetUser(ctx, id); err == nil {
-			out = append(out, u)
-		}
-	}
-	return out
 }

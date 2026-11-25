@@ -134,9 +134,7 @@ either wrong or a second implementation of the override rules.
 
 ### Visibility
 
-Gear is owner-only in 0.4.0. It is not part of any visibility category, so
-feed, public profile, share links and federation never expose it. Adding a
-`gear` category to the per-field model is a 0.5 decision.
+Peloton members can browse each other's available gear. Gear edits and provider mapping decisions remain owner-only.
 
 ## Worker contract (`cairn.worker.v1`, additive)
 
@@ -380,8 +378,8 @@ Deviations from the design above, decided during implementation:
 
 - **Pending provider records.** A provider gear record Cairn has not seen is
   not auto-created. It is stored as a pending ref (`gear_external_refs.gear_id`
-  is nullable, `provider_import` keeps the provider's description) and raises
-  a `gear_decision_needed` notification. The user creates gear from it
+  is nullable, `provider_import` keeps the provider's description). It appears
+  in the pending gear list. The user creates gear from it
   (`CreateGearFromRef`), maps it onto existing gear (`LinkGearRef`), or leaves
   it (`ListPendingGearRefs`). Defaults are seeded and activities re-derived on
   the decision, not on import. The owner of a ref is the external account's

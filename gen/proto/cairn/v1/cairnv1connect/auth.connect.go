@@ -365,7 +365,7 @@ type AuthServiceClient interface {
 	// Scope: none (public).
 	GetLoginMethods(context.Context, *v1.GetLoginMethodsRequest) (*v1.GetLoginMethodsResponse, error)
 	// Instance identity and feature flags for a client's server picker:
-	// release, commit, build time, federation/OAuth availability, signup
+	// release, commit, build time, OAuth availability, signup
 	// policy and the scope catalog. Public; no auth required.
 	// Scope: none (public).
 	GetInstanceInfo(context.Context, *v1.GetInstanceInfoRequest) (*v1.GetInstanceInfoResponse, error)
@@ -483,7 +483,7 @@ type AuthServiceHandler interface {
 	// Scope: none (public).
 	GetLoginMethods(context.Context, *v1.GetLoginMethodsRequest) (*v1.GetLoginMethodsResponse, error)
 	// Instance identity and feature flags for a client's server picker:
-	// release, commit, build time, federation/OAuth availability, signup
+	// release, commit, build time, OAuth availability, signup
 	// policy and the scope catalog. Public; no auth required.
 	// Scope: none (public).
 	GetInstanceInfo(context.Context, *v1.GetInstanceInfoRequest) (*v1.GetInstanceInfoResponse, error)

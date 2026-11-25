@@ -2717,7 +2717,7 @@ type UserRecord struct {
 	ActivitySourceId string                 `protobuf:"bytes,9,opt,name=activity_source_id,json=activitySourceId,proto3" json:"activity_source_id,omitempty"`
 	BestEffortId     string                 `protobuf:"bytes,10,opt,name=best_effort_id,json=bestEffortId,proto3" json:"best_effort_id,omitempty"`
 	Ts               *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=ts,proto3" json:"ts,omitempty"`
-	// Recent improvement context — for "you set a new PR" notifications.
+	// Recent improvement context — for live personal-record events.
 	PreviousValue *float64               `protobuf:"fixed64,12,opt,name=previous_value,json=previousValue,proto3,oneof" json:"previous_value,omitempty"`
 	PreviousTs    *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=previous_ts,json=previousTs,proto3,oneof" json:"previous_ts,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -6482,270 +6482,6 @@ func (x *GetMergedStreamResponse) GetChannels() map[string]*MergedChannel {
 	return nil
 }
 
-type ListKudosRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ActivityId    string                 `protobuf:"bytes,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListKudosRequest) Reset() {
-	*x = ListKudosRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[66]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListKudosRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListKudosRequest) ProtoMessage() {}
-
-func (x *ListKudosRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[66]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListKudosRequest.ProtoReflect.Descriptor instead.
-func (*ListKudosRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{66}
-}
-
-func (x *ListKudosRequest) GetActivityId() string {
-	if x != nil {
-		return x.ActivityId
-	}
-	return ""
-}
-
-type ListKudosResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Count int32                  `protobuf:"varint,1,opt,name=count,proto3" json:"count,omitempty"`
-	// The caller gave kudos.
-	HasKudos bool `protobuf:"varint,2,opt,name=has_kudos,json=hasKudos,proto3" json:"has_kudos,omitempty"`
-	// Local users first, then federated actors (remote = true); capped.
-	Kudosers      []*UserCard `protobuf:"bytes,3,rep,name=kudosers,proto3" json:"kudosers,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListKudosResponse) Reset() {
-	*x = ListKudosResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[67]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListKudosResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListKudosResponse) ProtoMessage() {}
-
-func (x *ListKudosResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[67]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListKudosResponse.ProtoReflect.Descriptor instead.
-func (*ListKudosResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{67}
-}
-
-func (x *ListKudosResponse) GetCount() int32 {
-	if x != nil {
-		return x.Count
-	}
-	return 0
-}
-
-func (x *ListKudosResponse) GetHasKudos() bool {
-	if x != nil {
-		return x.HasKudos
-	}
-	return false
-}
-
-func (x *ListKudosResponse) GetKudosers() []*UserCard {
-	if x != nil {
-		return x.Kudosers
-	}
-	return nil
-}
-
-type ListCommentsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ActivityId    string                 `protobuf:"bytes,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListCommentsRequest) Reset() {
-	*x = ListCommentsRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[68]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListCommentsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListCommentsRequest) ProtoMessage() {}
-
-func (x *ListCommentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[68]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListCommentsRequest.ProtoReflect.Descriptor instead.
-func (*ListCommentsRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{68}
-}
-
-func (x *ListCommentsRequest) GetActivityId() string {
-	if x != nil {
-		return x.ActivityId
-	}
-	return ""
-}
-
-type Comment struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// A local comment id, or the ActivityPub id of a federated reply.
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	Author        *UserCard              `protobuf:"bytes,4,opt,name=author,proto3" json:"author,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Comment) Reset() {
-	*x = Comment{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[69]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Comment) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Comment) ProtoMessage() {}
-
-func (x *Comment) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[69]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Comment.ProtoReflect.Descriptor instead.
-func (*Comment) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{69}
-}
-
-func (x *Comment) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *Comment) GetBody() string {
-	if x != nil {
-		return x.Body
-	}
-	return ""
-}
-
-func (x *Comment) GetCreatedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return nil
-}
-
-func (x *Comment) GetAuthor() *UserCard {
-	if x != nil {
-		return x.Author
-	}
-	return nil
-}
-
-type ListCommentsResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Oldest first.
-	Comments      []*Comment `protobuf:"bytes,1,rep,name=comments,proto3" json:"comments,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListCommentsResponse) Reset() {
-	*x = ListCommentsResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[70]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListCommentsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListCommentsResponse) ProtoMessage() {}
-
-func (x *ListCommentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[70]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListCommentsResponse.ProtoReflect.Descriptor instead.
-func (*ListCommentsResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{70}
-}
-
-func (x *ListCommentsResponse) GetComments() []*Comment {
-	if x != nil {
-		return x.Comments
-	}
-	return nil
-}
-
 type GetActivityManageInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ActivityId    string                 `protobuf:"bytes,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
@@ -6755,7 +6491,7 @@ type GetActivityManageInfoRequest struct {
 
 func (x *GetActivityManageInfoRequest) Reset() {
 	*x = GetActivityManageInfoRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[71]
+	mi := &file_cairn_v1_activity_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6767,7 +6503,7 @@ func (x *GetActivityManageInfoRequest) String() string {
 func (*GetActivityManageInfoRequest) ProtoMessage() {}
 
 func (x *GetActivityManageInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[71]
+	mi := &file_cairn_v1_activity_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6780,7 +6516,7 @@ func (x *GetActivityManageInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActivityManageInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetActivityManageInfoRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{71}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GetActivityManageInfoRequest) GetActivityId() string {
@@ -6820,7 +6556,7 @@ type SourceInsight struct {
 
 func (x *SourceInsight) Reset() {
 	*x = SourceInsight{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[72]
+	mi := &file_cairn_v1_activity_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6832,7 +6568,7 @@ func (x *SourceInsight) String() string {
 func (*SourceInsight) ProtoMessage() {}
 
 func (x *SourceInsight) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[72]
+	mi := &file_cairn_v1_activity_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6845,7 +6581,7 @@ func (x *SourceInsight) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceInsight.ProtoReflect.Descriptor instead.
 func (*SourceInsight) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{72}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *SourceInsight) GetSource() *ActivitySource {
@@ -6990,7 +6726,7 @@ type FieldProvenance struct {
 
 func (x *FieldProvenance) Reset() {
 	*x = FieldProvenance{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[73]
+	mi := &file_cairn_v1_activity_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7002,7 +6738,7 @@ func (x *FieldProvenance) String() string {
 func (*FieldProvenance) ProtoMessage() {}
 
 func (x *FieldProvenance) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[73]
+	mi := &file_cairn_v1_activity_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7015,7 +6751,7 @@ func (x *FieldProvenance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FieldProvenance.ProtoReflect.Descriptor instead.
 func (*FieldProvenance) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{73}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *FieldProvenance) GetField() string {
@@ -7073,7 +6809,7 @@ type GetActivityManageInfoResponse struct {
 
 func (x *GetActivityManageInfoResponse) Reset() {
 	*x = GetActivityManageInfoResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[74]
+	mi := &file_cairn_v1_activity_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7085,7 +6821,7 @@ func (x *GetActivityManageInfoResponse) String() string {
 func (*GetActivityManageInfoResponse) ProtoMessage() {}
 
 func (x *GetActivityManageInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[74]
+	mi := &file_cairn_v1_activity_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7098,7 +6834,7 @@ func (x *GetActivityManageInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActivityManageInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetActivityManageInfoResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{74}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *GetActivityManageInfoResponse) GetMergedAt() *timestamppb.Timestamp {
@@ -7139,7 +6875,7 @@ type GetParsedSourceRequest struct {
 
 func (x *GetParsedSourceRequest) Reset() {
 	*x = GetParsedSourceRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[75]
+	mi := &file_cairn_v1_activity_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7151,7 +6887,7 @@ func (x *GetParsedSourceRequest) String() string {
 func (*GetParsedSourceRequest) ProtoMessage() {}
 
 func (x *GetParsedSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[75]
+	mi := &file_cairn_v1_activity_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7164,7 +6900,7 @@ func (x *GetParsedSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetParsedSourceRequest.ProtoReflect.Descriptor instead.
 func (*GetParsedSourceRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{75}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetParsedSourceRequest) GetActivityId() string {
@@ -7190,7 +6926,7 @@ type GetParsedSourceResponse struct {
 
 func (x *GetParsedSourceResponse) Reset() {
 	*x = GetParsedSourceResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[76]
+	mi := &file_cairn_v1_activity_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7202,7 +6938,7 @@ func (x *GetParsedSourceResponse) String() string {
 func (*GetParsedSourceResponse) ProtoMessage() {}
 
 func (x *GetParsedSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[76]
+	mi := &file_cairn_v1_activity_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7215,7 +6951,7 @@ func (x *GetParsedSourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetParsedSourceResponse.ProtoReflect.Descriptor instead.
 func (*GetParsedSourceResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{76}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetParsedSourceResponse) GetPayload() *ActivitySourcePayload {
@@ -7250,7 +6986,7 @@ type Attachment struct {
 
 func (x *Attachment) Reset() {
 	*x = Attachment{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[77]
+	mi := &file_cairn_v1_activity_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7262,7 +6998,7 @@ func (x *Attachment) String() string {
 func (*Attachment) ProtoMessage() {}
 
 func (x *Attachment) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[77]
+	mi := &file_cairn_v1_activity_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7275,7 +7011,7 @@ func (x *Attachment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Attachment.ProtoReflect.Descriptor instead.
 func (*Attachment) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{77}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *Attachment) GetId() string {
@@ -7364,7 +7100,7 @@ type ListAttachmentsRequest struct {
 
 func (x *ListAttachmentsRequest) Reset() {
 	*x = ListAttachmentsRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[78]
+	mi := &file_cairn_v1_activity_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7376,7 +7112,7 @@ func (x *ListAttachmentsRequest) String() string {
 func (*ListAttachmentsRequest) ProtoMessage() {}
 
 func (x *ListAttachmentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[78]
+	mi := &file_cairn_v1_activity_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7389,7 +7125,7 @@ func (x *ListAttachmentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAttachmentsRequest.ProtoReflect.Descriptor instead.
 func (*ListAttachmentsRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{78}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ListAttachmentsRequest) GetActivityId() string {
@@ -7408,7 +7144,7 @@ type ListAttachmentsResponse struct {
 
 func (x *ListAttachmentsResponse) Reset() {
 	*x = ListAttachmentsResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[79]
+	mi := &file_cairn_v1_activity_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7420,7 +7156,7 @@ func (x *ListAttachmentsResponse) String() string {
 func (*ListAttachmentsResponse) ProtoMessage() {}
 
 func (x *ListAttachmentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[79]
+	mi := &file_cairn_v1_activity_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7433,7 +7169,7 @@ func (x *ListAttachmentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAttachmentsResponse.ProtoReflect.Descriptor instead.
 func (*ListAttachmentsResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{79}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ListAttachmentsResponse) GetAttachments() []*Attachment {
@@ -7452,7 +7188,7 @@ type GetActivityMapImageRequest struct {
 
 func (x *GetActivityMapImageRequest) Reset() {
 	*x = GetActivityMapImageRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[80]
+	mi := &file_cairn_v1_activity_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7464,7 +7200,7 @@ func (x *GetActivityMapImageRequest) String() string {
 func (*GetActivityMapImageRequest) ProtoMessage() {}
 
 func (x *GetActivityMapImageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[80]
+	mi := &file_cairn_v1_activity_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7477,7 +7213,7 @@ func (x *GetActivityMapImageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActivityMapImageRequest.ProtoReflect.Descriptor instead.
 func (*GetActivityMapImageRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{80}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *GetActivityMapImageRequest) GetActivityId() string {
@@ -7498,7 +7234,7 @@ type GetActivityMapImageResponse struct {
 
 func (x *GetActivityMapImageResponse) Reset() {
 	*x = GetActivityMapImageResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[81]
+	mi := &file_cairn_v1_activity_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7510,7 +7246,7 @@ func (x *GetActivityMapImageResponse) String() string {
 func (*GetActivityMapImageResponse) ProtoMessage() {}
 
 func (x *GetActivityMapImageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[81]
+	mi := &file_cairn_v1_activity_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7523,7 +7259,7 @@ func (x *GetActivityMapImageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActivityMapImageResponse.ProtoReflect.Descriptor instead.
 func (*GetActivityMapImageResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{81}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *GetActivityMapImageResponse) GetImage() *ContentUrl {
@@ -7549,7 +7285,7 @@ type GetExportOptionsRequest struct {
 
 func (x *GetExportOptionsRequest) Reset() {
 	*x = GetExportOptionsRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[82]
+	mi := &file_cairn_v1_activity_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7561,7 +7297,7 @@ func (x *GetExportOptionsRequest) String() string {
 func (*GetExportOptionsRequest) ProtoMessage() {}
 
 func (x *GetExportOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[82]
+	mi := &file_cairn_v1_activity_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7574,7 +7310,7 @@ func (x *GetExportOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetExportOptionsRequest.ProtoReflect.Descriptor instead.
 func (*GetExportOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{82}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *GetExportOptionsRequest) GetActivityId() string {
@@ -7595,7 +7331,7 @@ type GetExportOptionsResponse struct {
 
 func (x *GetExportOptionsResponse) Reset() {
 	*x = GetExportOptionsResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[83]
+	mi := &file_cairn_v1_activity_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7607,7 +7343,7 @@ func (x *GetExportOptionsResponse) String() string {
 func (*GetExportOptionsResponse) ProtoMessage() {}
 
 func (x *GetExportOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[83]
+	mi := &file_cairn_v1_activity_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7620,7 +7356,7 @@ func (x *GetExportOptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetExportOptionsResponse.ProtoReflect.Descriptor instead.
 func (*GetExportOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{83}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *GetExportOptionsResponse) GetAvailable() map[string]bool {
@@ -7642,7 +7378,7 @@ type ExportActivityRequest struct {
 
 func (x *ExportActivityRequest) Reset() {
 	*x = ExportActivityRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[84]
+	mi := &file_cairn_v1_activity_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7654,7 +7390,7 @@ func (x *ExportActivityRequest) String() string {
 func (*ExportActivityRequest) ProtoMessage() {}
 
 func (x *ExportActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[84]
+	mi := &file_cairn_v1_activity_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7667,7 +7403,7 @@ func (x *ExportActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportActivityRequest.ProtoReflect.Descriptor instead.
 func (*ExportActivityRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{84}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ExportActivityRequest) GetActivityId() string {
@@ -7703,7 +7439,7 @@ type ExportActivityResponse struct {
 
 func (x *ExportActivityResponse) Reset() {
 	*x = ExportActivityResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[85]
+	mi := &file_cairn_v1_activity_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7715,7 +7451,7 @@ func (x *ExportActivityResponse) String() string {
 func (*ExportActivityResponse) ProtoMessage() {}
 
 func (x *ExportActivityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[85]
+	mi := &file_cairn_v1_activity_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7728,7 +7464,7 @@ func (x *ExportActivityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportActivityResponse.ProtoReflect.Descriptor instead.
 func (*ExportActivityResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{85}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *ExportActivityResponse) GetFile() *ContentUrl {
@@ -7763,7 +7499,7 @@ type ListBestEffortsRequest struct {
 
 func (x *ListBestEffortsRequest) Reset() {
 	*x = ListBestEffortsRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[86]
+	mi := &file_cairn_v1_activity_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7775,7 +7511,7 @@ func (x *ListBestEffortsRequest) String() string {
 func (*ListBestEffortsRequest) ProtoMessage() {}
 
 func (x *ListBestEffortsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[86]
+	mi := &file_cairn_v1_activity_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7788,7 +7524,7 @@ func (x *ListBestEffortsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBestEffortsRequest.ProtoReflect.Descriptor instead.
 func (*ListBestEffortsRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{86}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *ListBestEffortsRequest) GetActivityId() string {
@@ -7814,7 +7550,7 @@ type ListBestEffortsResponse struct {
 
 func (x *ListBestEffortsResponse) Reset() {
 	*x = ListBestEffortsResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[87]
+	mi := &file_cairn_v1_activity_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7826,7 +7562,7 @@ func (x *ListBestEffortsResponse) String() string {
 func (*ListBestEffortsResponse) ProtoMessage() {}
 
 func (x *ListBestEffortsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[87]
+	mi := &file_cairn_v1_activity_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7839,7 +7575,7 @@ func (x *ListBestEffortsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBestEffortsResponse.ProtoReflect.Descriptor instead.
 func (*ListBestEffortsResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{87}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *ListBestEffortsResponse) GetEfforts() []*BestEffort {
@@ -7864,7 +7600,7 @@ type ListRecordsRequest struct {
 
 func (x *ListRecordsRequest) Reset() {
 	*x = ListRecordsRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[88]
+	mi := &file_cairn_v1_activity_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7876,7 +7612,7 @@ func (x *ListRecordsRequest) String() string {
 func (*ListRecordsRequest) ProtoMessage() {}
 
 func (x *ListRecordsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[88]
+	mi := &file_cairn_v1_activity_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7889,7 +7625,7 @@ func (x *ListRecordsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRecordsRequest.ProtoReflect.Descriptor instead.
 func (*ListRecordsRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{88}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListRecordsRequest) GetActivityType() ActivityType {
@@ -7929,7 +7665,7 @@ type ListRecordsResponse struct {
 
 func (x *ListRecordsResponse) Reset() {
 	*x = ListRecordsResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[89]
+	mi := &file_cairn_v1_activity_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7941,7 +7677,7 @@ func (x *ListRecordsResponse) String() string {
 func (*ListRecordsResponse) ProtoMessage() {}
 
 func (x *ListRecordsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[89]
+	mi := &file_cairn_v1_activity_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7954,7 +7690,7 @@ func (x *ListRecordsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRecordsResponse.ProtoReflect.Descriptor instead.
 func (*ListRecordsResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{89}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListRecordsResponse) GetRecords() []*UserRecord {
@@ -7977,7 +7713,7 @@ type CreateCustomBestEffortRequest struct {
 
 func (x *CreateCustomBestEffortRequest) Reset() {
 	*x = CreateCustomBestEffortRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[90]
+	mi := &file_cairn_v1_activity_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7989,7 +7725,7 @@ func (x *CreateCustomBestEffortRequest) String() string {
 func (*CreateCustomBestEffortRequest) ProtoMessage() {}
 
 func (x *CreateCustomBestEffortRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[90]
+	mi := &file_cairn_v1_activity_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8002,7 +7738,7 @@ func (x *CreateCustomBestEffortRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCustomBestEffortRequest.ProtoReflect.Descriptor instead.
 func (*CreateCustomBestEffortRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{90}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *CreateCustomBestEffortRequest) GetActivityType() ActivityType {
@@ -8049,7 +7785,7 @@ type CreateCustomBestEffortResponse struct {
 
 func (x *CreateCustomBestEffortResponse) Reset() {
 	*x = CreateCustomBestEffortResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[91]
+	mi := &file_cairn_v1_activity_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8061,7 +7797,7 @@ func (x *CreateCustomBestEffortResponse) String() string {
 func (*CreateCustomBestEffortResponse) ProtoMessage() {}
 
 func (x *CreateCustomBestEffortResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[91]
+	mi := &file_cairn_v1_activity_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8074,7 +7810,7 @@ func (x *CreateCustomBestEffortResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCustomBestEffortResponse.ProtoReflect.Descriptor instead.
 func (*CreateCustomBestEffortResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{91}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *CreateCustomBestEffortResponse) GetCustomBestEffort() *CustomBestEffort {
@@ -8094,7 +7830,7 @@ type ListCustomBestEffortsRequest struct {
 
 func (x *ListCustomBestEffortsRequest) Reset() {
 	*x = ListCustomBestEffortsRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[92]
+	mi := &file_cairn_v1_activity_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8106,7 +7842,7 @@ func (x *ListCustomBestEffortsRequest) String() string {
 func (*ListCustomBestEffortsRequest) ProtoMessage() {}
 
 func (x *ListCustomBestEffortsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[92]
+	mi := &file_cairn_v1_activity_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8119,7 +7855,7 @@ func (x *ListCustomBestEffortsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCustomBestEffortsRequest.ProtoReflect.Descriptor instead.
 func (*ListCustomBestEffortsRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{92}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *ListCustomBestEffortsRequest) GetMember() string {
@@ -8138,7 +7874,7 @@ type ListCustomBestEffortsResponse struct {
 
 func (x *ListCustomBestEffortsResponse) Reset() {
 	*x = ListCustomBestEffortsResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[93]
+	mi := &file_cairn_v1_activity_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8150,7 +7886,7 @@ func (x *ListCustomBestEffortsResponse) String() string {
 func (*ListCustomBestEffortsResponse) ProtoMessage() {}
 
 func (x *ListCustomBestEffortsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[93]
+	mi := &file_cairn_v1_activity_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8163,7 +7899,7 @@ func (x *ListCustomBestEffortsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCustomBestEffortsResponse.ProtoReflect.Descriptor instead.
 func (*ListCustomBestEffortsResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{93}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *ListCustomBestEffortsResponse) GetCustomBestEfforts() []*CustomBestEffort {
@@ -8182,7 +7918,7 @@ type DeleteCustomBestEffortRequest struct {
 
 func (x *DeleteCustomBestEffortRequest) Reset() {
 	*x = DeleteCustomBestEffortRequest{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[94]
+	mi := &file_cairn_v1_activity_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8194,7 +7930,7 @@ func (x *DeleteCustomBestEffortRequest) String() string {
 func (*DeleteCustomBestEffortRequest) ProtoMessage() {}
 
 func (x *DeleteCustomBestEffortRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[94]
+	mi := &file_cairn_v1_activity_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8207,7 +7943,7 @@ func (x *DeleteCustomBestEffortRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCustomBestEffortRequest.ProtoReflect.Descriptor instead.
 func (*DeleteCustomBestEffortRequest) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{94}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *DeleteCustomBestEffortRequest) GetId() string {
@@ -8225,7 +7961,7 @@ type DeleteCustomBestEffortResponse struct {
 
 func (x *DeleteCustomBestEffortResponse) Reset() {
 	*x = DeleteCustomBestEffortResponse{}
-	mi := &file_cairn_v1_activity_proto_msgTypes[95]
+	mi := &file_cairn_v1_activity_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8237,7 +7973,7 @@ func (x *DeleteCustomBestEffortResponse) String() string {
 func (*DeleteCustomBestEffortResponse) ProtoMessage() {}
 
 func (x *DeleteCustomBestEffortResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cairn_v1_activity_proto_msgTypes[95]
+	mi := &file_cairn_v1_activity_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8250,7 +7986,7 @@ func (x *DeleteCustomBestEffortResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCustomBestEffortResponse.ProtoReflect.Descriptor instead.
 func (*DeleteCustomBestEffortResponse) Descriptor() ([]byte, []int) {
-	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{95}
+	return file_cairn_v1_activity_proto_rawDescGZIP(), []int{90}
 }
 
 var File_cairn_v1_activity_proto protoreflect.FileDescriptor
@@ -8916,25 +8652,7 @@ const file_cairn_v1_activity_proto_rawDesc = "" +
 	"\bchannels\x18\x02 \x03(\v2/.cairn.v1.GetMergedStreamResponse.ChannelsEntryR\bchannels\x1aT\n" +
 	"\rChannelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12-\n" +
-	"\x05value\x18\x02 \x01(\v2\x17.cairn.v1.MergedChannelR\x05value:\x028\x01\"3\n" +
-	"\x10ListKudosRequest\x12\x1f\n" +
-	"\vactivity_id\x18\x01 \x01(\tR\n" +
-	"activityId\"v\n" +
-	"\x11ListKudosResponse\x12\x14\n" +
-	"\x05count\x18\x01 \x01(\x05R\x05count\x12\x1b\n" +
-	"\thas_kudos\x18\x02 \x01(\bR\bhasKudos\x12.\n" +
-	"\bkudosers\x18\x03 \x03(\v2\x12.cairn.v1.UserCardR\bkudosers\"6\n" +
-	"\x13ListCommentsRequest\x12\x1f\n" +
-	"\vactivity_id\x18\x01 \x01(\tR\n" +
-	"activityId\"\x94\x01\n" +
-	"\aComment\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04body\x18\x02 \x01(\tR\x04body\x129\n" +
-	"\n" +
-	"created_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12*\n" +
-	"\x06author\x18\x04 \x01(\v2\x12.cairn.v1.UserCardR\x06author\"E\n" +
-	"\x14ListCommentsResponse\x12-\n" +
-	"\bcomments\x18\x01 \x03(\v2\x11.cairn.v1.CommentR\bcomments\"?\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.cairn.v1.MergedChannelR\x05value:\x028\x01\"?\n" +
 	"\x1cGetActivityManageInfoRequest\x12\x1f\n" +
 	"\vactivity_id\x18\x01 \x01(\tR\n" +
 	"activityId\"\xeb\x05\n" +
@@ -9190,7 +8908,7 @@ const file_cairn_v1_activity_proto_rawDesc = "" +
 	"\x19EXPORT_FORMAT_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11EXPORT_FORMAT_GPX\x10\x01\x12\x15\n" +
 	"\x11EXPORT_FORMAT_TCX\x10\x02\x12\x15\n" +
-	"\x11EXPORT_FORMAT_FIT\x10\x032\xfc\x19\n" +
+	"\x11EXPORT_FORMAT_FIT\x10\x032\xdd\x18\n" +
 	"\x0fActivityService\x12S\n" +
 	"\x0eListActivities\x12\x1f.cairn.v1.ListActivitiesRequest\x1a .cairn.v1.ListActivitiesResponse\x12^\n" +
 	"\x10SearchActivities\x12!.cairn.v1.SearchActivitiesRequest\x1a\".cairn.v1.SearchActivitiesResponse\"\x03\x90\x02\x01\x12J\n" +
@@ -9213,9 +8931,7 @@ const file_cairn_v1_activity_proto_rawDesc = "" +
 	"\x10GetActivityZones\x12!.cairn.v1.GetActivityZonesRequest\x1a\".cairn.v1.GetActivityZonesResponse\"\x03\x90\x02\x01\x12|\n" +
 	"\x1aListActivitySegmentEfforts\x12+.cairn.v1.ListActivitySegmentEffortsRequest\x1a,.cairn.v1.ListActivitySegmentEffortsResponse\"\x03\x90\x02\x01\x12m\n" +
 	"\x15ListSimilarActivities\x12&.cairn.v1.ListSimilarActivitiesRequest\x1a'.cairn.v1.ListSimilarActivitiesResponse\"\x03\x90\x02\x01\x12[\n" +
-	"\x0fGetMergedStream\x12 .cairn.v1.GetMergedStreamRequest\x1a!.cairn.v1.GetMergedStreamResponse\"\x03\x90\x02\x01\x12I\n" +
-	"\tListKudos\x12\x1a.cairn.v1.ListKudosRequest\x1a\x1b.cairn.v1.ListKudosResponse\"\x03\x90\x02\x01\x12R\n" +
-	"\fListComments\x12\x1d.cairn.v1.ListCommentsRequest\x1a\x1e.cairn.v1.ListCommentsResponse\"\x03\x90\x02\x01\x12m\n" +
+	"\x0fGetMergedStream\x12 .cairn.v1.GetMergedStreamRequest\x1a!.cairn.v1.GetMergedStreamResponse\"\x03\x90\x02\x01\x12m\n" +
 	"\x15GetActivityManageInfo\x12&.cairn.v1.GetActivityManageInfoRequest\x1a'.cairn.v1.GetActivityManageInfoResponse\"\x03\x90\x02\x01\x12[\n" +
 	"\x0fGetParsedSource\x12 .cairn.v1.GetParsedSourceRequest\x1a!.cairn.v1.GetParsedSourceResponse\"\x03\x90\x02\x01\x12[\n" +
 	"\x0fListAttachments\x12 .cairn.v1.ListAttachmentsRequest\x1a!.cairn.v1.ListAttachmentsResponse\"\x03\x90\x02\x01\x12g\n" +
@@ -9242,7 +8958,7 @@ func file_cairn_v1_activity_proto_rawDescGZIP() []byte {
 }
 
 var file_cairn_v1_activity_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
-var file_cairn_v1_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 102)
+var file_cairn_v1_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 97)
 var file_cairn_v1_activity_proto_goTypes = []any{
 	(GearSetBy)(0),                             // 0: cairn.v1.GearSetBy
 	(ActivityType)(0),                          // 1: cairn.v1.ActivityType
@@ -9324,134 +9040,128 @@ var file_cairn_v1_activity_proto_goTypes = []any{
 	(*GetMergedStreamRequest)(nil),             // 77: cairn.v1.GetMergedStreamRequest
 	(*MergedChannel)(nil),                      // 78: cairn.v1.MergedChannel
 	(*GetMergedStreamResponse)(nil),            // 79: cairn.v1.GetMergedStreamResponse
-	(*ListKudosRequest)(nil),                   // 80: cairn.v1.ListKudosRequest
-	(*ListKudosResponse)(nil),                  // 81: cairn.v1.ListKudosResponse
-	(*ListCommentsRequest)(nil),                // 82: cairn.v1.ListCommentsRequest
-	(*Comment)(nil),                            // 83: cairn.v1.Comment
-	(*ListCommentsResponse)(nil),               // 84: cairn.v1.ListCommentsResponse
-	(*GetActivityManageInfoRequest)(nil),       // 85: cairn.v1.GetActivityManageInfoRequest
-	(*SourceInsight)(nil),                      // 86: cairn.v1.SourceInsight
-	(*FieldProvenance)(nil),                    // 87: cairn.v1.FieldProvenance
-	(*GetActivityManageInfoResponse)(nil),      // 88: cairn.v1.GetActivityManageInfoResponse
-	(*GetParsedSourceRequest)(nil),             // 89: cairn.v1.GetParsedSourceRequest
-	(*GetParsedSourceResponse)(nil),            // 90: cairn.v1.GetParsedSourceResponse
-	(*Attachment)(nil),                         // 91: cairn.v1.Attachment
-	(*ListAttachmentsRequest)(nil),             // 92: cairn.v1.ListAttachmentsRequest
-	(*ListAttachmentsResponse)(nil),            // 93: cairn.v1.ListAttachmentsResponse
-	(*GetActivityMapImageRequest)(nil),         // 94: cairn.v1.GetActivityMapImageRequest
-	(*GetActivityMapImageResponse)(nil),        // 95: cairn.v1.GetActivityMapImageResponse
-	(*GetExportOptionsRequest)(nil),            // 96: cairn.v1.GetExportOptionsRequest
-	(*GetExportOptionsResponse)(nil),           // 97: cairn.v1.GetExportOptionsResponse
-	(*ExportActivityRequest)(nil),              // 98: cairn.v1.ExportActivityRequest
-	(*ExportActivityResponse)(nil),             // 99: cairn.v1.ExportActivityResponse
-	(*ListBestEffortsRequest)(nil),             // 100: cairn.v1.ListBestEffortsRequest
-	(*ListBestEffortsResponse)(nil),            // 101: cairn.v1.ListBestEffortsResponse
-	(*ListRecordsRequest)(nil),                 // 102: cairn.v1.ListRecordsRequest
-	(*ListRecordsResponse)(nil),                // 103: cairn.v1.ListRecordsResponse
-	(*CreateCustomBestEffortRequest)(nil),      // 104: cairn.v1.CreateCustomBestEffortRequest
-	(*CreateCustomBestEffortResponse)(nil),     // 105: cairn.v1.CreateCustomBestEffortResponse
-	(*ListCustomBestEffortsRequest)(nil),       // 106: cairn.v1.ListCustomBestEffortsRequest
-	(*ListCustomBestEffortsResponse)(nil),      // 107: cairn.v1.ListCustomBestEffortsResponse
-	(*DeleteCustomBestEffortRequest)(nil),      // 108: cairn.v1.DeleteCustomBestEffortRequest
-	(*DeleteCustomBestEffortResponse)(nil),     // 109: cairn.v1.DeleteCustomBestEffortResponse
-	nil,                                        // 110: cairn.v1.Activity.MergeProvenanceEntry
-	nil,                                        // 111: cairn.v1.ActivitySourcePayload.ExtraEntry
-	nil,                                        // 112: cairn.v1.ActivityEvent.I18nParamsEntry
-	nil,                                        // 113: cairn.v1.PresignActivityUploadResponse.RequiredHeadersEntry
-	nil,                                        // 114: cairn.v1.GetMergedStreamResponse.ChannelsEntry
-	nil,                                        // 115: cairn.v1.GetExportOptionsResponse.AvailableEntry
-	(*timestamppb.Timestamp)(nil),              // 116: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),                // 117: google.protobuf.Duration
-	(*ContentUrl)(nil),                         // 118: cairn.v1.ContentUrl
-	(*EncodedPolyline)(nil),                    // 119: cairn.v1.EncodedPolyline
-	(*TimeRange)(nil),                          // 120: cairn.v1.TimeRange
-	(*PageRequest)(nil),                        // 121: cairn.v1.PageRequest
-	(*Facet)(nil),                              // 122: cairn.v1.Facet
-	(*PageResponse)(nil),                       // 123: cairn.v1.PageResponse
-	(*UserCard)(nil),                           // 124: cairn.v1.UserCard
+	(*GetActivityManageInfoRequest)(nil),       // 80: cairn.v1.GetActivityManageInfoRequest
+	(*SourceInsight)(nil),                      // 81: cairn.v1.SourceInsight
+	(*FieldProvenance)(nil),                    // 82: cairn.v1.FieldProvenance
+	(*GetActivityManageInfoResponse)(nil),      // 83: cairn.v1.GetActivityManageInfoResponse
+	(*GetParsedSourceRequest)(nil),             // 84: cairn.v1.GetParsedSourceRequest
+	(*GetParsedSourceResponse)(nil),            // 85: cairn.v1.GetParsedSourceResponse
+	(*Attachment)(nil),                         // 86: cairn.v1.Attachment
+	(*ListAttachmentsRequest)(nil),             // 87: cairn.v1.ListAttachmentsRequest
+	(*ListAttachmentsResponse)(nil),            // 88: cairn.v1.ListAttachmentsResponse
+	(*GetActivityMapImageRequest)(nil),         // 89: cairn.v1.GetActivityMapImageRequest
+	(*GetActivityMapImageResponse)(nil),        // 90: cairn.v1.GetActivityMapImageResponse
+	(*GetExportOptionsRequest)(nil),            // 91: cairn.v1.GetExportOptionsRequest
+	(*GetExportOptionsResponse)(nil),           // 92: cairn.v1.GetExportOptionsResponse
+	(*ExportActivityRequest)(nil),              // 93: cairn.v1.ExportActivityRequest
+	(*ExportActivityResponse)(nil),             // 94: cairn.v1.ExportActivityResponse
+	(*ListBestEffortsRequest)(nil),             // 95: cairn.v1.ListBestEffortsRequest
+	(*ListBestEffortsResponse)(nil),            // 96: cairn.v1.ListBestEffortsResponse
+	(*ListRecordsRequest)(nil),                 // 97: cairn.v1.ListRecordsRequest
+	(*ListRecordsResponse)(nil),                // 98: cairn.v1.ListRecordsResponse
+	(*CreateCustomBestEffortRequest)(nil),      // 99: cairn.v1.CreateCustomBestEffortRequest
+	(*CreateCustomBestEffortResponse)(nil),     // 100: cairn.v1.CreateCustomBestEffortResponse
+	(*ListCustomBestEffortsRequest)(nil),       // 101: cairn.v1.ListCustomBestEffortsRequest
+	(*ListCustomBestEffortsResponse)(nil),      // 102: cairn.v1.ListCustomBestEffortsResponse
+	(*DeleteCustomBestEffortRequest)(nil),      // 103: cairn.v1.DeleteCustomBestEffortRequest
+	(*DeleteCustomBestEffortResponse)(nil),     // 104: cairn.v1.DeleteCustomBestEffortResponse
+	nil,                                        // 105: cairn.v1.Activity.MergeProvenanceEntry
+	nil,                                        // 106: cairn.v1.ActivitySourcePayload.ExtraEntry
+	nil,                                        // 107: cairn.v1.ActivityEvent.I18nParamsEntry
+	nil,                                        // 108: cairn.v1.PresignActivityUploadResponse.RequiredHeadersEntry
+	nil,                                        // 109: cairn.v1.GetMergedStreamResponse.ChannelsEntry
+	nil,                                        // 110: cairn.v1.GetExportOptionsResponse.AvailableEntry
+	(*timestamppb.Timestamp)(nil),              // 111: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),                // 112: google.protobuf.Duration
+	(*ContentUrl)(nil),                         // 113: cairn.v1.ContentUrl
+	(*EncodedPolyline)(nil),                    // 114: cairn.v1.EncodedPolyline
+	(*TimeRange)(nil),                          // 115: cairn.v1.TimeRange
+	(*PageRequest)(nil),                        // 116: cairn.v1.PageRequest
+	(*Facet)(nil),                              // 117: cairn.v1.Facet
+	(*PageResponse)(nil),                       // 118: cairn.v1.PageResponse
 }
 var file_cairn_v1_activity_proto_depIdxs = []int32{
 	1,   // 0: cairn.v1.Activity.type:type_name -> cairn.v1.ActivityType
 	2,   // 1: cairn.v1.Activity.discipline:type_name -> cairn.v1.Discipline
-	116, // 2: cairn.v1.Activity.start_time:type_name -> google.protobuf.Timestamp
-	116, // 3: cairn.v1.Activity.end_time:type_name -> google.protobuf.Timestamp
-	117, // 4: cairn.v1.Activity.elapsed_duration:type_name -> google.protobuf.Duration
-	117, // 5: cairn.v1.Activity.moving_duration:type_name -> google.protobuf.Duration
+	111, // 2: cairn.v1.Activity.start_time:type_name -> google.protobuf.Timestamp
+	111, // 3: cairn.v1.Activity.end_time:type_name -> google.protobuf.Timestamp
+	112, // 4: cairn.v1.Activity.elapsed_duration:type_name -> google.protobuf.Duration
+	112, // 5: cairn.v1.Activity.moving_duration:type_name -> google.protobuf.Duration
 	15,  // 6: cairn.v1.Activity.summary:type_name -> cairn.v1.ActivitySummary
 	16,  // 7: cairn.v1.Activity.sources:type_name -> cairn.v1.ActivitySource
-	110, // 8: cairn.v1.Activity.merge_provenance:type_name -> cairn.v1.Activity.MergeProvenanceEntry
-	116, // 9: cairn.v1.Activity.merged_at:type_name -> google.protobuf.Timestamp
-	116, // 10: cairn.v1.Activity.created_at:type_name -> google.protobuf.Timestamp
-	116, // 11: cairn.v1.Activity.updated_at:type_name -> google.protobuf.Timestamp
+	105, // 8: cairn.v1.Activity.merge_provenance:type_name -> cairn.v1.Activity.MergeProvenanceEntry
+	111, // 9: cairn.v1.Activity.merged_at:type_name -> google.protobuf.Timestamp
+	111, // 10: cairn.v1.Activity.created_at:type_name -> google.protobuf.Timestamp
+	111, // 11: cairn.v1.Activity.updated_at:type_name -> google.protobuf.Timestamp
 	3,   // 12: cairn.v1.Activity.privacy:type_name -> cairn.v1.Privacy
-	116, // 13: cairn.v1.Activity.deleted_at:type_name -> google.protobuf.Timestamp
+	111, // 13: cairn.v1.Activity.deleted_at:type_name -> google.protobuf.Timestamp
 	0,   // 14: cairn.v1.Activity.gear_set_by:type_name -> cairn.v1.GearSetBy
-	118, // 15: cairn.v1.Activity.map_image:type_name -> cairn.v1.ContentUrl
+	113, // 15: cairn.v1.Activity.map_image:type_name -> cairn.v1.ContentUrl
 	17,  // 16: cairn.v1.ActivitySource.parsed:type_name -> cairn.v1.ActivitySourcePayload
 	4,   // 17: cairn.v1.ActivitySource.status:type_name -> cairn.v1.ActivitySourceStatus
 	5,   // 18: cairn.v1.ActivitySource.reimport_status:type_name -> cairn.v1.ReimportStatus
-	116, // 19: cairn.v1.ActivitySource.imported_at:type_name -> google.protobuf.Timestamp
-	116, // 20: cairn.v1.ActivitySource.last_reimported_at:type_name -> google.protobuf.Timestamp
-	116, // 21: cairn.v1.ActivitySource.updated_at:type_name -> google.protobuf.Timestamp
+	111, // 19: cairn.v1.ActivitySource.imported_at:type_name -> google.protobuf.Timestamp
+	111, // 20: cairn.v1.ActivitySource.last_reimported_at:type_name -> google.protobuf.Timestamp
+	111, // 21: cairn.v1.ActivitySource.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 22: cairn.v1.ActivitySourcePayload.type:type_name -> cairn.v1.ActivityType
 	2,   // 23: cairn.v1.ActivitySourcePayload.discipline:type_name -> cairn.v1.Discipline
-	116, // 24: cairn.v1.ActivitySourcePayload.start_time:type_name -> google.protobuf.Timestamp
-	116, // 25: cairn.v1.ActivitySourcePayload.end_time:type_name -> google.protobuf.Timestamp
-	117, // 26: cairn.v1.ActivitySourcePayload.elapsed_duration:type_name -> google.protobuf.Duration
-	117, // 27: cairn.v1.ActivitySourcePayload.moving_duration:type_name -> google.protobuf.Duration
+	111, // 24: cairn.v1.ActivitySourcePayload.start_time:type_name -> google.protobuf.Timestamp
+	111, // 25: cairn.v1.ActivitySourcePayload.end_time:type_name -> google.protobuf.Timestamp
+	112, // 26: cairn.v1.ActivitySourcePayload.elapsed_duration:type_name -> google.protobuf.Duration
+	112, // 27: cairn.v1.ActivitySourcePayload.moving_duration:type_name -> google.protobuf.Duration
 	15,  // 28: cairn.v1.ActivitySourcePayload.summary:type_name -> cairn.v1.ActivitySummary
 	18,  // 29: cairn.v1.ActivitySourcePayload.laps:type_name -> cairn.v1.ActivityLap
 	19,  // 30: cairn.v1.ActivitySourcePayload.stream_summary:type_name -> cairn.v1.StreamSummary
 	20,  // 31: cairn.v1.ActivitySourcePayload.provider_segment_efforts:type_name -> cairn.v1.ProviderSegmentEffort
 	21,  // 32: cairn.v1.ActivitySourcePayload.provider_best_efforts:type_name -> cairn.v1.ProviderBestEffort
-	111, // 33: cairn.v1.ActivitySourcePayload.extra:type_name -> cairn.v1.ActivitySourcePayload.ExtraEntry
-	116, // 34: cairn.v1.ActivityLap.start_time:type_name -> google.protobuf.Timestamp
-	117, // 35: cairn.v1.ActivityLap.elapsed_duration:type_name -> google.protobuf.Duration
-	117, // 36: cairn.v1.ActivityLap.moving_duration:type_name -> google.protobuf.Duration
+	106, // 33: cairn.v1.ActivitySourcePayload.extra:type_name -> cairn.v1.ActivitySourcePayload.ExtraEntry
+	111, // 34: cairn.v1.ActivityLap.start_time:type_name -> google.protobuf.Timestamp
+	112, // 35: cairn.v1.ActivityLap.elapsed_duration:type_name -> google.protobuf.Duration
+	112, // 36: cairn.v1.ActivityLap.moving_duration:type_name -> google.protobuf.Duration
 	6,   // 37: cairn.v1.StreamSummary.channels:type_name -> cairn.v1.StreamChannel
-	119, // 38: cairn.v1.StreamSummary.polyline:type_name -> cairn.v1.EncodedPolyline
-	116, // 39: cairn.v1.ProviderSegmentEffort.start_time:type_name -> google.protobuf.Timestamp
-	117, // 40: cairn.v1.ProviderSegmentEffort.elapsed:type_name -> google.protobuf.Duration
-	117, // 41: cairn.v1.ProviderBestEffort.elapsed:type_name -> google.protobuf.Duration
+	114, // 38: cairn.v1.StreamSummary.polyline:type_name -> cairn.v1.EncodedPolyline
+	111, // 39: cairn.v1.ProviderSegmentEffort.start_time:type_name -> google.protobuf.Timestamp
+	112, // 40: cairn.v1.ProviderSegmentEffort.elapsed:type_name -> google.protobuf.Duration
+	112, // 41: cairn.v1.ProviderBestEffort.elapsed:type_name -> google.protobuf.Duration
 	6,   // 42: cairn.v1.ActivityStream.channels:type_name -> cairn.v1.StreamChannel
 	1,   // 43: cairn.v1.BestEffort.activity_type:type_name -> cairn.v1.ActivityType
 	2,   // 44: cairn.v1.BestEffort.discipline:type_name -> cairn.v1.Discipline
 	7,   // 45: cairn.v1.BestEffort.metric:type_name -> cairn.v1.BestEffortMetric
 	8,   // 46: cairn.v1.BestEffort.window_kind:type_name -> cairn.v1.BestEffortWindowKind
-	117, // 47: cairn.v1.BestEffort.duration:type_name -> google.protobuf.Duration
-	116, // 48: cairn.v1.BestEffort.ts:type_name -> google.protobuf.Timestamp
+	112, // 47: cairn.v1.BestEffort.duration:type_name -> google.protobuf.Duration
+	111, // 48: cairn.v1.BestEffort.ts:type_name -> google.protobuf.Timestamp
 	1,   // 49: cairn.v1.UserRecord.activity_type:type_name -> cairn.v1.ActivityType
 	2,   // 50: cairn.v1.UserRecord.discipline:type_name -> cairn.v1.Discipline
 	7,   // 51: cairn.v1.UserRecord.metric:type_name -> cairn.v1.BestEffortMetric
 	8,   // 52: cairn.v1.UserRecord.window_kind:type_name -> cairn.v1.BestEffortWindowKind
-	116, // 53: cairn.v1.UserRecord.ts:type_name -> google.protobuf.Timestamp
-	116, // 54: cairn.v1.UserRecord.previous_ts:type_name -> google.protobuf.Timestamp
+	111, // 53: cairn.v1.UserRecord.ts:type_name -> google.protobuf.Timestamp
+	111, // 54: cairn.v1.UserRecord.previous_ts:type_name -> google.protobuf.Timestamp
 	1,   // 55: cairn.v1.CustomBestEffort.activity_type:type_name -> cairn.v1.ActivityType
 	7,   // 56: cairn.v1.CustomBestEffort.metric:type_name -> cairn.v1.BestEffortMetric
 	8,   // 57: cairn.v1.CustomBestEffort.window_kind:type_name -> cairn.v1.BestEffortWindowKind
-	116, // 58: cairn.v1.CustomBestEffort.created_at:type_name -> google.protobuf.Timestamp
-	120, // 59: cairn.v1.ListActivitiesRequest.time_range:type_name -> cairn.v1.TimeRange
+	111, // 58: cairn.v1.CustomBestEffort.created_at:type_name -> google.protobuf.Timestamp
+	115, // 59: cairn.v1.ListActivitiesRequest.time_range:type_name -> cairn.v1.TimeRange
 	1,   // 60: cairn.v1.ListActivitiesRequest.types:type_name -> cairn.v1.ActivityType
 	2,   // 61: cairn.v1.ListActivitiesRequest.disciplines:type_name -> cairn.v1.Discipline
 	9,   // 62: cairn.v1.ListActivitiesRequest.sort:type_name -> cairn.v1.ActivitySort
-	121, // 63: cairn.v1.ListActivitiesRequest.page:type_name -> cairn.v1.PageRequest
+	116, // 63: cairn.v1.ListActivitiesRequest.page:type_name -> cairn.v1.PageRequest
 	1,   // 64: cairn.v1.ActivityFilter.types:type_name -> cairn.v1.ActivityType
-	120, // 65: cairn.v1.ActivityFilter.time_range:type_name -> cairn.v1.TimeRange
+	115, // 65: cairn.v1.ActivityFilter.time_range:type_name -> cairn.v1.TimeRange
 	13,  // 66: cairn.v1.ActivityFilter.virtual:type_name -> cairn.v1.ActivityFilter.Flag
 	13,  // 67: cairn.v1.ActivityFilter.ebike:type_name -> cairn.v1.ActivityFilter.Flag
 	13,  // 68: cairn.v1.ActivityFilter.commute:type_name -> cairn.v1.ActivityFilter.Flag
 	13,  // 69: cairn.v1.ActivityFilter.race:type_name -> cairn.v1.ActivityFilter.Flag
-	122, // 70: cairn.v1.ActivityFacets.types:type_name -> cairn.v1.Facet
-	122, // 71: cairn.v1.ActivityFacets.disciplines:type_name -> cairn.v1.Facet
-	122, // 72: cairn.v1.ActivityFacets.years:type_name -> cairn.v1.Facet
+	117, // 70: cairn.v1.ActivityFacets.types:type_name -> cairn.v1.Facet
+	117, // 71: cairn.v1.ActivityFacets.disciplines:type_name -> cairn.v1.Facet
+	117, // 72: cairn.v1.ActivityFacets.years:type_name -> cairn.v1.Facet
 	27,  // 73: cairn.v1.SearchActivitiesRequest.filter:type_name -> cairn.v1.ActivityFilter
 	9,   // 74: cairn.v1.SearchActivitiesRequest.sort:type_name -> cairn.v1.ActivitySort
-	121, // 75: cairn.v1.SearchActivitiesRequest.page:type_name -> cairn.v1.PageRequest
+	116, // 75: cairn.v1.SearchActivitiesRequest.page:type_name -> cairn.v1.PageRequest
 	14,  // 76: cairn.v1.SearchActivitiesResponse.activities:type_name -> cairn.v1.Activity
 	28,  // 77: cairn.v1.SearchActivitiesResponse.facets:type_name -> cairn.v1.ActivityFacets
-	123, // 78: cairn.v1.SearchActivitiesResponse.page:type_name -> cairn.v1.PageResponse
+	118, // 78: cairn.v1.SearchActivitiesResponse.page:type_name -> cairn.v1.PageResponse
 	14,  // 79: cairn.v1.ListActivitiesResponse.activities:type_name -> cairn.v1.Activity
-	123, // 80: cairn.v1.ListActivitiesResponse.page:type_name -> cairn.v1.PageResponse
+	118, // 80: cairn.v1.ListActivitiesResponse.page:type_name -> cairn.v1.PageResponse
 	14,  // 81: cairn.v1.GetActivityResponse.activity:type_name -> cairn.v1.Activity
 	1,   // 82: cairn.v1.UpdateActivityRequest.type:type_name -> cairn.v1.ActivityType
 	2,   // 83: cairn.v1.UpdateActivityRequest.discipline:type_name -> cairn.v1.Discipline
@@ -9459,22 +9169,22 @@ var file_cairn_v1_activity_proto_depIdxs = []int32{
 	14,  // 85: cairn.v1.UpdateActivityResponse.activity:type_name -> cairn.v1.Activity
 	10,  // 86: cairn.v1.StreamActivityEventsRequest.types:type_name -> cairn.v1.ActivityEventType
 	10,  // 87: cairn.v1.ActivityEvent.type:type_name -> cairn.v1.ActivityEventType
-	116, // 88: cairn.v1.ActivityEvent.ts:type_name -> google.protobuf.Timestamp
-	112, // 89: cairn.v1.ActivityEvent.i18n_params:type_name -> cairn.v1.ActivityEvent.I18nParamsEntry
+	111, // 88: cairn.v1.ActivityEvent.ts:type_name -> google.protobuf.Timestamp
+	107, // 89: cairn.v1.ActivityEvent.i18n_params:type_name -> cairn.v1.ActivityEvent.I18nParamsEntry
 	16,  // 90: cairn.v1.ListActivitySourcesResponse.sources:type_name -> cairn.v1.ActivitySource
 	11,  // 91: cairn.v1.SourcePreview.status:type_name -> cairn.v1.SourcePreviewStatus
 	46,  // 92: cairn.v1.SourcePreview.source_diff:type_name -> cairn.v1.FieldChange
 	46,  // 93: cairn.v1.SourcePreview.merged_diff:type_name -> cairn.v1.FieldChange
-	116, // 94: cairn.v1.SourcePreview.created_at:type_name -> google.protobuf.Timestamp
-	116, // 95: cairn.v1.SourcePreview.expires_at:type_name -> google.protobuf.Timestamp
+	111, // 94: cairn.v1.SourcePreview.created_at:type_name -> google.protobuf.Timestamp
+	111, // 95: cairn.v1.SourcePreview.expires_at:type_name -> google.protobuf.Timestamp
 	47,  // 96: cairn.v1.GetSourcePreviewResponse.preview:type_name -> cairn.v1.SourcePreview
 	14,  // 97: cairn.v1.CommitSourcePreviewResponse.activity:type_name -> cairn.v1.Activity
 	14,  // 98: cairn.v1.LinkSourceToActivityResponse.activity:type_name -> cairn.v1.Activity
 	14,  // 99: cairn.v1.DetachSourceResponse.new_activity:type_name -> cairn.v1.Activity
 	6,   // 100: cairn.v1.GetActivityStreamRequest.channels:type_name -> cairn.v1.StreamChannel
 	22,  // 101: cairn.v1.GetActivityStreamResponse.stream:type_name -> cairn.v1.ActivityStream
-	113, // 102: cairn.v1.PresignActivityUploadResponse.required_headers:type_name -> cairn.v1.PresignActivityUploadResponse.RequiredHeadersEntry
-	116, // 103: cairn.v1.PresignActivityUploadResponse.expires_at:type_name -> google.protobuf.Timestamp
+	108, // 102: cairn.v1.PresignActivityUploadResponse.required_headers:type_name -> cairn.v1.PresignActivityUploadResponse.RequiredHeadersEntry
+	111, // 103: cairn.v1.PresignActivityUploadResponse.expires_at:type_name -> google.protobuf.Timestamp
 	1,   // 104: cairn.v1.UploadActivityRequest.type_hint:type_name -> cairn.v1.ActivityType
 	2,   // 105: cairn.v1.UploadActivityRequest.discipline_hint:type_name -> cairn.v1.Discipline
 	18,  // 106: cairn.v1.ListLapsResponse.laps:type_name -> cairn.v1.ActivityLap
@@ -9484,117 +9194,109 @@ var file_cairn_v1_activity_proto_depIdxs = []int32{
 	69,  // 110: cairn.v1.GetActivityZonesResponse.decoupling:type_name -> cairn.v1.Decoupling
 	72,  // 111: cairn.v1.ListActivitySegmentEffortsResponse.efforts:type_name -> cairn.v1.ActivitySegmentEffort
 	1,   // 112: cairn.v1.SimilarActivity.type:type_name -> cairn.v1.ActivityType
-	116, // 113: cairn.v1.SimilarActivity.start_time:type_name -> google.protobuf.Timestamp
+	111, // 113: cairn.v1.SimilarActivity.start_time:type_name -> google.protobuf.Timestamp
 	75,  // 114: cairn.v1.ListSimilarActivitiesResponse.activities:type_name -> cairn.v1.SimilarActivity
-	114, // 115: cairn.v1.GetMergedStreamResponse.channels:type_name -> cairn.v1.GetMergedStreamResponse.ChannelsEntry
-	124, // 116: cairn.v1.ListKudosResponse.kudosers:type_name -> cairn.v1.UserCard
-	116, // 117: cairn.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
-	124, // 118: cairn.v1.Comment.author:type_name -> cairn.v1.UserCard
-	83,  // 119: cairn.v1.ListCommentsResponse.comments:type_name -> cairn.v1.Comment
-	16,  // 120: cairn.v1.SourceInsight.source:type_name -> cairn.v1.ActivitySource
-	116, // 121: cairn.v1.SourceInsight.last_reimported_at:type_name -> google.protobuf.Timestamp
-	116, // 122: cairn.v1.FieldProvenance.synced_at:type_name -> google.protobuf.Timestamp
-	116, // 123: cairn.v1.GetActivityManageInfoResponse.merged_at:type_name -> google.protobuf.Timestamp
-	86,  // 124: cairn.v1.GetActivityManageInfoResponse.sources:type_name -> cairn.v1.SourceInsight
-	87,  // 125: cairn.v1.GetActivityManageInfoResponse.provenance:type_name -> cairn.v1.FieldProvenance
-	17,  // 126: cairn.v1.GetParsedSourceResponse.payload:type_name -> cairn.v1.ActivitySourcePayload
-	118, // 127: cairn.v1.Attachment.original:type_name -> cairn.v1.ContentUrl
-	118, // 128: cairn.v1.Attachment.medium:type_name -> cairn.v1.ContentUrl
-	118, // 129: cairn.v1.Attachment.thumb:type_name -> cairn.v1.ContentUrl
-	116, // 130: cairn.v1.Attachment.created_at:type_name -> google.protobuf.Timestamp
-	91,  // 131: cairn.v1.ListAttachmentsResponse.attachments:type_name -> cairn.v1.Attachment
-	118, // 132: cairn.v1.GetActivityMapImageResponse.image:type_name -> cairn.v1.ContentUrl
-	115, // 133: cairn.v1.GetExportOptionsResponse.available:type_name -> cairn.v1.GetExportOptionsResponse.AvailableEntry
-	12,  // 134: cairn.v1.ExportActivityRequest.format:type_name -> cairn.v1.ExportFormat
-	118, // 135: cairn.v1.ExportActivityResponse.file:type_name -> cairn.v1.ContentUrl
-	7,   // 136: cairn.v1.ListBestEffortsRequest.metrics:type_name -> cairn.v1.BestEffortMetric
-	23,  // 137: cairn.v1.ListBestEffortsResponse.efforts:type_name -> cairn.v1.BestEffort
-	1,   // 138: cairn.v1.ListRecordsRequest.activity_type:type_name -> cairn.v1.ActivityType
-	2,   // 139: cairn.v1.ListRecordsRequest.discipline:type_name -> cairn.v1.Discipline
-	120, // 140: cairn.v1.ListRecordsRequest.time_range:type_name -> cairn.v1.TimeRange
-	7,   // 141: cairn.v1.ListRecordsRequest.metrics:type_name -> cairn.v1.BestEffortMetric
-	24,  // 142: cairn.v1.ListRecordsResponse.records:type_name -> cairn.v1.UserRecord
-	1,   // 143: cairn.v1.CreateCustomBestEffortRequest.activity_type:type_name -> cairn.v1.ActivityType
-	7,   // 144: cairn.v1.CreateCustomBestEffortRequest.metric:type_name -> cairn.v1.BestEffortMetric
-	8,   // 145: cairn.v1.CreateCustomBestEffortRequest.window_kind:type_name -> cairn.v1.BestEffortWindowKind
-	25,  // 146: cairn.v1.CreateCustomBestEffortResponse.custom_best_effort:type_name -> cairn.v1.CustomBestEffort
-	25,  // 147: cairn.v1.ListCustomBestEffortsResponse.custom_best_efforts:type_name -> cairn.v1.CustomBestEffort
-	78,  // 148: cairn.v1.GetMergedStreamResponse.ChannelsEntry.value:type_name -> cairn.v1.MergedChannel
-	26,  // 149: cairn.v1.ActivityService.ListActivities:input_type -> cairn.v1.ListActivitiesRequest
-	29,  // 150: cairn.v1.ActivityService.SearchActivities:input_type -> cairn.v1.SearchActivitiesRequest
-	32,  // 151: cairn.v1.ActivityService.GetActivity:input_type -> cairn.v1.GetActivityRequest
-	34,  // 152: cairn.v1.ActivityService.UpdateActivity:input_type -> cairn.v1.UpdateActivityRequest
-	36,  // 153: cairn.v1.ActivityService.DeleteActivity:input_type -> cairn.v1.DeleteActivityRequest
-	38,  // 154: cairn.v1.ActivityService.StreamActivityEvents:input_type -> cairn.v1.StreamActivityEventsRequest
-	40,  // 155: cairn.v1.ActivityService.ListActivitySources:input_type -> cairn.v1.ListActivitySourcesRequest
-	42,  // 156: cairn.v1.ActivityService.ReimportSource:input_type -> cairn.v1.ReimportSourceRequest
-	44,  // 157: cairn.v1.ActivityService.PreviewSourceReimport:input_type -> cairn.v1.PreviewSourceReimportRequest
-	48,  // 158: cairn.v1.ActivityService.GetSourcePreview:input_type -> cairn.v1.GetSourcePreviewRequest
-	50,  // 159: cairn.v1.ActivityService.CommitSourcePreview:input_type -> cairn.v1.CommitSourcePreviewRequest
-	52,  // 160: cairn.v1.ActivityService.DiscardSourcePreview:input_type -> cairn.v1.DiscardSourcePreviewRequest
-	54,  // 161: cairn.v1.ActivityService.LinkSourceToActivity:input_type -> cairn.v1.LinkSourceToActivityRequest
-	56,  // 162: cairn.v1.ActivityService.DetachSource:input_type -> cairn.v1.DetachSourceRequest
-	58,  // 163: cairn.v1.ActivityService.GetActivityStream:input_type -> cairn.v1.GetActivityStreamRequest
-	60,  // 164: cairn.v1.ActivityService.PresignActivityUpload:input_type -> cairn.v1.PresignActivityUploadRequest
-	62,  // 165: cairn.v1.ActivityService.UploadActivity:input_type -> cairn.v1.UploadActivityRequest
-	64,  // 166: cairn.v1.ActivityService.ListLaps:input_type -> cairn.v1.ListLapsRequest
-	66,  // 167: cairn.v1.ActivityService.GetActivityZones:input_type -> cairn.v1.GetActivityZonesRequest
-	71,  // 168: cairn.v1.ActivityService.ListActivitySegmentEfforts:input_type -> cairn.v1.ListActivitySegmentEffortsRequest
-	74,  // 169: cairn.v1.ActivityService.ListSimilarActivities:input_type -> cairn.v1.ListSimilarActivitiesRequest
-	77,  // 170: cairn.v1.ActivityService.GetMergedStream:input_type -> cairn.v1.GetMergedStreamRequest
-	80,  // 171: cairn.v1.ActivityService.ListKudos:input_type -> cairn.v1.ListKudosRequest
-	82,  // 172: cairn.v1.ActivityService.ListComments:input_type -> cairn.v1.ListCommentsRequest
-	85,  // 173: cairn.v1.ActivityService.GetActivityManageInfo:input_type -> cairn.v1.GetActivityManageInfoRequest
-	89,  // 174: cairn.v1.ActivityService.GetParsedSource:input_type -> cairn.v1.GetParsedSourceRequest
-	92,  // 175: cairn.v1.ActivityService.ListAttachments:input_type -> cairn.v1.ListAttachmentsRequest
-	94,  // 176: cairn.v1.ActivityService.GetActivityMapImage:input_type -> cairn.v1.GetActivityMapImageRequest
-	96,  // 177: cairn.v1.ActivityService.GetExportOptions:input_type -> cairn.v1.GetExportOptionsRequest
-	98,  // 178: cairn.v1.ActivityService.ExportActivity:input_type -> cairn.v1.ExportActivityRequest
-	100, // 179: cairn.v1.ActivityService.ListBestEfforts:input_type -> cairn.v1.ListBestEffortsRequest
-	102, // 180: cairn.v1.ActivityService.ListRecords:input_type -> cairn.v1.ListRecordsRequest
-	104, // 181: cairn.v1.ActivityService.CreateCustomBestEffort:input_type -> cairn.v1.CreateCustomBestEffortRequest
-	106, // 182: cairn.v1.ActivityService.ListCustomBestEfforts:input_type -> cairn.v1.ListCustomBestEffortsRequest
-	108, // 183: cairn.v1.ActivityService.DeleteCustomBestEffort:input_type -> cairn.v1.DeleteCustomBestEffortRequest
-	31,  // 184: cairn.v1.ActivityService.ListActivities:output_type -> cairn.v1.ListActivitiesResponse
-	30,  // 185: cairn.v1.ActivityService.SearchActivities:output_type -> cairn.v1.SearchActivitiesResponse
-	33,  // 186: cairn.v1.ActivityService.GetActivity:output_type -> cairn.v1.GetActivityResponse
-	35,  // 187: cairn.v1.ActivityService.UpdateActivity:output_type -> cairn.v1.UpdateActivityResponse
-	37,  // 188: cairn.v1.ActivityService.DeleteActivity:output_type -> cairn.v1.DeleteActivityResponse
-	39,  // 189: cairn.v1.ActivityService.StreamActivityEvents:output_type -> cairn.v1.ActivityEvent
-	41,  // 190: cairn.v1.ActivityService.ListActivitySources:output_type -> cairn.v1.ListActivitySourcesResponse
-	43,  // 191: cairn.v1.ActivityService.ReimportSource:output_type -> cairn.v1.ReimportSourceResponse
-	45,  // 192: cairn.v1.ActivityService.PreviewSourceReimport:output_type -> cairn.v1.PreviewSourceReimportResponse
-	49,  // 193: cairn.v1.ActivityService.GetSourcePreview:output_type -> cairn.v1.GetSourcePreviewResponse
-	51,  // 194: cairn.v1.ActivityService.CommitSourcePreview:output_type -> cairn.v1.CommitSourcePreviewResponse
-	53,  // 195: cairn.v1.ActivityService.DiscardSourcePreview:output_type -> cairn.v1.DiscardSourcePreviewResponse
-	55,  // 196: cairn.v1.ActivityService.LinkSourceToActivity:output_type -> cairn.v1.LinkSourceToActivityResponse
-	57,  // 197: cairn.v1.ActivityService.DetachSource:output_type -> cairn.v1.DetachSourceResponse
-	59,  // 198: cairn.v1.ActivityService.GetActivityStream:output_type -> cairn.v1.GetActivityStreamResponse
-	61,  // 199: cairn.v1.ActivityService.PresignActivityUpload:output_type -> cairn.v1.PresignActivityUploadResponse
-	63,  // 200: cairn.v1.ActivityService.UploadActivity:output_type -> cairn.v1.UploadActivityResponse
-	65,  // 201: cairn.v1.ActivityService.ListLaps:output_type -> cairn.v1.ListLapsResponse
-	70,  // 202: cairn.v1.ActivityService.GetActivityZones:output_type -> cairn.v1.GetActivityZonesResponse
-	73,  // 203: cairn.v1.ActivityService.ListActivitySegmentEfforts:output_type -> cairn.v1.ListActivitySegmentEffortsResponse
-	76,  // 204: cairn.v1.ActivityService.ListSimilarActivities:output_type -> cairn.v1.ListSimilarActivitiesResponse
-	79,  // 205: cairn.v1.ActivityService.GetMergedStream:output_type -> cairn.v1.GetMergedStreamResponse
-	81,  // 206: cairn.v1.ActivityService.ListKudos:output_type -> cairn.v1.ListKudosResponse
-	84,  // 207: cairn.v1.ActivityService.ListComments:output_type -> cairn.v1.ListCommentsResponse
-	88,  // 208: cairn.v1.ActivityService.GetActivityManageInfo:output_type -> cairn.v1.GetActivityManageInfoResponse
-	90,  // 209: cairn.v1.ActivityService.GetParsedSource:output_type -> cairn.v1.GetParsedSourceResponse
-	93,  // 210: cairn.v1.ActivityService.ListAttachments:output_type -> cairn.v1.ListAttachmentsResponse
-	95,  // 211: cairn.v1.ActivityService.GetActivityMapImage:output_type -> cairn.v1.GetActivityMapImageResponse
-	97,  // 212: cairn.v1.ActivityService.GetExportOptions:output_type -> cairn.v1.GetExportOptionsResponse
-	99,  // 213: cairn.v1.ActivityService.ExportActivity:output_type -> cairn.v1.ExportActivityResponse
-	101, // 214: cairn.v1.ActivityService.ListBestEfforts:output_type -> cairn.v1.ListBestEffortsResponse
-	103, // 215: cairn.v1.ActivityService.ListRecords:output_type -> cairn.v1.ListRecordsResponse
-	105, // 216: cairn.v1.ActivityService.CreateCustomBestEffort:output_type -> cairn.v1.CreateCustomBestEffortResponse
-	107, // 217: cairn.v1.ActivityService.ListCustomBestEfforts:output_type -> cairn.v1.ListCustomBestEffortsResponse
-	109, // 218: cairn.v1.ActivityService.DeleteCustomBestEffort:output_type -> cairn.v1.DeleteCustomBestEffortResponse
-	184, // [184:219] is the sub-list for method output_type
-	149, // [149:184] is the sub-list for method input_type
-	149, // [149:149] is the sub-list for extension type_name
-	149, // [149:149] is the sub-list for extension extendee
-	0,   // [0:149] is the sub-list for field type_name
+	109, // 115: cairn.v1.GetMergedStreamResponse.channels:type_name -> cairn.v1.GetMergedStreamResponse.ChannelsEntry
+	16,  // 116: cairn.v1.SourceInsight.source:type_name -> cairn.v1.ActivitySource
+	111, // 117: cairn.v1.SourceInsight.last_reimported_at:type_name -> google.protobuf.Timestamp
+	111, // 118: cairn.v1.FieldProvenance.synced_at:type_name -> google.protobuf.Timestamp
+	111, // 119: cairn.v1.GetActivityManageInfoResponse.merged_at:type_name -> google.protobuf.Timestamp
+	81,  // 120: cairn.v1.GetActivityManageInfoResponse.sources:type_name -> cairn.v1.SourceInsight
+	82,  // 121: cairn.v1.GetActivityManageInfoResponse.provenance:type_name -> cairn.v1.FieldProvenance
+	17,  // 122: cairn.v1.GetParsedSourceResponse.payload:type_name -> cairn.v1.ActivitySourcePayload
+	113, // 123: cairn.v1.Attachment.original:type_name -> cairn.v1.ContentUrl
+	113, // 124: cairn.v1.Attachment.medium:type_name -> cairn.v1.ContentUrl
+	113, // 125: cairn.v1.Attachment.thumb:type_name -> cairn.v1.ContentUrl
+	111, // 126: cairn.v1.Attachment.created_at:type_name -> google.protobuf.Timestamp
+	86,  // 127: cairn.v1.ListAttachmentsResponse.attachments:type_name -> cairn.v1.Attachment
+	113, // 128: cairn.v1.GetActivityMapImageResponse.image:type_name -> cairn.v1.ContentUrl
+	110, // 129: cairn.v1.GetExportOptionsResponse.available:type_name -> cairn.v1.GetExportOptionsResponse.AvailableEntry
+	12,  // 130: cairn.v1.ExportActivityRequest.format:type_name -> cairn.v1.ExportFormat
+	113, // 131: cairn.v1.ExportActivityResponse.file:type_name -> cairn.v1.ContentUrl
+	7,   // 132: cairn.v1.ListBestEffortsRequest.metrics:type_name -> cairn.v1.BestEffortMetric
+	23,  // 133: cairn.v1.ListBestEffortsResponse.efforts:type_name -> cairn.v1.BestEffort
+	1,   // 134: cairn.v1.ListRecordsRequest.activity_type:type_name -> cairn.v1.ActivityType
+	2,   // 135: cairn.v1.ListRecordsRequest.discipline:type_name -> cairn.v1.Discipline
+	115, // 136: cairn.v1.ListRecordsRequest.time_range:type_name -> cairn.v1.TimeRange
+	7,   // 137: cairn.v1.ListRecordsRequest.metrics:type_name -> cairn.v1.BestEffortMetric
+	24,  // 138: cairn.v1.ListRecordsResponse.records:type_name -> cairn.v1.UserRecord
+	1,   // 139: cairn.v1.CreateCustomBestEffortRequest.activity_type:type_name -> cairn.v1.ActivityType
+	7,   // 140: cairn.v1.CreateCustomBestEffortRequest.metric:type_name -> cairn.v1.BestEffortMetric
+	8,   // 141: cairn.v1.CreateCustomBestEffortRequest.window_kind:type_name -> cairn.v1.BestEffortWindowKind
+	25,  // 142: cairn.v1.CreateCustomBestEffortResponse.custom_best_effort:type_name -> cairn.v1.CustomBestEffort
+	25,  // 143: cairn.v1.ListCustomBestEffortsResponse.custom_best_efforts:type_name -> cairn.v1.CustomBestEffort
+	78,  // 144: cairn.v1.GetMergedStreamResponse.ChannelsEntry.value:type_name -> cairn.v1.MergedChannel
+	26,  // 145: cairn.v1.ActivityService.ListActivities:input_type -> cairn.v1.ListActivitiesRequest
+	29,  // 146: cairn.v1.ActivityService.SearchActivities:input_type -> cairn.v1.SearchActivitiesRequest
+	32,  // 147: cairn.v1.ActivityService.GetActivity:input_type -> cairn.v1.GetActivityRequest
+	34,  // 148: cairn.v1.ActivityService.UpdateActivity:input_type -> cairn.v1.UpdateActivityRequest
+	36,  // 149: cairn.v1.ActivityService.DeleteActivity:input_type -> cairn.v1.DeleteActivityRequest
+	38,  // 150: cairn.v1.ActivityService.StreamActivityEvents:input_type -> cairn.v1.StreamActivityEventsRequest
+	40,  // 151: cairn.v1.ActivityService.ListActivitySources:input_type -> cairn.v1.ListActivitySourcesRequest
+	42,  // 152: cairn.v1.ActivityService.ReimportSource:input_type -> cairn.v1.ReimportSourceRequest
+	44,  // 153: cairn.v1.ActivityService.PreviewSourceReimport:input_type -> cairn.v1.PreviewSourceReimportRequest
+	48,  // 154: cairn.v1.ActivityService.GetSourcePreview:input_type -> cairn.v1.GetSourcePreviewRequest
+	50,  // 155: cairn.v1.ActivityService.CommitSourcePreview:input_type -> cairn.v1.CommitSourcePreviewRequest
+	52,  // 156: cairn.v1.ActivityService.DiscardSourcePreview:input_type -> cairn.v1.DiscardSourcePreviewRequest
+	54,  // 157: cairn.v1.ActivityService.LinkSourceToActivity:input_type -> cairn.v1.LinkSourceToActivityRequest
+	56,  // 158: cairn.v1.ActivityService.DetachSource:input_type -> cairn.v1.DetachSourceRequest
+	58,  // 159: cairn.v1.ActivityService.GetActivityStream:input_type -> cairn.v1.GetActivityStreamRequest
+	60,  // 160: cairn.v1.ActivityService.PresignActivityUpload:input_type -> cairn.v1.PresignActivityUploadRequest
+	62,  // 161: cairn.v1.ActivityService.UploadActivity:input_type -> cairn.v1.UploadActivityRequest
+	64,  // 162: cairn.v1.ActivityService.ListLaps:input_type -> cairn.v1.ListLapsRequest
+	66,  // 163: cairn.v1.ActivityService.GetActivityZones:input_type -> cairn.v1.GetActivityZonesRequest
+	71,  // 164: cairn.v1.ActivityService.ListActivitySegmentEfforts:input_type -> cairn.v1.ListActivitySegmentEffortsRequest
+	74,  // 165: cairn.v1.ActivityService.ListSimilarActivities:input_type -> cairn.v1.ListSimilarActivitiesRequest
+	77,  // 166: cairn.v1.ActivityService.GetMergedStream:input_type -> cairn.v1.GetMergedStreamRequest
+	80,  // 167: cairn.v1.ActivityService.GetActivityManageInfo:input_type -> cairn.v1.GetActivityManageInfoRequest
+	84,  // 168: cairn.v1.ActivityService.GetParsedSource:input_type -> cairn.v1.GetParsedSourceRequest
+	87,  // 169: cairn.v1.ActivityService.ListAttachments:input_type -> cairn.v1.ListAttachmentsRequest
+	89,  // 170: cairn.v1.ActivityService.GetActivityMapImage:input_type -> cairn.v1.GetActivityMapImageRequest
+	91,  // 171: cairn.v1.ActivityService.GetExportOptions:input_type -> cairn.v1.GetExportOptionsRequest
+	93,  // 172: cairn.v1.ActivityService.ExportActivity:input_type -> cairn.v1.ExportActivityRequest
+	95,  // 173: cairn.v1.ActivityService.ListBestEfforts:input_type -> cairn.v1.ListBestEffortsRequest
+	97,  // 174: cairn.v1.ActivityService.ListRecords:input_type -> cairn.v1.ListRecordsRequest
+	99,  // 175: cairn.v1.ActivityService.CreateCustomBestEffort:input_type -> cairn.v1.CreateCustomBestEffortRequest
+	101, // 176: cairn.v1.ActivityService.ListCustomBestEfforts:input_type -> cairn.v1.ListCustomBestEffortsRequest
+	103, // 177: cairn.v1.ActivityService.DeleteCustomBestEffort:input_type -> cairn.v1.DeleteCustomBestEffortRequest
+	31,  // 178: cairn.v1.ActivityService.ListActivities:output_type -> cairn.v1.ListActivitiesResponse
+	30,  // 179: cairn.v1.ActivityService.SearchActivities:output_type -> cairn.v1.SearchActivitiesResponse
+	33,  // 180: cairn.v1.ActivityService.GetActivity:output_type -> cairn.v1.GetActivityResponse
+	35,  // 181: cairn.v1.ActivityService.UpdateActivity:output_type -> cairn.v1.UpdateActivityResponse
+	37,  // 182: cairn.v1.ActivityService.DeleteActivity:output_type -> cairn.v1.DeleteActivityResponse
+	39,  // 183: cairn.v1.ActivityService.StreamActivityEvents:output_type -> cairn.v1.ActivityEvent
+	41,  // 184: cairn.v1.ActivityService.ListActivitySources:output_type -> cairn.v1.ListActivitySourcesResponse
+	43,  // 185: cairn.v1.ActivityService.ReimportSource:output_type -> cairn.v1.ReimportSourceResponse
+	45,  // 186: cairn.v1.ActivityService.PreviewSourceReimport:output_type -> cairn.v1.PreviewSourceReimportResponse
+	49,  // 187: cairn.v1.ActivityService.GetSourcePreview:output_type -> cairn.v1.GetSourcePreviewResponse
+	51,  // 188: cairn.v1.ActivityService.CommitSourcePreview:output_type -> cairn.v1.CommitSourcePreviewResponse
+	53,  // 189: cairn.v1.ActivityService.DiscardSourcePreview:output_type -> cairn.v1.DiscardSourcePreviewResponse
+	55,  // 190: cairn.v1.ActivityService.LinkSourceToActivity:output_type -> cairn.v1.LinkSourceToActivityResponse
+	57,  // 191: cairn.v1.ActivityService.DetachSource:output_type -> cairn.v1.DetachSourceResponse
+	59,  // 192: cairn.v1.ActivityService.GetActivityStream:output_type -> cairn.v1.GetActivityStreamResponse
+	61,  // 193: cairn.v1.ActivityService.PresignActivityUpload:output_type -> cairn.v1.PresignActivityUploadResponse
+	63,  // 194: cairn.v1.ActivityService.UploadActivity:output_type -> cairn.v1.UploadActivityResponse
+	65,  // 195: cairn.v1.ActivityService.ListLaps:output_type -> cairn.v1.ListLapsResponse
+	70,  // 196: cairn.v1.ActivityService.GetActivityZones:output_type -> cairn.v1.GetActivityZonesResponse
+	73,  // 197: cairn.v1.ActivityService.ListActivitySegmentEfforts:output_type -> cairn.v1.ListActivitySegmentEffortsResponse
+	76,  // 198: cairn.v1.ActivityService.ListSimilarActivities:output_type -> cairn.v1.ListSimilarActivitiesResponse
+	79,  // 199: cairn.v1.ActivityService.GetMergedStream:output_type -> cairn.v1.GetMergedStreamResponse
+	83,  // 200: cairn.v1.ActivityService.GetActivityManageInfo:output_type -> cairn.v1.GetActivityManageInfoResponse
+	85,  // 201: cairn.v1.ActivityService.GetParsedSource:output_type -> cairn.v1.GetParsedSourceResponse
+	88,  // 202: cairn.v1.ActivityService.ListAttachments:output_type -> cairn.v1.ListAttachmentsResponse
+	90,  // 203: cairn.v1.ActivityService.GetActivityMapImage:output_type -> cairn.v1.GetActivityMapImageResponse
+	92,  // 204: cairn.v1.ActivityService.GetExportOptions:output_type -> cairn.v1.GetExportOptionsResponse
+	94,  // 205: cairn.v1.ActivityService.ExportActivity:output_type -> cairn.v1.ExportActivityResponse
+	96,  // 206: cairn.v1.ActivityService.ListBestEfforts:output_type -> cairn.v1.ListBestEffortsResponse
+	98,  // 207: cairn.v1.ActivityService.ListRecords:output_type -> cairn.v1.ListRecordsResponse
+	100, // 208: cairn.v1.ActivityService.CreateCustomBestEffort:output_type -> cairn.v1.CreateCustomBestEffortResponse
+	102, // 209: cairn.v1.ActivityService.ListCustomBestEfforts:output_type -> cairn.v1.ListCustomBestEffortsResponse
+	104, // 210: cairn.v1.ActivityService.DeleteCustomBestEffort:output_type -> cairn.v1.DeleteCustomBestEffortResponse
+	178, // [178:211] is the sub-list for method output_type
+	145, // [145:178] is the sub-list for method input_type
+	145, // [145:145] is the sub-list for extension type_name
+	145, // [145:145] is the sub-list for extension extendee
+	0,   // [0:145] is the sub-list for field type_name
 }
 
 func init() { file_cairn_v1_activity_proto_init() }
@@ -9617,15 +9319,15 @@ func file_cairn_v1_activity_proto_init() {
 	file_cairn_v1_activity_proto_msgTypes[56].OneofWrappers = []any{}
 	file_cairn_v1_activity_proto_msgTypes[58].OneofWrappers = []any{}
 	file_cairn_v1_activity_proto_msgTypes[61].OneofWrappers = []any{}
-	file_cairn_v1_activity_proto_msgTypes[72].OneofWrappers = []any{}
-	file_cairn_v1_activity_proto_msgTypes[88].OneofWrappers = []any{}
+	file_cairn_v1_activity_proto_msgTypes[67].OneofWrappers = []any{}
+	file_cairn_v1_activity_proto_msgTypes[83].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cairn_v1_activity_proto_rawDesc), len(file_cairn_v1_activity_proto_rawDesc)),
 			NumEnums:      14,
-			NumMessages:   102,
+			NumMessages:   97,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

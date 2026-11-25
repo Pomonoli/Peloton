@@ -991,8 +991,6 @@ type GetInstanceInfoResponse struct {
 	Commit string `protobuf:"bytes,2,opt,name=commit,proto3" json:"commit,omitempty"`
 	// Build time; unset when the binary carries no build metadata.
 	BuildTime *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=build_time,json=buildTime,proto3" json:"build_time,omitempty"`
-	// ActivityPub federation is switched on for this instance.
-	FederationEnabled bool `protobuf:"varint,4,opt,name=federation_enabled,json=federationEnabled,proto3" json:"federation_enabled,omitempty"`
 	// The OAuth 2.1 authorization server (PKCE, dynamic registration) is available.
 	OauthEnabled bool `protobuf:"varint,5,opt,name=oauth_enabled,json=oauthEnabled,proto3" json:"oauth_enabled,omitempty"`
 	// Self-service signup without an invite is allowed. False means invite-only.
@@ -1052,13 +1050,6 @@ func (x *GetInstanceInfoResponse) GetBuildTime() *timestamppb.Timestamp {
 		return x.BuildTime
 	}
 	return nil
-}
-
-func (x *GetInstanceInfoResponse) GetFederationEnabled() bool {
-	if x != nil {
-		return x.FederationEnabled
-	}
-	return false
 }
 
 func (x *GetInstanceInfoResponse) GetOauthEnabled() bool {
@@ -6759,16 +6750,15 @@ const file_cairn_v1_auth_proto_rawDesc = "" +
 	"\x0fOIDCLoginOption\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\"\x18\n" +
-	"\x16GetInstanceInfoRequest\"\xb2\x02\n" +
+	"\x16GetInstanceInfoRequest\"\x9d\x02\n" +
 	"\x17GetInstanceInfoResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
 	"\x06commit\x18\x02 \x01(\tR\x06commit\x129\n" +
 	"\n" +
-	"build_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tbuildTime\x12-\n" +
-	"\x12federation_enabled\x18\x04 \x01(\bR\x11federationEnabled\x12#\n" +
+	"build_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tbuildTime\x12#\n" +
 	"\roauth_enabled\x18\x05 \x01(\bR\foauthEnabled\x12+\n" +
 	"\x11registration_open\x18\x06 \x01(\bR\x10registrationOpen\x12)\n" +
-	"\x10supported_scopes\x18\a \x03(\tR\x0fsupportedScopes\"\x11\n" +
+	"\x10supported_scopes\x18\a \x03(\tR\x0fsupportedScopesJ\x04\b\x04\x10\x05R\x12federation_enabled\"\x11\n" +
 	"\x0fGetQuotaRequest\"\xa3\x01\n" +
 	"\x10GetQuotaResponse\x12'\n" +
 	"\x0factivities_used\x18\x01 \x01(\x05R\x0eactivitiesUsed\x12)\n" +
