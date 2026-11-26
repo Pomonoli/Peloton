@@ -7,7 +7,6 @@ type RecordedElevation = (
 ) => ElevationStats;
 
 export async function recordedElevation(): Promise<RecordedElevation> {
-	const module = '/waas-engine/route-metrics.js';
-	const { WaasRouteMetrics } = await import(/* @vite-ignore */ module);
+	const { WaasRouteMetrics } = await import('../../../static/waas-engine/route-metrics.js');
 	return WaasRouteMetrics.elevation as RecordedElevation;
 }

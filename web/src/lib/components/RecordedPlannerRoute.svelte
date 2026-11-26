@@ -86,12 +86,11 @@
 		if (!route || !track.length) return;
 		const name = route.name;
 		const segments = track.map((line) =>
-			line.map((p) => [gpxCoordinate(p.lat), gpxCoordinate(p.lon), finiteElevation(p)])
+			line.map((p) => [gpxCoordinate(p.lat), gpxCoordinate(p.lon), finiteElevation(p)] as const)
 		);
 		exportFailed = false;
 		try {
-			const module = '/waas-engine/gpx.js';
-			const { writeGPX } = await import(/* @vite-ignore */ module);
+			const { writeGPX } = await import('../../../static/waas-engine/gpx.js');
 			downloadGPX(writeGPX(name, '', segments), `peloton-route-${id}.gpx`);
 		} catch {
 			exportFailed = true;
