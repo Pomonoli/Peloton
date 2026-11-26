@@ -23,11 +23,13 @@ type catalogResult struct {
 		Rides          int
 		RiderCount     int     `json:"rider_count"`
 		DistanceM      float64 `json:"distance_m"`
+		ElevationM     float64 `json:"elevation_gain_m"`
 		BestSpeed      float64 `json:"best_speed_kmh"`
 		Riders         []struct {
 			Username    string
 			DisplayName string `json:"display_name"`
 			Rides       int
+			BestSpeed   float64 `json:"best_speed_kmh"`
 		}
 	}
 }
@@ -61,21 +63,7 @@ func TestAPI_RecordedRoutesLifecycle(t *testing.T) {
 	add := func(who *itestClient, day, start int, reverse bool, speed, latitude float64) activity.IngestResult {
 		t.Helper()
 		from := time.Date(2025, 1, day, 9, 0, 0, 0, time.UTC)
-		stream := routeLoop(from, start, reverse, speed, latitude)
-		duration := stream[len(stream)-1].Timestamp.Sub(from)
-		out, err := env.app.IngestActivity.Execute(ctx, activity.IngestInput{
-			UserID: who.userID, Provider: "upload", SourceWorkerName: "test", ExternalID: fmt.Sprint(day),
-			Payload: domain.ActivitySourcePayload{Type: domain.ActivityTypeRide, HasStream: true,
-				StartTime: from, EndTime: from.Add(duration), Timezone: "UTC", MovingDuration: duration,
-				ElapsedDuration: duration + 20*time.Minute, Summary: domain.ActivitySummary{
-					DistanceM: new(4000.0), ElevationGainM: new(70.0),
-				}},
-			Stream: stream,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return out
+		return ingestRecordedRide(t, who, routeLoop(from, start, reverse, speed, latitude), 4000, 70)
 	}
 	// A real upgrade must enqueue rides recorded before the route tables existed.
 	if _, err := db.MigrateDownTo(ctx, env.pool, 89); err != nil {
@@ -273,4 +261,195 @@ func routeLoop(start time.Time, offset int, reverse bool, speed, latitude float6
 		}
 	}
 	return samples
+}
+
+func ingestRecordedRide(t *testing.T, who *itestClient, stream []domain.StreamSample, distance, elevation float64) activity.IngestResult {
+	t.Helper()
+	from, to := stream[0].Timestamp, stream[len(stream)-1].Timestamp
+	out, err := who.env.app.IngestActivity.Execute(t.Context(), activity.IngestInput{
+		UserID: who.userID, Provider: "upload", SourceWorkerName: "test", ExternalID: fmt.Sprint(from.Day()),
+		Payload: domain.ActivitySourcePayload{Type: domain.ActivityTypeRide, HasStream: true,
+			StartTime: from, EndTime: to, Timezone: "UTC", MovingDuration: to.Sub(from),
+			ElapsedDuration: to.Sub(from) + 20*time.Minute, Summary: domain.ActivitySummary{
+				DistanceM: &distance, ElevationGainM: &elevation,
+			}},
+		Stream: stream,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestAPI_RecordedRoutesRecluster(t *testing.T) {
+	env := newITestEnv(t)
+	ada := env.user("ada", domain.UserRoleUser)
+	mira := env.user("mira", domain.UserRoleUser)
+	sam := env.user("sam", domain.UserRoleUser)
+	ctx := t.Context()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := env.pool.Exec(ctx, query, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	processor := *env.app.RouteProcessor
+	drain := func() {
+		t.Helper()
+		for range 30 {
+			worked, err := processor.ProcessOne(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !worked {
+				return
+			}
+		}
+		t.Fatal("route queue did not drain")
+	}
+	add := func(who *itestClient, day int, offset, speed, distance, elevation float64) domain.ActivityID {
+		t.Helper()
+		from := time.Date(2025, 2, day, 9, 0, 0, 0, time.UTC)
+		samples := make([]domain.StreamSample, int(distance/10)+1)
+		degrees := 180 / (math.Pi * domain.EarthRadiusMeters)
+		for i := range samples {
+			samples[i] = domain.StreamSample{
+				Timestamp: from.Add(time.Duration(1e9 * float64(i) * 10 / speed)),
+				Latitude:  new(51.0), Longitude: new(4 + (offset+float64(i)*10)*degrees/math.Cos(51*math.Pi/180)),
+				AltitudeM: new(elevation + float64(i)/5),
+			}
+		}
+		return ingestRecordedRide(t, who, samples, distance, elevation).ActivityID
+	}
+
+	left1 := add(ada, 1, 0, 9, 4000, 70)
+	left2 := add(ada, 2, 0, 10, 4000, 70)
+	middle := add(ada, 3, 550, 10, 4050, 92)
+	right1 := add(mira, 4, 1200, 12.5, 4000, 70)
+	right2 := add(mira, 5, 1200, 10, 4000, 70)
+	right3 := add(sam, 6, 1200, 8, 4000, 70)
+	edge1 := add(mira, 7, 1850, 9, 4000, 70)
+	edge2 := add(mira, 8, 1850, 10, 4000, 70)
+	drain()
+
+	// Recreate three pre-upgrade catalog entries. The first two anchors
+	// cannot match, but the middle ride can represent both of their groups.
+	// The third group matches the second, but the full chain has no center.
+	if _, err := db.MigrateDownTo(ctx, env.pool, 90); err != nil {
+		t.Fatal(err)
+	}
+	exec(`DELETE FROM recorded_routes`)
+	exec(`DELETE FROM recorded_route_queue`)
+	exec(`DELETE FROM recorded_route_tracks WHERE activity_id = $1`, right3.UUID())
+	makeLegacyRoute := func(ids ...domain.ActivityID) string {
+		t.Helper()
+		var id string
+		if err := env.pool.QueryRow(ctx, `INSERT INTO recorded_routes (anchor_id) VALUES ($1) RETURNING id::text`, ids[0].UUID()).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		for _, ride := range ids {
+			exec(`INSERT INTO recorded_route_matches (route_id, activity_id, overlap) VALUES ($1, $2, 1)`, id, ride.UUID())
+		}
+		return id
+	}
+	keep := makeLegacyRoute(left1, left2, middle)
+	discard := makeLegacyRoute(right1, right2)
+	edge := makeLegacyRoute(edge1, edge2)
+	exec(`INSERT INTO recorded_routes DEFAULT VALUES`)
+
+	if _, err := db.MigrateUp(ctx, env.pool); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := processor.ProcessOne(ctx); !worked || err != nil {
+		t.Fatalf("enqueue upgrade work: worked=%v err=%v", worked, err)
+	}
+	// Simulate a restart after scheduling the migration but before draining.
+	processor = *env.app.RouteProcessor
+	drain()
+	assertCenter := func(want domain.ActivityID) {
+		t.Helper()
+		var center domain.ActivityID
+		if err := env.pool.QueryRow(ctx, `SELECT anchor_id FROM recorded_routes WHERE id = $1`, keep).Scan(&center); err != nil {
+			t.Fatal(err)
+		}
+		if center != want {
+			t.Fatalf("representative = %s, want %s", center, want)
+		}
+	}
+	assertCenter(middle)
+	var groups, matches int
+	if err := env.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM recorded_routes), (SELECT count(*) FROM recorded_route_matches)`).Scan(&groups, &matches); err != nil {
+		t.Fatal(err)
+	}
+	if groups != 2 || matches != 8 {
+		t.Fatalf("reclustered catalog has %d groups and %d matches, want 2 and 8", groups, matches)
+	}
+	mira.do(http.MethodGet, "/api/routes/"+discard, nil, http.StatusNotFound)
+	var listing catalogResult
+	routeJSON(t, ada, "/api/routes", &listing)
+	if listing.Total != 2 || listing.Routes[0].ID != keep || listing.Routes[1].ID != edge {
+		t.Fatalf("unexpected routes after upgrade: %+v", listing)
+	}
+	var detail struct {
+		Track [][]struct {
+			Elevation *float64 `json:"elevation_m"`
+		}
+		Recent []struct{ ID string }
+	}
+	routeJSON(t, mira, "/api/routes/"+keep, &detail)
+	if len(detail.Recent) != 5 || detail.Recent[0].ID != right3.String() ||
+		len(detail.Track) != 1 || detail.Track[0][0].Elevation == nil || *detail.Track[0][0].Elevation != 92 {
+		t.Fatalf("detail did not use the representative track and merged recent rides: %+v", detail.Recent)
+	}
+	merged := listing.Routes[0]
+	if merged.Rides != 6 || merged.RiderCount != 3 || math.Abs(merged.DistanceM-4050) > 1 || merged.ElevationM != 92 ||
+		math.Abs(merged.BestSpeed-45) > .01 || len(merged.Riders) != 3 ||
+		merged.Riders[0].Username != "ada" || merged.Riders[0].Rides != 3 ||
+		merged.Riders[1].Username != "mira" || merged.Riders[1].Rides != 2 || math.Abs(merged.Riders[1].BestSpeed-45) > .01 {
+		t.Fatalf("merged route statistics: %+v", merged)
+	}
+	routeJSON(t, ada, "/api/routes?rider=sam", &listing)
+	if listing.Total != 1 || listing.Routes[0].ID != keep {
+		t.Fatalf("could not filter by a rider from the merged route: %+v", listing)
+	}
+
+	exec(`INSERT INTO recorded_route_recluster DEFAULT VALUES`)
+	drain()
+	assertCenter(middle)
+
+	better := add(mira, 9, 600, 10, 4050, 110)
+	drain()
+	assertCenter(better)
+	// Removing non-representative rides can also change the best center.
+	exec(`DELETE FROM activities WHERE id IN ($1, $2)`, right2.UUID(), right3.UUID())
+	drain()
+	assertCenter(middle)
+	routeJSON(t, ada, "/api/routes", &listing)
+	if listing.Total != 2 || listing.Routes[0].ID != keep || listing.Routes[0].Rides != 5 || listing.Routes[0].RiderCount != 2 {
+		t.Fatalf("incorrect statistics after incremental changes: %+v", listing)
+	}
+}
+
+func TestAPI_RecordedRouteMatchesAcrossKinds(t *testing.T) {
+	env := newITestEnv(t)
+	ada := env.user("ada", domain.UserRoleUser)
+	from := time.Date(2025, 2, 1, 9, 0, 0, 0, time.UTC)
+	ingestRecordedRide(t, ada, routeLoop(from, 0, false, 10, 51)[:335], 3340, 60)
+	ingestRecordedRide(t, ada, routeLoop(from.AddDate(0, 0, 1), 60, true, 10, 51), 4000, 70)
+
+	for range 5 {
+		worked, err := env.app.RouteProcessor.ProcessOne(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !worked {
+			var listing catalogResult
+			routeJSON(t, ada, "/api/routes?type=point_to_point", &listing)
+			if listing.Total != 1 || listing.Routes[0].Rides != 2 || math.Abs(listing.Routes[0].DistanceM-3340) > 1 {
+				t.Fatalf("short point-to-point variant should share the loop's cluster and represent it: %+v", listing)
+			}
+			return
+		}
+	}
+	t.Fatal("route queue did not drain")
 }

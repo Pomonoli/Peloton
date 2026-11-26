@@ -15,12 +15,26 @@ func TestRecordedRouteCoverage(t *testing.T) {
 		return RecordedTrack{line}
 	}
 	a := straight(0, 4000, 0)
-	b := straight(400, 4400, 0)
-	c := straight(800, 4800, 0)
-	if a.Coverage().RecordedOverlap(b.Coverage()) < MinRecordedRouteOverlap ||
-		b.Coverage().RecordedOverlap(c.Coverage()) < MinRecordedRouteOverlap ||
-		a.Coverage().RecordedOverlap(c.Coverage()) >= MinRecordedRouteOverlap {
-		t.Fatal("the overlapping chain must not pass a direct comparison to its initial route")
+	b := straight(670, 4670, 0)
+	c := straight(1340, 5340, 0)
+	for _, pair := range [][2]RecordedTrack{{a, b}, {b, c}, {b, a}} {
+		if score := pair[0].Coverage().RecordedOverlap(pair[1].Coverage()); score < .80 || score >= .85 {
+			t.Fatalf("expected a match in the new 80–85%% range, got %v", score)
+		}
+	}
+	if score := a.Coverage().RecordedOverlap(c.Coverage()); score >= MinRecordedRouteOverlap {
+		t.Fatalf("distant endpoints of the overlapping chain matched, overlap = %v", score)
+	}
+	if score := a.Coverage().RecordedOverlap(straight(0, 3240, 0).Coverage()); score < .80 || score >= .85 {
+		t.Fatalf("81%% length variation should match, overlap = %v", score)
+	}
+	if score := a.Coverage().RecordedOverlap(straight(0, 3190, 0).Coverage()); score != 0 {
+		t.Fatalf("length ratio should reject a short track even within GPS tolerance, overlap = %v", score)
+	}
+	detour := append(straight(0, 1700, 0)[0], straight(1700, 2300, 100)[0]...)
+	detour = append(detour, straight(2300, 4000, 0)[0]...)
+	if score := a.Coverage().RecordedOverlap(RecordedTrack{detour}.Coverage()); score < .80 || score >= .85 {
+		t.Fatalf("short diversion should match, overlap = %v", score)
 	}
 	if score := a.Coverage().RecordedOverlap(straight(0, 4000, 18).Coverage()); score < .98 {
 		t.Fatalf("minor GPS offset should match, overlap = %v", score)

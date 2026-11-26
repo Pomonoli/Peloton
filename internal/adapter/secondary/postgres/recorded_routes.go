@@ -26,6 +26,24 @@ func (r *RecordedRouteRepo) Lock(ctx context.Context) (bool, error) {
 	return locked, err
 }
 
+func (r *RecordedRouteRepo) EnqueueRecluster(ctx context.Context) (bool, error) {
+	// Consume the upgrade marker and enqueue the history in one transaction.
+	// The upgraded worker owns this step, even if migrations ran separately.
+	var queued bool
+	err := dbtx(ctx, r.pool).QueryRow(ctx, `
+		WITH upgrade AS (DELETE FROM recorded_route_recluster RETURNING true),
+		queued AS (
+			INSERT INTO recorded_route_queue (activity_id, available_at, live)
+			SELECT a.id, LEAST(a.start_time, now()), false FROM activities a
+			WHERE EXISTS (SELECT 1 FROM upgrade) AND (
+				(a.type = 'ride' AND a.deleted_at IS NULL AND a.primary_stream_source_id IS NOT NULL)
+				OR EXISTS (SELECT 1 FROM recorded_route_tracks t WHERE t.activity_id = a.id))
+			ORDER BY a.id
+			ON CONFLICT (activity_id) DO NOTHING
+		) SELECT EXISTS (SELECT 1 FROM upgrade)`).Scan(&queued)
+	return queued, err
+}
+
 func (r *RecordedRouteRepo) Next(ctx context.Context) (port.RouteJob, error) {
 	var out port.RouteJob
 	err := dbtx(ctx, r.pool).QueryRow(ctx, `
@@ -62,9 +80,9 @@ const sharedRouteActivity = `NOT a.hidden_by_admin AND NOT a.provider_restricted
 func (r *RecordedRouteRepo) Input(ctx context.Context, id domain.ActivityID) (port.RouteInput, error) {
 	var out port.RouteInput
 	err := dbtx(ctx, r.pool).QueryRow(ctx, `
-		SELECT src.id, src.heatmap_revision, a.user_id, (`+sharedRouteActivity+`)
+		SELECT src.id, src.heatmap_revision, (`+sharedRouteActivity+`)
 		FROM activities a `+currentRouteSource+`
-		WHERE a.id = $1 AND `+currentRouteActivity, id.UUID()).Scan(&out.Source, &out.Revision, &out.Rider, &out.Shared)
+		WHERE a.id = $1 AND `+currentRouteActivity, id.UUID()).Scan(&out.Source, &out.Revision, &out.Shared)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
@@ -139,66 +157,71 @@ func (r *RecordedRouteRepo) DeleteTrack(ctx context.Context, id domain.ActivityI
 	return err
 }
 
-func (r *RecordedRouteRepo) Membership(ctx context.Context, id domain.ActivityID) (port.RouteMembership, error) {
-	var out port.RouteMembership
+func (r *RecordedRouteRepo) Membership(ctx context.Context, id domain.ActivityID) (domain.RecordedRouteID, error) {
+	var out domain.RecordedRouteID
 	err := dbtx(ctx, r.pool).QueryRow(ctx, `
-		SELECT id, true FROM recorded_routes WHERE anchor_id = $1
+		SELECT id FROM recorded_routes WHERE anchor_id = $1
 		UNION ALL
-		SELECT route_id, false FROM recorded_route_matches WHERE activity_id = $1
-		ORDER BY 2 DESC LIMIT 1`, id.UUID()).Scan(&out.Route, &out.Anchor)
+		SELECT route_id FROM recorded_route_matches WHERE activity_id = $1
+		LIMIT 1`, id.UUID()).Scan(&out)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
 	return out, err
 }
 
-func (r *RecordedRouteRepo) Candidates(ctx context.Context, ref domain.ActivityID, q port.RouteCandidates) ([]port.RouteCandidate, error) {
-	join := `LEFT JOIN recorded_route_matches m ON m.activity_id = t.activity_id`
-	filter := ""
-	routeID := "m.route_id"
-	args := []any{ref.UUID(), domain.MinRecordedRouteOverlap}
-	switch {
-	case q.Anchors:
-		join = `JOIN recorded_routes rr ON rr.anchor_id = t.activity_id`
-		routeID = "rr.id"
-	case q.Unassigned:
-		filter = " AND m.activity_id IS NULL"
-	default:
-		args = append(args, q.MembersOf.UUID())
-		filter = " AND m.route_id = $3"
+const routeCandidateData = `
+	SELECT t.activity_id, m.route_id, a.user_id, a.start_time, t.track
+	FROM recorded_route_tracks t
+	JOIN activities a ON a.id = t.activity_id ` + currentRouteSource + `
+	LEFT JOIN recorded_route_matches m ON m.activity_id = t.activity_id
+	WHERE ` + currentRouteActivity + ` AND ` + currentRouteTrack + ` AND ` + sharedRouteActivity
+
+func (r *RecordedRouteRepo) Candidate(ctx context.Context, id domain.ActivityID) (port.RouteCandidate, error) {
+	out, err := scanRouteCandidate(dbtx(ctx, r.pool).QueryRow(ctx, routeCandidateData+` AND t.activity_id = $1`, id.UUID()))
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = nil
 	}
-	filter += " AND " + sharedRouteActivity
-	if q.Rider != (domain.UserID{}) {
-		// Rider filtering is only used when looking for an unassigned second ride.
-		args = append(args, q.Rider.UUID())
-		filter += " AND a.user_id = $3"
-	}
+	return out, err
+}
+
+func (r *RecordedRouteRepo) Nearby(ctx context.Context, refs, exclude []domain.ActivityID) ([]port.RouteCandidate, error) {
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
-		SELECT t.activity_id, `+routeID+`, t.kind, t.track
-		FROM recorded_route_tracks ref
-		CROSS JOIN LATERAL (
-			SELECT ST_Expand(ref.bounds, 0.0004 / greatest(0.000003,
-				cos(radians(greatest(abs(ST_YMin(ref.bounds)), abs(ST_YMax(ref.bounds)))))), 0.0004) AS bounds
-		) area
-		JOIN recorded_route_tracks t ON t.activity_id <> ref.activity_id
-			AND t.length_m BETWEEN ref.length_m * $2 AND ref.length_m / $2
-			AND (t.bounds && area.bounds
-				OR (ST_XMin(area.bounds) < -180 AND t.bounds && ST_Translate(area.bounds, 360, 0))
-				OR (ST_XMax(area.bounds) > 180 AND t.bounds && ST_Translate(area.bounds, -360, 0)))
-		JOIN activities a ON a.id = t.activity_id `+currentRouteSource+join+`
-		WHERE ref.activity_id = $1 AND `+currentRouteActivity+` AND `+currentRouteTrack+filter+`
-		ORDER BY a.start_time, a.id`, args...)
+		WITH nearby AS MATERIALIZED (
+			SELECT DISTINCT t.activity_id
+			FROM recorded_route_tracks ref
+			CROSS JOIN LATERAL (
+				SELECT ST_Expand(ref.bounds, 0.0004 / greatest(0.000003,
+					cos(radians(greatest(abs(ST_YMin(ref.bounds)), abs(ST_YMax(ref.bounds)))))), 0.0004) AS bounds
+			) area
+			JOIN recorded_route_tracks t ON t.length_m BETWEEN ref.length_m * $3 AND ref.length_m / $3
+				AND (t.bounds && area.bounds
+					OR (ST_XMin(area.bounds) < -180 AND t.bounds && ST_Translate(area.bounds, 360, 0))
+					OR (ST_XMax(area.bounds) > 180 AND t.bounds && ST_Translate(area.bounds, -360, 0)))
+			WHERE ref.activity_id = ANY($1) AND t.activity_id <> ALL($2)
+		)
+		`+routeCandidateData+` AND t.activity_id IN (SELECT activity_id FROM nearby)
+		ORDER BY a.start_time, a.id`, activityUUIDs(refs), activityUUIDs(exclude), domain.MinRecordedRouteLengthRatio)
 	if err != nil {
 		return nil, err
 	}
 	return pgCollectRows(rows, scanRouteCandidate, "scan route candidate", "iterate route candidates")
 }
 
+func (r *RecordedRouteRepo) Members(ctx context.Context, id domain.RecordedRouteID) ([]port.RouteCandidate, error) {
+	rows, err := dbtx(ctx, r.pool).Query(ctx, routeCandidateData+`
+		AND m.route_id = $1 ORDER BY a.start_time, a.id`, id.UUID())
+	if err != nil {
+		return nil, err
+	}
+	return pgCollectRows(rows, scanRouteCandidate, "scan route member", "iterate route members")
+}
+
 func scanRouteCandidate(row rowScanner) (port.RouteCandidate, error) {
 	var out port.RouteCandidate
 	var routeID *domain.RecordedRouteID
 	var raw trackJSON
-	err := row.Scan(&out.Activity, &routeID, &out.Kind, &raw)
+	err := row.Scan(&out.Activity, &routeID, &out.Rider, &out.StartTime, &raw)
 	if routeID != nil {
 		out.Route = *routeID
 	}
@@ -206,79 +229,96 @@ func scanRouteCandidate(row rowScanner) (port.RouteCandidate, error) {
 	return out, err
 }
 
-func (r *RecordedRouteRepo) Orphan(ctx context.Context) (domain.RecordedRouteID, domain.ActivityID, error) {
+func (r *RecordedRouteRepo) Orphan(ctx context.Context) (domain.RecordedRouteID, error) {
 	var route domain.RecordedRouteID
-	var id domain.ActivityID
 	err := dbtx(ctx, r.pool).QueryRow(ctx, `
-		SELECT rr.id, m.activity_id
-		FROM recorded_routes rr
-		JOIN recorded_route_matches m ON m.route_id = rr.id
-		JOIN recorded_route_tracks t ON t.activity_id = m.activity_id
-		JOIN activities a ON a.id = m.activity_id `+currentRouteSource+`
-		WHERE rr.anchor_id IS NULL AND `+currentRouteActivity+` AND `+currentRouteTrack+` AND `+sharedRouteActivity+`
-		ORDER BY rr.id, m.overlap DESC, a.start_time, a.id LIMIT 1`).Scan(&route, &id)
+		SELECT id FROM recorded_routes rr WHERE anchor_id IS NULL AND (
+			NOT EXISTS (SELECT 1 FROM recorded_route_matches WHERE route_id = rr.id)
+			OR EXISTS (`+routeCandidateData+` AND m.route_id = rr.id)
+		) ORDER BY id LIMIT 1`).Scan(&route)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
-	return route, id, err
+	return route, err
 }
 
-func (r *RecordedRouteRepo) Anchor(ctx context.Context, id domain.RecordedRouteID) (port.RouteCandidate, error) {
-	out, err := scanRouteCandidate(dbtx(ctx, r.pool).QueryRow(ctx, `
-		SELECT t.activity_id, rr.id, t.kind, t.track
-		FROM recorded_routes rr
-		JOIN recorded_route_tracks t ON t.activity_id = rr.anchor_id
-		JOIN activities a ON a.id = t.activity_id `+currentRouteSource+`
-		WHERE rr.id = $1 AND `+currentRouteActivity+` AND `+currentRouteTrack+` AND `+sharedRouteActivity, id.UUID()))
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = nil
+func (r *RecordedRouteRepo) SaveCluster(ctx context.Context, routes []domain.RecordedRouteID, representative domain.ActivityID, matches []port.RouteMatch) error {
+	tx := dbtx(ctx, r.pool)
+	ids := make([]string, len(routes))
+	for i, route := range routes {
+		ids[i] = route.String()
 	}
-	return out, err
-}
-
-func (r *RecordedRouteRepo) SetAnchor(ctx context.Context, id domain.RecordedRouteID, activity domain.ActivityID) error {
-	var anchor any
-	if activity != (domain.ActivityID{}) {
-		anchor = activity.UUID()
+	if len(matches) != 0 {
+		var route domain.RecordedRouteID
+		if len(routes) == 0 {
+			if err := tx.QueryRow(ctx, `INSERT INTO recorded_routes DEFAULT VALUES RETURNING id`).Scan(&route); err != nil {
+				return err
+			}
+		} else {
+			route = routes[0]
+			ids = ids[1:]
+		}
+		// The representative may have been the anchor of a route being merged.
+		if _, err := tx.Exec(ctx, `UPDATE recorded_routes SET anchor_id = NULL WHERE id = ANY($1) AND anchor_id = $2`,
+			ids, representative.UUID()); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE recorded_routes SET anchor_id = $2 WHERE id = $1 AND anchor_id IS DISTINCT FROM $2`,
+			route.UUID(), representative.UUID()); err != nil {
+			return err
+		}
+		if err := r.saveRouteMatches(ctx, route, matches); err != nil {
+			return err
+		}
 	}
-	_, err := dbtx(ctx, r.pool).Exec(ctx, `UPDATE recorded_routes SET anchor_id = $2 WHERE id = $1`,
-		id.UUID(), anchor)
-	return err
-}
-
-func (r *RecordedRouteRepo) Create(ctx context.Context, activity domain.ActivityID) (domain.RecordedRouteID, error) {
-	var id domain.RecordedRouteID
-	err := dbtx(ctx, r.pool).QueryRow(ctx, `INSERT INTO recorded_routes (anchor_id) VALUES ($1) RETURNING id`,
-		activity.UUID()).Scan(&id)
-	return id, err
-}
-
-func (r *RecordedRouteRepo) SetMatch(ctx context.Context, activity domain.ActivityID, id domain.RecordedRouteID, score float64) error {
-	_, err := dbtx(ctx, r.pool).Exec(ctx, `
-		INSERT INTO recorded_route_matches (activity_id, route_id, overlap) VALUES ($1, $2, $3)
-		ON CONFLICT (activity_id) DO UPDATE SET route_id = EXCLUDED.route_id, overlap = EXCLUDED.overlap`, activity.UUID(), id.UUID(), score)
-	return err
-}
-
-func (r *RecordedRouteRepo) RemoveMatch(ctx context.Context, id domain.ActivityID) error {
-	_, err := dbtx(ctx, r.pool).Exec(ctx, `DELETE FROM recorded_route_matches WHERE activity_id = $1`, id.UUID())
-	return err
-}
-
-func (r *RecordedRouteRepo) RetainMatches(ctx context.Context, id domain.RecordedRouteID, retain []domain.ActivityID) error {
-	ids := make([]string, len(retain))
-	for i, activity := range retain {
-		ids[i] = activity.String()
-	}
-	_, err := dbtx(ctx, r.pool).Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		WITH removed AS (
-			DELETE FROM recorded_route_matches WHERE route_id = $1 AND activity_id <> ALL($2::uuid[])
-			RETURNING activity_id
+			DELETE FROM recorded_route_matches WHERE route_id = ANY($1) RETURNING activity_id
 		)
 		INSERT INTO recorded_route_queue (activity_id, available_at)
-		SELECT activity_id, now() FROM removed
-		ON CONFLICT (activity_id) DO NOTHING`, id.UUID(), ids)
+		SELECT activity_id, now() FROM removed ON CONFLICT DO NOTHING`, ids)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM recorded_routes WHERE id = ANY($1)`, ids)
 	return err
+}
+
+func (r *RecordedRouteRepo) saveRouteMatches(ctx context.Context, route domain.RecordedRouteID, matches []port.RouteMatch) error {
+	ids := make([]string, len(matches))
+	scores := make([]float64, len(matches))
+	for i, match := range matches {
+		ids[i], scores[i] = match.Activity.String(), match.Overlap
+	}
+	tx := dbtx(ctx, r.pool)
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO recorded_route_matches (activity_id, route_id, overlap)
+		SELECT activity_id, $1, score FROM unnest($2::uuid[], $3::float8[]) AS matches(activity_id, score)
+		ON CONFLICT (activity_id) DO UPDATE SET route_id = EXCLUDED.route_id, overlap = EXCLUDED.overlap
+		WHERE (recorded_route_matches.route_id, recorded_route_matches.overlap) IS DISTINCT FROM (EXCLUDED.route_id, EXCLUDED.overlap)`,
+		route.UUID(), ids, scores); err != nil {
+		return err
+	}
+	// All these tracks have been reclustered. Keep live jobs and their
+	// generation checks, since a correction could have arrived in parallel.
+	if _, err := tx.Exec(ctx, `DELETE FROM recorded_route_queue WHERE NOT live AND activity_id = ANY($1)`, ids); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `
+		WITH removed AS (
+			DELETE FROM recorded_route_matches WHERE route_id = $1 AND activity_id <> ALL($2) RETURNING activity_id
+		)
+		INSERT INTO recorded_route_queue (activity_id, available_at)
+		SELECT activity_id, now() FROM removed ON CONFLICT DO NOTHING`, route.UUID(), ids)
+	return err
+}
+
+func activityUUIDs(ids []domain.ActivityID) []string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = id.String()
+	}
+	return out
 }
 
 var _ port.RecordedRouteWriter = (*RecordedRouteRepo)(nil)

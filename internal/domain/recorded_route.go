@@ -7,7 +7,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const MinRecordedRouteOverlap = .85
+const (
+	MinRecordedRouteOverlap     = .80
+	MinRecordedRouteLengthRatio = .80
+)
 
 type RecordedRouteID uuid.UUID
 
@@ -93,14 +96,24 @@ func (track RecordedTrack) Coverage() RouteCoverage {
 // Circular tracks can begin anywhere, since coverage is measured spatially.
 func (r RouteCoverage) RecordedOverlap(other RouteCoverage) float64 {
 	if r.length == 0 || other.length == 0 ||
-		min(r.length, other.length) < MinRecordedRouteOverlap*max(r.length, other.length) {
+		min(r.length, other.length) < MinRecordedRouteLengthRatio*max(r.length, other.length) {
 		return 0
 	}
+	// Ignore roundoff from summing intervals in grid iteration order.
+	const precision = 1e12
 	best := 0.0
 	for _, direction := range []float64{1, -1} {
-		if forward := r.coveredBy(other, direction); forward >= MinRecordedRouteOverlap {
-			best = max(best, min(forward, other.coveredBy(r, direction)))
+		forward := math.Round(r.coveredBy(other, direction)*precision) / precision
+		if forward >= MinRecordedRouteOverlap {
+			reverse := math.Round(other.coveredBy(r, direction)*precision) / precision
+			best = max(best, min(forward, reverse))
 		}
+		if best == 1 {
+			break
+		}
+	}
+	if best < MinRecordedRouteOverlap {
+		return 0
 	}
 	return best
 }

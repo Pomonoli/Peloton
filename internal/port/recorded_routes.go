@@ -15,7 +15,6 @@ type RouteJob struct {
 type RouteInput struct {
 	Source   domain.SourceID
 	Revision int64
-	Rider    domain.UserID
 	Shared   bool
 }
 
@@ -28,28 +27,22 @@ type RouteTrack struct {
 	Track    domain.RecordedTrack
 }
 
-type RouteMembership struct {
-	Route  domain.RecordedRouteID
-	Anchor bool
-}
-
 type RouteCandidate struct {
-	Activity domain.ActivityID
-	Route    domain.RecordedRouteID
-	Track    domain.RecordedTrack
-	Kind     domain.RecordedRouteKind
+	Activity  domain.ActivityID
+	Route     domain.RecordedRouteID
+	Rider     domain.UserID
+	StartTime time.Time
+	Track     domain.RecordedTrack
 }
 
-type RouteCandidates struct {
-	// Exactly one of Anchors, MembersOf or Unassigned selects the relationship.
-	Anchors    bool
-	MembersOf  domain.RecordedRouteID
-	Unassigned bool
-	Rider      domain.UserID
+type RouteMatch struct {
+	Activity domain.ActivityID
+	Overlap  float64
 }
 
 type RecordedRouteWriter interface {
 	Lock(context.Context) (bool, error)
+	EnqueueRecluster(context.Context) (bool, error)
 	Next(context.Context) (RouteJob, error)
 	Finish(context.Context, RouteJob) error
 	Retry(context.Context, RouteJob) error
@@ -57,15 +50,14 @@ type RecordedRouteWriter interface {
 	Track(context.Context, domain.ActivityID) (RouteTrack, error)
 	SaveTrack(context.Context, RouteTrack) error
 	DeleteTrack(context.Context, domain.ActivityID) error
-	Membership(context.Context, domain.ActivityID) (RouteMembership, error)
-	Candidates(context.Context, domain.ActivityID, RouteCandidates) ([]RouteCandidate, error)
-	Orphan(context.Context) (domain.RecordedRouteID, domain.ActivityID, error)
-	Anchor(context.Context, domain.RecordedRouteID) (RouteCandidate, error)
-	SetAnchor(context.Context, domain.RecordedRouteID, domain.ActivityID) error
-	Create(context.Context, domain.ActivityID) (domain.RecordedRouteID, error)
-	SetMatch(context.Context, domain.ActivityID, domain.RecordedRouteID, float64) error
-	RemoveMatch(context.Context, domain.ActivityID) error
-	RetainMatches(context.Context, domain.RecordedRouteID, []domain.ActivityID) error
+	Membership(context.Context, domain.ActivityID) (domain.RecordedRouteID, error)
+	Candidate(context.Context, domain.ActivityID) (RouteCandidate, error)
+	Nearby(ctx context.Context, refs, exclude []domain.ActivityID) ([]RouteCandidate, error)
+	Members(context.Context, domain.RecordedRouteID) ([]RouteCandidate, error)
+	Orphan(context.Context) (domain.RecordedRouteID, error)
+	// SaveCluster keeps the first route ID, removes the rest, and queues any
+	// released members. An empty match list removes the listed routes.
+	SaveCluster(context.Context, []domain.RecordedRouteID, domain.ActivityID, []RouteMatch) error
 }
 
 type RecordedRouteQuery struct {
