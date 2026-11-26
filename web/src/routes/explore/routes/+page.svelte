@@ -240,17 +240,6 @@
 						</li>
 					{/each}
 				</ul>
-				{#if routes.some((route) => route.track.length > 0)}
-					<a
-						class="mt-2 inline-block text-[10px] text-quiet hover:underline"
-						href="https://www.openstreetmap.org/copyright"
-						target="_blank"
-						rel="noreferrer"
-					>
-						© OpenStreetMap contributors
-					</a>
-				{/if}
-
 				{#if offset < total && routes.length > 0}
 					<button
 						class="mt-3 min-h-11 w-full surface px-3 text-sm font-semibold text-accent-300 hover:border-accent-500 disabled:opacity-50"

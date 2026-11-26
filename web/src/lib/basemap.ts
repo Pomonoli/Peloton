@@ -1,5 +1,4 @@
 import {
-	AttributionControl,
 	Map as MapLibreMap,
 	setWorkerUrl,
 	type MapOptions,
@@ -19,55 +18,10 @@ setWorkerUrl(workerUrl);
 // vector styles without an API key (CARTO's free raster basemap started
 // watermarking tiles with "API KEY REQUIRED" in 2026-08). Operators can point
 // VITE_MAP_STYLE_URL at any MapLibre style (MapTiler, keyed CARTO, self-hosted).
-// Attribution comes from the style's own sources (including TileJSON).
 const OPENFREEMAP = 'https://tiles.openfreemap.org/styles/';
 
-class CompactAttributionControl extends AttributionControl {
-	private stopAutoCollapse: (() => void) | undefined;
-
-	override onAdd(map: MapLibreMap): HTMLElement {
-		const control = super.onAdd(map);
-		const toggle = control.querySelector('summary')!;
-		const credits = control.querySelector('.maplibregl-ctrl-attrib-inner')!;
-		const expanded = () => control.classList.contains('maplibregl-compact-show');
-		let timer: number | undefined;
-		const cancel = () => window.clearTimeout(timer);
-
-		function showCredits() {
-			cancel();
-			if (control.classList.contains('maplibregl-attrib-empty')) return;
-			if (!expanded()) toggle.click();
-			// Give newly loaded credits five seconds before collapsing to the info icon.
-			timer = window.setTimeout(() => {
-				if (expanded() && !control.matches(':focus-within')) toggle.click();
-			}, 5000);
-		}
-
-		const observer = new MutationObserver(showCredits);
-		observer.observe(credits, { childList: true });
-		control.addEventListener('click', cancel);
-		control.addEventListener('focusin', cancel);
-		showCredits();
-		this.stopAutoCollapse = () => {
-			observer.disconnect();
-			cancel();
-			control.removeEventListener('click', cancel);
-			control.removeEventListener('focusin', cancel);
-		};
-		return control;
-	}
-
-	override onRemove(): void {
-		this.stopAutoCollapse?.();
-		this.stopAutoCollapse = undefined;
-		super.onRemove();
-	}
-}
-
 export function createMap(options: Omit<MapOptions, 'attributionControl'>): MapLibreMap {
-	return new MapLibreMap({ ...options, attributionControl: false }).addControl(
-		new CompactAttributionControl({ compact: true })
-	);
+	return new MapLibreMap({ ...options, attributionControl: false });
 }
 
 // Low-detail monochrome variants for data overlays (the heatmap), where the

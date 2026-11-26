@@ -503,7 +503,6 @@
 	}
 	.map-stage {
 		position: relative;
-		container-type: inline-size;
 		margin: 0;
 		inset: auto;
 		width: 100%;
@@ -595,7 +594,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.28rem 0.65rem;
-		max-width: calc(100% - 4rem);
+		max-width: calc(100% - 1.5rem);
 		padding: 0.38rem 0.55rem;
 		font-size: 0.68rem;
 		font-weight: 650;
@@ -681,11 +680,6 @@
 		}
 		.map-frame.compact {
 			--planner-map-height: 14rem;
-		}
-	}
-	@container (width < 500px) {
-		.map-legend {
-			bottom: 3.65rem;
 		}
 	}
 </style>

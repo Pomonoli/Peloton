@@ -159,6 +159,17 @@ async function pressRange(slider, key, count = 1) {
 	for (let i = 0; i < count; i++) await slider.press(key);
 }
 
+async function checkMapLegend(main) {
+	const legend = main.locator('.map-legend');
+	await legend.waitFor();
+	const gap = await legend.evaluate(
+		(element) =>
+			element.parentElement.getBoundingClientRect().bottom - element.getBoundingClientRect().bottom
+	);
+	assert.ok(Math.abs(gap - 12) < 1, `Expected a 12px gap beneath the legend, got ${gap}px`);
+	assert.equal(await main.locator('.maplibregl-ctrl-attrib').count(), 0);
+}
+
 async function drag(page, start, end, touch) {
 	if (touch) {
 		const cdp = await page.context().newCDPSession(page);
@@ -251,7 +262,8 @@ try {
 		const main = page.getByRole('main');
 		await main.getByRole('heading', { name: 'Routes', exact: true }).waitFor();
 		await main.getByText('2 routes found').waitFor();
-		await main.getByText('© OpenStreetMap', { exact: true }).first().waitFor();
+		await main.locator('svg[role="img"] image').first().waitFor({ state: 'attached' });
+		assert.equal(await main.getByText(/© OpenStreetMap/).count(), 0);
 		if (mobile) {
 			const subnav = page.getByRole('navigation', { name: 'Explore', exact: true });
 			assert.deepEqual(await subnav.getByRole('link').allTextContents(), [
@@ -320,24 +332,13 @@ try {
 		assert.equal(await main.getByRole('button', { name: /Waasland Loop/ }).count(), 0);
 		await page.goto(origin + '/routes/waasland/recorded/canal');
 		await main.getByRole('heading', { name: 'Canal Ride' }).waitFor();
-		const attribution = main.locator('.maplibregl-ctrl-attrib');
-		const toggle = attribution.locator('summary');
-		const osm = attribution.getByRole('link', { name: 'OpenStreetMap' });
-		await osm.waitFor();
-		await attribution.getByRole('link', { name: /OpenMapTiles/ }).waitFor();
-		assert.equal(await attribution.getByRole('link', { name: 'OpenFreeMap' }).count(), 0);
-		await osm.waitFor({ state: 'hidden', timeout: 8000 });
-		if (mobile) await toggle.tap();
-		else await toggle.press('Enter');
-		await osm.waitFor();
-		await toggle.click();
-		await osm.waitFor({ state: 'hidden' });
 		const fit = main.getByRole('button', { name: 'Fit route' });
 		await page.waitForFunction(
 			() =>
 				!document.querySelector('button[aria-label="Fit route"]')?.disabled &&
 				!!document.querySelector('.waas-marker-start')
 		);
+		await checkMapLegend(main);
 		assert.deepEqual(await metrics(main), [5.5, 20, 10, 80]);
 		const marker = main.locator('.waas-marker-start');
 		const initialMarker = await marker.boundingBox();
@@ -407,8 +408,7 @@ try {
 		const exit = main.getByRole('button', { name: 'Exit fullscreen' });
 		await exit.waitFor();
 		assert.ok((await canvas.boundingBox()).height > 800);
-		await toggle.click();
-		await osm.waitFor();
+		await checkMapLegend(main);
 		await exit.click();
 		await main.getByRole('button', { name: 'Enter fullscreen' }).waitFor();
 
@@ -482,6 +482,7 @@ try {
 			assert.equal(await main.getByRole('link', { name: 'Back to Routes' }).count(), 0);
 			const gpX = main.getByRole('button', { name: 'Download GPX' });
 			await gpX.waitFor();
+			await checkMapLegend(main);
 			const first = await metrics(main);
 			assert.ok(first[0] >= 69.5 && first[0] <= 70.5);
 			const target = main.getByRole('spinbutton', { name: 'Distance (km)', exact: true });

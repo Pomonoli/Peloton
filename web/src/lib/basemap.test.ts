@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const calls = vi.hoisted(() => [] as unknown[]);
-vi.mock('maplibre-gl', () => ({
-	AttributionControl: class {},
-	setWorkerUrl: (u: unknown) => calls.push(u)
-}));
+vi.mock('maplibre-gl', () => ({ setWorkerUrl: (u: unknown) => calls.push(u) }));
 vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: '/w.mjs' }));
 
 import { basemapStyle, basemapVariants } from './basemap';

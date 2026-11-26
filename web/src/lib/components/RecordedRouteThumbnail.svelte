@@ -117,13 +117,6 @@
 				{/each}
 			</g>
 		</svg>
-		{#if visible && map.tiles.some((tile) => !failedTiles.has(tile.url))}
-			<span
-				class="absolute right-0 bottom-0 rounded-tl bg-panel px-1 text-[10px] leading-tight text-zinc-300"
-			>
-				© OpenStreetMap
-			</span>
-		{/if}
 	{:else}
 		<div class="grid h-full place-items-center px-2 text-center text-xs text-quiet">
 			{m.routes_map_unavailable()}
