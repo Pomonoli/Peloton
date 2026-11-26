@@ -86,7 +86,7 @@
 	{/if}
 
 	{#if profile.length}
-		<WaasRouteMap recorded={route.track} compact />
+		<WaasRouteMap track={route.track} compact />
 	{:else}
 		<p class="rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-sm text-quiet">
 			{m.routes_map_unavailable()}

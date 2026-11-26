@@ -55,7 +55,14 @@ export interface Plan {
 	direction?: 'cw' | 'ccw';
 	visits?: Place[];
 }
+export interface ElevationStats {
+	ascent: number | null;
+	descent: number | null;
+	highest: number | null;
+	lowest: number | null;
+}
 export interface Ride extends Plan {
+	elevation: ElevationStats;
 	points: Point[];
 	streets: Section[];
 	sections: Section[];

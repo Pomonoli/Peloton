@@ -16,14 +16,21 @@ const WaasRouteMetrics = (() => {
 		return 2 * radius * Math.asin(Math.sqrt(Math.min(1, h)));
 	}
 
-	function gain(points, first = 0, last = points.length - 1) {
-		if (last <= first) return 0;
-		let bottom = points[first][2],
-			peak = bottom,
+	function gain(points, first = 0, last = points.length - 1, height = (point) => point[2], sign = 1) {
+		let bottom = null,
+			peak = 0,
 			rising = false,
 			total = 0;
-		for (let i = first + 1; i <= last; i++) {
-			const z = points[i][2];
+		for (let i = first; i <= last; i++) {
+			const sample = height(points[i]);
+			if (!Number.isFinite(sample)) {
+				if (rising) total += peak - bottom;
+				bottom = null;
+				rising = false;
+				continue;
+			}
+			const z = sign * sample;
+			if (bottom == null) bottom = z;
 			if (rising) {
 				peak = Math.max(peak, z);
 				if (peak - z >= noiseThreshold) {
@@ -40,6 +47,26 @@ const WaasRouteMetrics = (() => {
 			}
 		}
 		return total + (rising ? peak - bottom : 0);
+	}
+
+	function elevation(lines, height = (point) => point[2]) {
+		let ascent = 0, descent = 0, highest = null, lowest = null;
+		let hasLeg = false;
+		for (const line of lines) {
+			ascent += gain(line, 0, line.length - 1, height);
+			descent += gain(line, 0, line.length - 1, height, -1);
+			let previous = null;
+			for (const point of line) {
+				const z = height(point);
+				if (Number.isFinite(z)) {
+					highest = highest == null ? z : Math.max(highest, z);
+					lowest = lowest == null ? z : Math.min(lowest, z);
+					hasLeg ||= previous != null;
+					previous = z;
+				} else previous = null;
+			}
+		}
+		return { ascent: hasLeg ? ascent : null, descent: hasLeg ? descent : null, highest, lowest };
 	}
 
 	function measure(input) {
@@ -174,7 +201,7 @@ const WaasRouteMetrics = (() => {
 		});
 	}
 
-	return { distance, gain, measure, normalize, repeatedPassages };
+	return { distance, gain, elevation, measure, normalize, repeatedPassages };
 })();
 
 export { WaasRouteMetrics };

@@ -480,3 +480,56 @@
 		padding-inline: 0.25rem;
 	}
 }
+
+@layer components {
+	.planner-workspace {
+		display: grid;
+		align-items: start;
+		gap: 0.75rem;
+	}
+
+	.planner-mobile-actions {
+		position: fixed;
+		z-index: 30;
+		inset: auto 0 var(--mobile-tabbar-size, env(safe-area-inset-bottom, 0px));
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.5rem var(--space-page);
+		border-top: 1px solid var(--line-subtle);
+		background: var(--surface-panel);
+		box-shadow: var(--panel-shadow);
+	}
+}
+
+@media (width < 48rem) {
+	html:has(.planner-mobile-actions) {
+		scroll-padding-bottom: calc(var(--mobile-tabbar-size, 0px) + 4rem);
+	}
+
+	.planner-has-actions {
+		padding-bottom: 3.75rem;
+		scroll-margin-bottom: 3.75rem;
+	}
+
+	body:not(:has(.mobile-tabbar)) .planner-mobile-actions {
+		bottom: env(safe-area-inset-bottom, 0px);
+	}
+}
+
+@media (width >= 48rem) {
+	.planner-mobile-actions {
+		display: none;
+	}
+}
+
+@media (width >= 64rem) {
+	.planner-workspace {
+		grid-template-columns: minmax(0, 1fr) minmax(17.5rem, 19rem);
+		gap: 1rem;
+		grid-template-rows: auto auto 1fr;
+	}
+
+	.planner-side {
+		grid-area: 1 / 2 / span 3;
+	}
+}

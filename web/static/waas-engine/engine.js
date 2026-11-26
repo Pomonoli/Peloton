@@ -717,11 +717,13 @@ export function createPlanner(spines) {
 			meters: section.to - section.from,
 			points: points.slice(pointIndex(points, section.from), pointIndex(points, section.to) + 1)
 		}));
+		const elevation = WaasRouteMetrics.elevation([points]);
 		return {
 			...plan,
 			chunks,
 			meters: points.at(-1)?.[3] || 0,
-			gain: WaasRouteMetrics.gain(points),
+			gain: elevation.ascent ?? 0,
+			elevation,
 			points,
 			bridges,
 			climbs,

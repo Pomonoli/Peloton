@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
+import { WaasRouteMetrics } from '../static/waas-engine/route-metrics.js';
 import { chromium } from 'playwright-core';
 
 const originalGPX =
@@ -24,7 +26,8 @@ await new Promise((done) => server.listen(0, '127.0.0.1', done));
 const origin = 'http://127.0.0.1:' + server.address().port;
 const build = fileURLToPath(new URL('../build/', import.meta.url));
 const browser = await chromium.launch({
-	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+	args: ['--enable-unsafe-swiftshader']
 });
 const riders = [
 	{ id: 'a', username: 'ada', display_name: 'Ada', avatar_url: '', rides: 2, best_speed_kmh: 34.2 },
@@ -72,8 +75,91 @@ const canal = {
 	id: 'canal',
 	name: 'Canal Ride',
 	type: 'point_to_point',
-	riders: riders.slice(0, 1)
+	riders: riders.slice(0, 1),
+	track: [
+		[
+			[51, 4, 20, 0],
+			[51.004, 4.005, 30, 800],
+			[51.008, 4.015, 40, 1800]
+		],
+		[
+			[51.02, 4.025, 80, 3500],
+			[51.026, 4.03, 70, 4900],
+			[51.03, 4.045, null, 7200]
+		]
+	].map((line) =>
+		line.map(([lat, lon, elevation_m, distance_m]) => ({ lat, lon, elevation_m, distance_m }))
+	)
 };
+
+function planningLoop(km, bearings) {
+	const points = Array.from({ length: 361 }, (_, i) => {
+		const angle = (i * Math.PI) / 180 + bearings;
+		const radius = km / (Math.PI * 2);
+		return [
+			51.164 + (radius * Math.sin(angle)) / 111.2,
+			4.139 + (radius * Math.cos(angle)) / 69.7,
+			35 + 17 * Math.sin(angle * 4) + 10 * Math.sin(angle)
+		];
+	});
+	const measured = WaasRouteMetrics.measure(points);
+	return {
+		...measured,
+		from: 'sn',
+		to: 'sn',
+		climbs: [],
+		blocked: [],
+		rough: 0,
+		catalogRoute: true
+	};
+}
+const catalogs = new Map([
+	['route-spines.js', 'window.WAAS_SPINES = {};'],
+	[
+		'terrain-data.js',
+		'window.WAAS_DATA = {"routes":{},"circuits":[],"bounds":[[51,4],[51.3,4.3]]};'
+	],
+	[
+		'circuits-climb-sn.js',
+		'window.WAAS_CIRCUITS["climb-sn"] = ' +
+			JSON.stringify({
+				seventy: planningLoop(70, 0),
+				seventyFive: planningLoop(75, Math.PI / 5)
+			}) +
+			';'
+	],
+	['focus-climb-sn.bin', gzipSync(JSON.stringify({ routes: [] }))]
+]);
+
+async function metrics(main) {
+	const values = await main
+		.getByRole('region', { name: 'Route summary' })
+		.locator('dd')
+		.allTextContents();
+	return values.map((value) => Number.parseFloat(value));
+}
+
+async function pressRange(slider, key, count = 1) {
+	for (let i = 0; i < count; i++) await slider.press(key);
+}
+
+async function drag(page, start, end, touch) {
+	if (touch) {
+		const cdp = await page.context().newCDPSession(page);
+		try {
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [end] });
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		} finally {
+			await cdp.detach();
+		}
+	} else {
+		await page.mouse.move(start.x, start.y);
+		await page.mouse.down();
+		await page.mouse.move(end.x, end.y, { steps: 6 });
+		await page.mouse.up();
+	}
+}
 
 try {
 	for (const width of [1440, 390, 320]) {
@@ -82,7 +168,9 @@ try {
 			viewport: { width, height: 900 },
 			locale: 'en-US',
 			timezoneId: 'UTC',
-			colorScheme: mobile ? 'dark' : 'light'
+			colorScheme: mobile ? 'dark' : 'light',
+			hasTouch: mobile,
+			ignoreHTTPSErrors: true
 		});
 		const errors = [];
 		page.on('pageerror', (error) => errors.push(error.message));
@@ -90,6 +178,19 @@ try {
 			const url = new URL(request.request().url());
 			if (url.hostname === 'tiles.openfreemap.org') {
 				return request.fulfill({ json: { version: 8, sources: {}, layers: [] } });
+			}
+			if (url.hostname === 'api.open-meteo.com') {
+				return request.fulfill({
+					json: {
+						utc_offset_seconds: 0,
+						current: {
+							time: new Date().toISOString().slice(0, 16),
+							wind_speed_10m: 12,
+							wind_direction_10m: 225,
+							wind_gusts_10m: 20
+						}
+					}
+				});
 			}
 			if (url.origin !== origin) return request.abort();
 			const { pathname, searchParams } = url;
@@ -114,6 +215,10 @@ try {
 			if (pathname === '/api/routes/waasland') return request.fulfill({ json: loop });
 			if (pathname === '/api/routes/canal') return request.fulfill({ json: canal });
 			if (pathname === '/api/routes/waasland/gpx') return request.continue();
+			if (pathname.startsWith('/api/route-planner/waasland/data/')) {
+				const body = catalogs.get(pathname.split('/').at(-1));
+				return body ? request.fulfill({ body }) : request.fulfill({ status: 404 });
+			}
 			if (pathname.startsWith('/api/')) return request.fulfill({ json: {} });
 			return request.fulfill({
 				path: resolve(
@@ -173,7 +278,11 @@ try {
 		await panel.getByRole('link', { name: 'Open in Route Planner' }).click();
 		await page.waitForURL(origin + '/routes/waasland/recorded/waasland');
 		await main.getByRole('heading', { name: 'Waasland Loop' }).waitFor();
-		await main.getByRole('checkbox', { name: 'Reverse direction' }).check();
+		await main.getByRole('button', { name: 'Reverse direction' }).click();
+		assert.equal(
+			await main.getByRole('button', { name: 'Reverse direction' }).getAttribute('aria-pressed'),
+			'true'
+		);
 		const edited = page.waitForEvent('download');
 		await main.getByRole('button', { name: 'Export edited GPX' }).click();
 		const exportedText = await readFile(await (await edited).path(), 'utf8');
@@ -187,10 +296,178 @@ try {
 		await main.getByText('1 route found').waitFor();
 		await main.getByRole('button', { name: /Canal Ride/ }).waitFor();
 		assert.equal(await main.getByRole('button', { name: /Waasland Loop/ }).count(), 0);
+		await page.goto(origin + '/routes/waasland/recorded/canal');
+		await main.getByRole('heading', { name: 'Canal Ride' }).waitFor();
+		const fit = main.getByRole('button', { name: 'Fit route' });
+		await page.waitForFunction(
+			() =>
+				!document.querySelector('button[aria-label="Fit route"]')?.disabled &&
+				!!document.querySelector('.waas-marker-start')
+		);
+		assert.deepEqual(await metrics(main), [5.5, 20, 10, 80]);
+		const marker = main.locator('.waas-marker-start');
+		const initialMarker = await marker.boundingBox();
+		await main.getByRole('button', { name: 'Zoom in' }).click();
+		await page.waitForFunction(
+			(x) =>
+				Math.abs(document.querySelector('.waas-marker-start').getBoundingClientRect().x - x) > 8,
+			initialMarker.x
+		);
+		await fit.click();
+
+		const canvas = main.locator('.maplibregl-canvas');
+		const mapBox = await canvas.boundingBox();
+		const center = { x: mapBox.x + mapBox.width / 2, y: mapBox.y + mapBox.height / 2 };
+		const scroll = await page.evaluate(() => scrollY);
+		if (mobile) {
+			const cdp = await page.context().newCDPSession(page);
+			const touch = (type, touchPoints) =>
+				cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+			for (const [offset, spread] of [
+				[24, 68],
+				[57, 0]
+			]) {
+				await touch(
+					'touchStart',
+					spread
+						? [
+								{ x: center.x - offset, y: center.y },
+								{ x: center.x + offset, y: center.y }
+							]
+						: [center]
+				);
+				await touch(
+					'touchMove',
+					spread
+						? [
+								{ x: center.x - spread, y: center.y },
+								{ x: center.x + spread, y: center.y }
+							]
+						: [{ x: center.x + offset, y: center.y + 26 }]
+				);
+				await touch('touchEnd', []);
+			}
+			await cdp.detach();
+		} else {
+			await page.mouse.move(center.x, center.y);
+			await page.mouse.down();
+			await page.mouse.move(center.x + 110, center.y + 30, { steps: 7 });
+			await page.mouse.up();
+			await page.mouse.wheel(0, -320);
+		}
+		await page.waitForFunction(
+			(x) =>
+				Math.abs(document.querySelector('.waas-marker-start').getBoundingClientRect().x - x) > 8,
+			initialMarker.x
+		);
+		assert.equal(await page.evaluate(() => scrollY), scroll);
+		await fit.click();
+
+		if (width === 320) {
+			// Exercise the dialog used when element fullscreen is unavailable.
+			await page.evaluate(() => {
+				HTMLElement.prototype.requestFullscreen = undefined;
+			});
+		}
+		await main.getByRole('button', { name: 'Enter fullscreen' }).click();
+		const exit = main.getByRole('button', { name: 'Exit fullscreen' });
+		await exit.waitFor();
+		assert.ok((await canvas.boundingBox()).height > 800);
+		await exit.click();
+		await main.getByRole('button', { name: 'Enter fullscreen' }).waitFor();
+
+		const chart = main.getByRole('slider', { name: 'Position on route' });
+		if (mobile) {
+			await chart.tap();
+		} else {
+			await chart.hover();
+		}
+		await main.locator('[data-profile-tooltip]').waitFor();
+		await main.locator('.waas-marker-profile').waitFor();
+		const plot = await chart.boundingBox();
+		const plotMiddle = plot.y + plot.height / 2;
+		await drag(
+			page,
+			{ x: plot.x + 12, y: plotMiddle },
+			{ x: plot.x + plot.width * 0.7, y: plotMiddle },
+			mobile
+		);
+		assert.ok(Number(await chart.inputValue()) > 3000);
+		await chart.press('Home');
+		assert.match(await chart.getAttribute('aria-valuetext'), /0 km, 20 m/);
+
+		await main.getByRole('button', { name: 'Reverse direction' }).click();
+		assert.deepEqual(await metrics(main), [5.5, 10, 20, 80]);
+		await chart.press('Home');
+		assert.match(await chart.getAttribute('aria-valuetext'), /0 km, —/);
+		const trim = main.getByRole('slider', { name: 'Trim start' });
+		await trim.scrollIntoViewIfNeeded();
+		const range = await trim.boundingBox();
+		const thumbMiddle = range.y + range.height / 2;
+		await drag(
+			page,
+			{ x: range.x + 12, y: thumbMiddle },
+			{ x: range.x + range.width * 0.3, y: thumbMiddle },
+			mobile
+		);
+		assert.ok(Number(await trim.inputValue()) > 700);
+		await trim.press('Home');
+		await pressRange(trim, 'ArrowRight', 10);
+		await pressRange(main.getByRole('slider', { name: 'Trim end' }), 'ArrowLeft', 15);
+		assert.ok((await metrics(main))[0] < 5.5);
+		await main.getByText('Trimmed', { exact: true }).waitFor();
+		const cut = page.waitForEvent('download');
+		await main.getByRole('button', { name: 'Export edited GPX' }).click();
+		const cutText = await readFile(await (await cut).path(), 'utf8');
+		const segments = await page.evaluate((xml) => {
+			const doc = new DOMParser().parseFromString(xml, 'application/xml');
+			if (doc.querySelector('parsererror')) return [];
+			return Array.from(doc.querySelectorAll('trkseg'), (segment) =>
+				Array.from(segment.querySelectorAll('trkpt'), (pt) => ({
+					lat: Number(pt.getAttribute('lat')),
+					elevation: pt.querySelector('ele')?.textContent ?? null
+				}))
+			);
+		}, cutText);
+		assert.equal(segments.length, 2);
+		assert.ok(segments[0][0].lat > segments[0].at(-1).lat);
+		assert.equal(segments[0][0].elevation, null);
+		assert.equal(segments[0].at(-1).elevation, '80.0');
+		assert.ok(segments[1].at(-1).lat > 51);
+		await main
+			.getByRole('button', { name: 'Reset edits' })
+			.filter({ hasText: 'Reset edits' })
+			.click();
+		assert.deepEqual(await metrics(main), [5.5, 20, 10, 80]);
+
+		if (width !== 320) {
+			await page.goto(origin + '/routes/waasland');
+			await main.getByRole('heading', { name: 'Waasland route planner' }).waitFor();
+			const gpX = main.getByRole('button', { name: 'Download GPX' });
+			await gpX.waitFor();
+			const first = await metrics(main);
+			assert.ok(first[0] >= 69.5 && first[0] <= 70.5);
+			const target = main.getByRole('spinbutton', { name: 'Distance (km)', exact: true });
+			await target.fill('75');
+			await target.blur();
+			await main.getByRole('button', { name: 'Plan ride' }).click();
+			await gpX.waitFor();
+			const next = await metrics(main);
+			assert.ok(next[0] >= 74.5 && next[0] <= 75.5);
+			assert.ok(next[1] && next[2] && next[3]);
+			const planned = page.waitForEvent('download');
+			await gpX.click();
+			const xml = await readFile(await (await planned).path(), 'utf8');
+			assert.match(xml, /<gpx version="1.1"/);
+			assert.match(xml, /<trkpt .+<ele>/);
+		}
+
 		assert.deepEqual(errors, []);
 		await page.close();
 	}
-	console.log('Recorded routes, desktop and mobile, including GPX and planner editing passed.');
+	console.log(
+		'Route catalog and planner passed on desktop and mobile, including map, profile, edits and GPX.'
+	);
 } finally {
 	await browser.close();
 	await new Promise((done) => server.close(done));

@@ -34,7 +34,19 @@ export const icons = {
 	swap: 'M3 8h17l-4-4 M21 16H4l4 4',
 	upload: 'M12 16V3m-4 4 4-4 4 4 M4 15v5h16v-5',
 	search: 'M16 16l5 5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0z',
-	filter: 'M4 7h16 M7 12h10 M10 17h4'
+	filter: 'M4 7h16 M7 12h10 M10 17h4',
+	download: 'M12 3v12m-4-4 4 4 4-4 M4 16v4h16v-4',
+	ascend: 'M3 18 18 6 M10 6h8v8',
+	descend: 'M3 6l15 12 M10 18h8v-8',
+	plus: 'M12 5v14 M5 12h14',
+	minus: 'M5 12h14',
+	fit: 'M8 4H4v4 M16 4h4v4 M20 16v4h-4 M4 16v4h4 M12 8v8 M8 12h8',
+	expand: 'M8 4H4v4 M16 4h4v4 M20 16v4h-4 M4 16v4h4',
+	shrink: 'M4 8h4V4 M20 8h-4V4 M16 20v-4h4 M8 20v-4H4',
+	layers: 'm12 3 9 5-9 5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5',
+	share: 'M12 14V3m-4 4 4-4 4 4 M6 12H4v8h16v-8h-2',
+	reset: 'M4 10a8 8 0 1 1 1.5 7 M4 4v6h6',
+	flag: 'M5 21V4 M5 4c5-4 9 4 14 0v10c-5 4-9-4-14 0'
 } as const;
 
 export type IconName = keyof typeof icons;
