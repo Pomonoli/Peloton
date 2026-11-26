@@ -4,6 +4,7 @@ const locale = vi.hoisted(() => ({ current: 'de' }));
 vi.mock('#lib/paraglide/runtime.js', () => ({ getLocale: () => locale.current }));
 
 import {
+	formatClockTime,
 	formatDate,
 	formatDateOnly,
 	formatDistance,
@@ -21,7 +22,6 @@ import {
 } from './format';
 import { setPrefs } from './prefs.svelte';
 
-// ICU versions differ on the space before AM/PM.
 const norm = (s: string) => s.replace(/[\u00a0\u202f]/g, ' ');
 
 // Dates are rendered in local time; pin it.
@@ -29,7 +29,7 @@ process.env.TZ = 'UTC';
 
 beforeEach(() => {
 	locale.current = 'de';
-	setPrefs({ dateFormat: '', timeFormat: '', units: 'metric' });
+	setPrefs({ dateFormat: '', units: 'metric' });
 });
 
 describe('null handling', () => {
@@ -145,16 +145,24 @@ describe('date formatting', () => {
 		expect(formatDateOnly(iso)).toBe('Mar 5, 2024');
 	});
 
-	it('time formats', () => {
-		setPrefs({ dateFormat: 'iso', timeFormat: '24h' });
+	it.each(['en', 'de', 'nl-BE'])('uses the 24-hour clock in %s', (language) => {
+		locale.current = language;
+		setPrefs({ dateFormat: 'iso' });
 		expect(formatDate(iso)).toBe('2024-03-05 14:07');
+		expect(formatClockTime('2024-03-05T00:00:00Z')).toBe('00:00');
+		expect(formatClockTime('2024-03-05T08:05:00Z')).toBe('08:05');
+		expect(formatClockTime('2024-03-05T12:00:00Z')).toBe('12:00');
+		expect(formatClockTime('2024-03-05T17:24:03Z', { seconds: true })).toBe('17:24:03');
+	});
+
+	it('honors an explicit timezone including summer and winter offsets', () => {
+		const options = { timeZone: 'Europe/Brussels' };
+		expect(formatClockTime('2024-07-04T22:00:00Z', options)).toBe('00:00');
+		expect(formatClockTime('2024-01-04T22:00:00Z', options)).toBe('23:00');
 		locale.current = 'en';
-		setPrefs({ timeFormat: '12h' });
-		expect(norm(formatDate(iso))).toBe('2024-03-05 2:07 PM');
-		setPrefs({ timeFormat: '' });
-		expect(norm(formatDate(iso))).toBe('2024-03-05 2:07 PM');
-		locale.current = 'de';
-		expect(formatDate(iso)).toBe('2024-03-05 14:07');
+		expect(formatDate('2024-03-05T17:24:03Z', { numericDate: true, seconds: true })).toBe(
+			'3/5/2024 17:24:03'
+		);
 	});
 });
 

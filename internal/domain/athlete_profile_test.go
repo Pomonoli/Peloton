@@ -74,3 +74,15 @@ func TestEstimateTSSUsesResolvedFTP(t *testing.T) {
 		t.Fatalf("higher FTP should lower TSS: %.2f vs %.2f", tss260, tss200)
 	}
 }
+
+func TestEstimateTSSDurationFallback(t *testing.T) {
+	summary := ActivitySummary{AvgPowerW: new(0), AvgHeartRateBpm: new(-1)}
+	if score, intensity, ok := EstimateTSS(summary, time.Hour, AthleteThresholds{}); !ok || score != 49 || intensity != 0.70 {
+		t.Fatalf("duration-only score = %v, intensity = %v, supported = %v", score, intensity, ok)
+	}
+	for _, duration := range []time.Duration{0, -time.Second} {
+		if _, _, ok := EstimateTSS(summary, duration, AthleteThresholds{}); ok {
+			t.Fatalf("unexpected score for invalid moving time %s", duration)
+		}
+	}
+}

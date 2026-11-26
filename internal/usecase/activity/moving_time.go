@@ -85,7 +85,7 @@ type activityTimingStore interface {
 
 // refreshActivityTiming updates canonical moving time and its derived metrics.
 // The caller serializes this with owner activity updates.
-func refreshActivityTiming(ctx context.Context, store activityTimingStore, streams port.StreamRepo, overrides port.ClassificationOverrideRepo, archive port.ActivityTimingArchive, id domain.ActivityID) (bool, error) {
+func (uc *RecomputeActivityFromSources) refreshActivityTiming(ctx context.Context, store activityTimingStore, streams port.StreamRepo, overrides port.ClassificationOverrideRepo, archive port.ActivityTimingArchive, id domain.ActivityID) (bool, error) {
 	act, err := store.GetActivity(ctx, id)
 	if errors.Is(err, domain.ErrNotFound) || (err == nil && act.IsDeleted()) {
 		return false, nil
@@ -94,48 +94,36 @@ func refreshActivityTiming(ctx context.Context, store activityTimingStore, strea
 		return false, err
 	}
 	beforeMoving, beforeSpeed := act.MovingDuration, act.Summary.AvgSpeedMps
+	before := act.Summary
+	winner, _ := act.MergeProvenance.Winner(domain.FieldGroupTrainingLoad)
+	sources, err := store.ListSourcesForActivity(ctx, id)
+	if err != nil {
+		return false, err
+	}
 	if canEstimateMovingTime(&act) && !act.ProviderRestricted {
 		overlay, err := loadClassificationOverride(ctx, overrides, id)
 		if err != nil {
 			return false, err
 		}
 		if overlay.MovingDuration == nil {
-			sources, err := store.ListSourcesForActivity(ctx, id)
-			if err != nil {
-				return false, err
-			}
 			canonical, _ := domain.CanonicalSources(sources)
 			if err := applyMovingTime(ctx, &act, canonical, newSummaryStreamReader(ctx, streams), archive); err != nil {
 				return false, err
 			}
-			refreshEstimatedTrainingStress(&act, beforeMoving, canonical)
 		}
 	}
 	act.RecalculateAverageSpeed()
-	if act.MovingDuration == beforeMoving && sameMetric(beforeSpeed, act.Summary.AvgSpeedMps) {
+	if err := uc.refreshTrainingStress(ctx, &act, sources); err != nil {
+		return false, err
+	}
+	next, _ := act.MergeProvenance.Winner(domain.FieldGroupTrainingLoad)
+	if act.MovingDuration == beforeMoving && sameMetric(beforeSpeed, act.Summary.AvgSpeedMps) &&
+		winner == next && sameMetric(before.TSS, act.Summary.TSS) &&
+		sameMetric(before.IntensityFactor, act.Summary.IntensityFactor) {
 		return false, nil
 	}
 	if err := store.SaveActivityTiming(ctx, act); err != nil {
 		return false, err
 	}
 	return true, nil
-}
-
-func refreshEstimatedTrainingStress(act *domain.Activity, before time.Duration, sources []domain.ActivitySource) {
-	if act.MovingDuration == before || before <= 0 || act.Summary.TSS == nil {
-		return
-	}
-	winner, _ := act.MergeProvenance.Winner(domain.FieldGroupTrainingLoad)
-	for _, source := range sources {
-		if source.ID == winner && source.Parsed.Summary.TSS != nil {
-			return
-		}
-	}
-	// Estimated TSS is proportional to moving time. Preserve the intensity
-	// and athlete thresholds used for the original estimate.
-	if act.MovingDuration <= 0 {
-		act.Summary.TSS = nil
-		return
-	}
-	act.Summary.TSS = new(*act.Summary.TSS * act.MovingDuration.Seconds() / before.Seconds())
 }

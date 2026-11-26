@@ -14,13 +14,12 @@
 	import { prefs, setPrefs } from '#lib/prefs.svelte.js';
 	import { formatDate, formatDistance, formatElevation } from '#lib/format.js';
 	import { connectClients } from '#lib/connect.js';
-	import { DateFormat, TimeFormat, UnitSystem } from '#lib/proto/cairn/v1/auth_pb.js';
+	import { DateFormat, UnitSystem } from '#lib/proto/cairn/v1/auth_pb.js';
 
 	let { data } = $props();
 
 	// Seeded from the shared store (which the layout filled from the user).
 	let dateFormat = $state(prefs.dateFormat);
-	let timeFormat = $state(prefs.timeFormat);
 	let units = $state(prefs.units);
 	let saved = $state(false);
 	let error = $state<string | null>(null);
@@ -47,13 +46,6 @@
 					? DateFormat.EU
 					: DateFormat.UNSPECIFIED;
 	}
-	function timeEnum(s: string): TimeFormat {
-		return s === '24h'
-			? TimeFormat.TIME_FORMAT_24H
-			: s === '12h'
-				? TimeFormat.TIME_FORMAT_12H
-				: TimeFormat.TIME_FORMAT_UNSPECIFIED;
-	}
 	function unitEnum(s: string): UnitSystem {
 		return s === 'imperial' ? UnitSystem.IMPERIAL : UnitSystem.METRIC;
 	}
@@ -61,12 +53,12 @@
 	// Persist + apply immediately site-wide on any change.
 	async function save() {
 		error = null;
-		setPrefs({ dateFormat, timeFormat, units });
+		setPrefs({ dateFormat, units });
 		try {
 			const clients = connectClients(fetch, page.url.origin);
 			await clients.auth.updateUserPreferences({
 				dateFormat: dateEnum(dateFormat),
-				timeFormat: timeEnum(timeFormat),
+				timeFormat: data.user.timeFormat,
 				units: unitEnum(units)
 			});
 			saved = true;
@@ -153,7 +145,7 @@
 		</div>
 		<p class="mb-4 text-xs text-zinc-500">Applied everywhere, on every device you sign in on.</p>
 
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div>
 				<label for="date-fmt" class="mb-1 block text-xs text-zinc-500">Date format</label>
 				<select
@@ -166,19 +158,6 @@
 					<option value="iso">ISO — 2026-06-02</option>
 					<option value="us">US — 06/02/2026</option>
 					<option value="eu">EU — 02.06.2026</option>
-				</select>
-			</div>
-			<div>
-				<label for="time-fmt" class="mb-1 block text-xs text-zinc-500">Time format</label>
-				<select
-					id="time-fmt"
-					bind:value={timeFormat}
-					onchange={save}
-					class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-accent-400 focus:outline-none"
-				>
-					<option value="">Locale default</option>
-					<option value="24h">24-hour — 14:30</option>
-					<option value="12h">12-hour — 2:30 PM</option>
 				</select>
 			</div>
 			<div>

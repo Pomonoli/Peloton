@@ -19,9 +19,8 @@ func ValidTrainingStress(score *float64) bool {
 //
 // Providers rarely hand us a ready-made TSS (Strava never does), so we estimate
 // it from whatever intensity signal the merged summary carries. The estimate is
-// deliberately simple and self-contained; per-user FTP / threshold-HR / pace
-// thresholds are a v2 refinement that will replace the defaults below without
-// changing call sites.
+// deliberately simple and self-contained. Athlete FTP and threshold heart
+// rate take precedence over the defaults below.
 
 // Default thresholds used when the user has not configured personal values.
 const (
@@ -34,8 +33,9 @@ const (
 // and moving duration, using the best available intensity signal:
 //
 //  1. Power:  IF = NormalizedPower / FTP        (preferred — cycling)
-//  2. Heart:  IF = avgHR / thresholdHR          (fallback — most other sports)
-//  3. Neither: a generic default intensity
+//  2. Average power (scaled to approximate normalized power)
+//  3. Heart:  IF = avgHR / thresholdHR
+//  4. Duration only: a generic default intensity
 //
 // FTP and threshold HR come from the athlete's profile, resolved at the
 // activity's date (th); zero fields fall back to the engine defaults so a user
@@ -51,27 +51,34 @@ func EstimateTSS(s ActivitySummary, moving time.Duration, th AthleteThresholds) 
 		return 0, 0, false
 	}
 	if_ := estimateIntensityFactor(s, th)
-	return hours * if_ * if_ * 100, if_, true
+	return 100 * if_ * if_ * hours, if_, true
 }
+
+// HasTrainingStressSensor reports whether the estimate uses a positive sensor reading.
+func HasTrainingStressSensor(s ActivitySummary) bool {
+	return positiveSensor(s.NormalizedPowerW) || positiveSensor(s.AvgPowerW) || positiveSensor(s.AvgHeartRateBpm)
+}
+
+func positiveSensor(value *int) bool { return value != nil && *value > 0 }
 
 func estimateIntensityFactor(s ActivitySummary, th AthleteThresholds) float64 {
 	ftp := th.FTPWatts
-	if ftp <= 0 {
+	if !(ftp > 0) || math.IsInf(ftp, 1) {
 		ftp = defaultFTPWatts
 	}
 	lthr := th.ThresholdHRBpm
-	if lthr <= 0 {
+	if !(lthr > 0) || math.IsInf(lthr, 1) {
 		lthr = defaultThresholdHRBpm
 	}
 	var if_ float64
 	switch {
-	case s.NormalizedPowerW != nil && *s.NormalizedPowerW > 0:
+	case positiveSensor(s.NormalizedPowerW):
 		if_ = float64(*s.NormalizedPowerW) / ftp
-	case s.AvgPowerW != nil && *s.AvgPowerW > 0:
+	case positiveSensor(s.AvgPowerW):
 		// No normalized power: approximate NP ≈ 1.05 × average for the
 		// variability of real-world efforts.
 		if_ = float64(*s.AvgPowerW) * 1.05 / ftp
-	case s.AvgHeartRateBpm != nil && *s.AvgHeartRateBpm > 0:
+	case positiveSensor(s.AvgHeartRateBpm):
 		if_ = float64(*s.AvgHeartRateBpm) / lthr
 	default:
 		if_ = defaultIntensity

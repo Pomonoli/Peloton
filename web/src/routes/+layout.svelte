@@ -40,8 +40,7 @@
 		if (data.user) {
 			setPrefs({
 				units: data.user.units,
-				dateFormat: data.user.dateFormat,
-				timeFormat: data.user.timeFormat
+				dateFormat: data.user.dateFormat
 			});
 		}
 	});

@@ -241,7 +241,14 @@ func mergeApplyGroups(out *Activity, ordered []ActivitySource, policy MergePolic
 		}
 
 		// A manual per-field source pin (override) wins over the cascade.
-		winner, ok := overrideWinner(ordered, g, overrides)
+		var winner ActivitySource
+		var ok bool
+		if g == FieldGroupTrainingLoad {
+			winner, ok = TrainingStressSource(ordered, policy, overrides)
+		}
+		if !ok {
+			winner, ok = overrideWinner(ordered, g, overrides)
+		}
 		if !ok {
 			winner, ok = pickWinner(ordered, g, policy)
 		}
@@ -268,6 +275,22 @@ func mergeApplyGroups(out *Activity, ordered []ActivitySource, policy MergePolic
 			out.MergeProvenance.Set(g, winner.ID)
 		}
 	}
+}
+
+// TrainingStressSource selects a valid imported score from canonical sources
+// in newest-first order. A source that only supplies intensity cannot mask it.
+func TrainingStressSource(sources []ActivitySource, policy MergePolicy, overrides map[FieldGroup]SourceID) (ActivitySource, bool) {
+	provides := func(s *ActivitySource) bool {
+		return s.Status != SourceStatusDetached && ValidTrainingStress(s.Parsed.Summary.TSS)
+	}
+	if pinned, ok := overrides[FieldGroupTrainingLoad]; ok {
+		for _, source := range sources {
+			if source.ID == pinned && provides(&source) {
+				return source, true
+			}
+		}
+	}
+	return pickWinnerBy(sources, policy.PriorityFor(FieldGroupTrainingLoad), provides)
 }
 
 // mergeDeriveInvariants fills fields derivable from the merged ones.

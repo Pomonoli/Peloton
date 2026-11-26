@@ -31,10 +31,16 @@ func TestAnalysisRangeAndCoverage(t *testing.T) {
 	add(rider, 4000, domain.ActivitySummary{TSS: new(50.0)}, false)
 	add(rider, 91, domain.ActivitySummary{TSS: new(250.0)}, false)
 	zero := add(rider, 30, domain.ActivitySummary{TSS: new(0.0)}, false)
+	sourceID := domain.SourceID(uuid.New())
 	if err := repo.SaveSource(t.Context(), domain.ActivitySource{
-		ID: domain.SourceID(uuid.New()), ActivityID: zero, Provider: "manual",
+		ID: sourceID, ActivityID: zero, Provider: "manual",
 		Parsed: domain.ActivitySourcePayload{Summary: domain.ActivitySummary{TSS: new(0.0)}},
 	}); err != nil {
+		t.Fatal(err)
+	}
+	activity := repo.Activities[zero]
+	activity.MergeProvenance = domain.MergeProvenance{domain.FieldGroupTrainingLoad: sourceID}
+	if err := repo.SaveActivity(t.Context(), activity); err != nil {
 		t.Fatal(err)
 	}
 	add(rider, 8, domain.ActivitySummary{TSS: new(70.2), AvgHeartRateBpm: new(145)}, false)

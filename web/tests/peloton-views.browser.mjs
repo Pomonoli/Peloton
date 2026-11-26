@@ -136,7 +136,8 @@ try {
 		const mobile = width < 768;
 		const page = await browser.newPage({
 			viewport: { width, height: 900 },
-			locale: 'en-US',
+			locale: mobile ? 'en-US' : 'de-DE',
+			timezoneId: 'Europe/Brussels',
 			hasTouch: mobile,
 			colorScheme: width === 360 || width === 430 ? 'dark' : 'light'
 		});
@@ -145,6 +146,7 @@ try {
 		let activityQuery;
 		let analysisQuery;
 		let selfHistory = 'typical';
+		let manualActivity;
 		page.on('pageerror', (error) => errors.push(error.message));
 		let catalogSort = [];
 		let weatherRequests = 0;
@@ -205,9 +207,19 @@ try {
 					)
 				});
 			}
+			if (path === '/api/activities/manual' && route.request().method() === 'POST') {
+				manualActivity = route.request().postDataJSON();
+				return route.fulfill({ json: { activity_id: recent.id } });
+			}
 			const fixtures = {
 				'/cairn.v1.AuthService/GetCurrentUser': {
-					user: { id: 'ada', username: 'ada', displayName: 'Ada', emailVerified: true },
+					user: {
+						id: 'ada',
+						username: 'ada',
+						displayName: 'Ada',
+						emailVerified: true,
+						timeFormat: 'TIME_FORMAT_12H'
+					},
 					permissions: width === 390 ? ['admin'] : []
 				},
 				'/cairn.v1.ActivityService/GetActivity': {
@@ -646,6 +658,10 @@ try {
 			await open(path);
 			await main.getByRole('heading', { name: heading, exact: true }).waitFor();
 			await noPageOverflow(path);
+			if (path === '/settings') {
+				await main.getByText('Jun 2, 2026 16:30', { exact: true }).waitFor();
+				assert.equal(await main.getByLabel('Time format', { exact: true }).count(), 0);
+			}
 			if (path === '/settings' && width === 390) {
 				await main.getByText('Dark', { exact: true }).click();
 				assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
@@ -653,6 +669,22 @@ try {
 				assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
 			}
 		}
+		await open('/activities/new');
+		await main.getByLabel('Start date', { exact: true }).fill('2026-06-02');
+		const startClock = main.getByLabel('Start time in 24-hour format');
+		await startClock.fill('24:00');
+		assert.equal(await startClock.evaluate((input) => input.checkValidity()), false);
+		await startClock.fill('08:05');
+		await main.getByLabel('Duration (min)', { exact: true }).fill('60');
+		await noPageOverflow('/activities/new');
+		const submitted = page.waitForRequest((request) =>
+			request.url().endsWith('/api/activities/manual')
+		);
+		await main.locator('button[type="submit"]').click();
+		await submitted;
+		await page.waitForURL(origin + '/activities/' + recent.id);
+		assert.equal(manualActivity.start_time, '2026-06-02T06:05:00.000Z');
+		assert.equal(manualActivity.timezone, 'Europe/Brussels');
 		assert.deepEqual(errors, []);
 		await page.close();
 	}

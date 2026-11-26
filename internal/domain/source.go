@@ -247,7 +247,7 @@ func (p *ActivitySourcePayload) providesSummary(g FieldGroup) bool {
 		return p.Summary.CaloriesKcal != nil
 
 	case FieldGroupTrainingLoad:
-		return p.Summary.TSS != nil || p.Summary.IntensityFactor != nil
+		return ValidTrainingStress(p.Summary.TSS) || p.Summary.IntensityFactor != nil
 
 	case FieldGroupSwim:
 		return p.Summary.PoolLengthM != nil || p.Summary.TotalStrokes != nil

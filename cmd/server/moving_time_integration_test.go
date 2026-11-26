@@ -60,6 +60,9 @@ func TestAPI_ActivityMovingTimeBackfill(t *testing.T) {
 		act.Summary.AvgSpeedMps == nil || math.Abs(*act.Summary.AvgSpeedMps-6.5) > .01 || act.Summary.MaxSpeedMps == nil {
 		t.Fatalf("import timing: %+v, error %v", act, err)
 	}
+	if act.Summary.TSS == nil || math.Abs(*act.Summary.TSS-49*(310.0/3600)) > 1e-9 {
+		t.Fatalf("initial GPX stress uses the wrong moving time: %+v", act.Summary.TSS)
+	}
 	average := *act.Summary.AvgSpeedMps
 	garmin, _, err := garminPayload(domain.GarminActivity{Moving: 360 * time.Second, Type: "road_cycling"}, port.UploadInput{
 		Filename: "garmin.gpx", Raw: raw,
@@ -86,7 +89,7 @@ func TestAPI_ActivityMovingTimeBackfill(t *testing.T) {
 	}
 
 	// Simulate a row produced before the fix. The source and GPS stay as imported.
-	if _, err := env.pool.Exec(ctx, `UPDATE activities SET moving_duration_s = elapsed_duration_s, avg_speed_mps = 1, tss = 50
+	if _, err := env.pool.Exec(ctx, `UPDATE activities SET moving_duration_s = elapsed_duration_s, avg_speed_mps = 1, tss = NULL
 		WHERE id = $1`, id.UUID()); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +107,6 @@ func TestAPI_ActivityMovingTimeBackfill(t *testing.T) {
 	}
 
 	after, err := env.app.Activities.GetActivity(ctx, id)
-	act.Summary.TSS = new(38.75)
 	if err != nil || after.MovingDuration != act.MovingDuration || after.ElapsedDuration != act.ElapsedDuration ||
 		!reflect.DeepEqual(after.Summary, act.Summary) {
 		t.Fatalf("backfill summary: %+v, error %v", after, err)

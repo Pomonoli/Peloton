@@ -41,7 +41,7 @@ func (r *MaintenanceRepo) count(ctx context.Context, sql string, args ...any) (i
 
 // listIDs runs a keyset query whose first column is a uuid and converts it to T.
 func listIDs[T ~[16]byte](ctx context.Context, pool *pgxpool.Pool, what, sql string, args ...any) ([]T, error) {
-	rows, err := pool.Query(ctx, sql, args...)
+	rows, err := dbtx(ctx, pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", what, err)
 	}

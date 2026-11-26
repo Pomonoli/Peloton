@@ -3,7 +3,7 @@ import { prefs } from '#lib/prefs.svelte.js';
 
 // UI-side formatters. The Go server reports SI units (meters, seconds, m/s);
 // this module converts to human-friendly strings, honouring the user's
-// preferences (unit system + date/time format) from #lib/prefs. Reading
+// preferences (unit system and date format) from #lib/prefs. Reading
 // `prefs.*` here makes every caller reactive to preference changes.
 
 const DASH = '—';
@@ -146,28 +146,28 @@ function formatDatePart(d: Date): string {
 	}
 }
 
-function formatTimePart(d: Date): string {
-	switch (prefs.timeFormat) {
-		case '24h':
-			return d.toLocaleTimeString(intlLocale(), {
-				hour: '2-digit',
-				minute: '2-digit',
-				hour12: false
-			});
-		case '12h':
-			return d.toLocaleTimeString(intlLocale(), {
-				hour: 'numeric',
-				minute: '2-digit',
-				hour12: true
-			});
-		default:
-			return d.toLocaleTimeString(intlLocale(), { timeStyle: 'short' });
-	}
+export function formatClockTime(
+	value: string | number | Date,
+	{ timeZone, seconds = false }: { timeZone?: string; seconds?: boolean } = {}
+): string {
+	const date = value instanceof Date ? value : new Date(value);
+	return date.toLocaleTimeString(intlLocale(), {
+		hour: '2-digit',
+		minute: '2-digit',
+		second: seconds ? '2-digit' : undefined,
+		hourCycle: 'h23',
+		numberingSystem: 'latn',
+		timeZone
+	});
 }
 
-export function formatDate(iso: string): string {
-	const d = new Date(iso);
-	return `${formatDatePart(d)} ${formatTimePart(d)}`;
+export function formatDate(
+	iso: string,
+	{ seconds = false, numericDate = false }: { seconds?: boolean; numericDate?: boolean } = {}
+): string {
+	const date = new Date(iso);
+	const day = numericDate ? date.toLocaleDateString(intlLocale()) : formatDatePart(date);
+	return `${day} ${formatClockTime(date, { seconds })}`;
 }
 
 export function formatDateOnly(iso: string): string {

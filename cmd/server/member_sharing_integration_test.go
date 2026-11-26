@@ -18,8 +18,8 @@ import (
 func TestAPI_MemberSharingUpgrade(t *testing.T) {
 	ctx := t.Context()
 	env := newITDiscoveryEnv(t)
-	if result, err := db.MigrateDown(ctx, env.pool); err != nil || result.Source.Version != 88 {
-		t.Fatalf("prepare version 87 schema: %v, %v", result, err)
+	if results, err := db.MigrateDownTo(ctx, env.pool, 87); err != nil || len(results) == 0 || results[len(results)-1].Source.Version != 88 {
+		t.Fatalf("prepare version 87 schema: %v, %v", results, err)
 	}
 	startITConsumers(t, env, startFollowUpConsumer)
 
@@ -76,7 +76,7 @@ func TestAPI_MemberSharingUpgrade(t *testing.T) {
 		}
 	}
 
-	if applied, err := db.MigrateUp(ctx, env.pool); err != nil || len(applied) != 1 || applied[0].Source.Version != 88 {
+	if applied, err := db.MigrateUp(ctx, env.pool); err != nil || len(applied) == 0 || applied[0].Source.Version != 88 {
 		t.Fatalf("upgrade to member sharing: %v, %v", applied, err)
 	}
 	var profiles, activities, sources, settings, policies int

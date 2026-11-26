@@ -594,6 +594,11 @@ func serveStartBackgroundLoops(ctx context.Context, app *App, cfg *config.Config
 	if app.Maintenance != nil {
 		app.Maintenance.Start(ctx)
 	}
+	if app.TrainingStressBackfill != nil {
+		goSupervised(ctx, logger, "training stress backfill", func(ctx context.Context) {
+			app.TrainingStressBackfill.Run(ctx, logger)
+		})
+	}
 
 	// Health watcher: raises an admin event when the instance leaves "healthy".
 	if app.SystemHealth != nil && app.AdminEvents != nil {

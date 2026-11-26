@@ -3,19 +3,18 @@ import { prefs, setPrefs } from './prefs.svelte';
 
 describe('setPrefs', () => {
 	beforeEach(() => {
-		setPrefs({ dateFormat: '', timeFormat: '', units: 'metric' });
+		setPrefs({ dateFormat: '', units: 'metric' });
 	});
 
 	it('starts at defaults', () => {
-		expect({ ...prefs }).toEqual({ dateFormat: '', timeFormat: '', units: 'metric' });
+		expect({ ...prefs }).toEqual({ dateFormat: '', units: 'metric' });
 	});
 
 	it('applies provided fields only', () => {
 		setPrefs({ dateFormat: 'iso' });
 		expect(prefs.dateFormat).toBe('iso');
-		expect(prefs.timeFormat).toBe('');
-		setPrefs({ timeFormat: '24h', units: 'imperial' });
-		expect(prefs).toMatchObject({ dateFormat: 'iso', timeFormat: '24h', units: 'imperial' });
+		setPrefs({ units: 'imperial' });
+		expect(prefs).toMatchObject({ dateFormat: 'iso', units: 'imperial' });
 	});
 
 	it('falls back to metric for unknown units', () => {

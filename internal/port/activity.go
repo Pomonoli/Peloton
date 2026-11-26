@@ -13,6 +13,10 @@ type CyclingSummaryStore interface {
 	SaveCyclingSummary(ctx context.Context, act domain.Activity) error
 }
 
+type TrainingStressStore interface {
+	SaveActivityTrainingStress(ctx context.Context, act domain.Activity) error
+}
+
 // ActivityTimingArchive recovers timing from original uploads when a
 // historical parsed summary or stored track lacks the necessary data.
 type ActivityTimingArchive interface {

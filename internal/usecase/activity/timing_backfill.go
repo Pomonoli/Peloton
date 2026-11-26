@@ -23,15 +23,18 @@ type TimingBackfill struct {
 		port.TxManager
 		port.UserLock
 	}
-	Streams   port.StreamRepo
-	Overrides port.ClassificationOverrideRepo
-	Archive   port.ActivityTimingArchive
+	Streams             port.StreamRepo
+	Overrides           port.ClassificationOverrideRepo
+	Archive             port.ActivityTimingArchive
+	Recompute           *RecomputeActivityFromSources
+	RebuildTrainingLoad func(context.Context, domain.UserID) error
 }
 
 func (b TimingBackfill) Execute(ctx context.Context) (int, error) {
 	const pageSize = 100
 	var after domain.ActivityID
 	var failures []error
+	riders := make(map[domain.UserID]bool)
 	updated := 0
 	for {
 		ids, err := b.ActivitiesToScan.ListActivityIDs(ctx, nil, after, pageSize)
@@ -55,7 +58,8 @@ func (b TimingBackfill) Execute(ctx context.Context) (int, error) {
 				if err := b.Tx.LockUser(ctx, act.UserID); err != nil {
 					return err
 				}
-				changed, err = refreshActivityTiming(ctx, b.Activities, b.Streams, b.Overrides, b.Archive, id)
+				riders[act.UserID] = true
+				changed, err = b.Recompute.refreshActivityTiming(ctx, b.Activities, b.Streams, b.Overrides, b.Archive, id)
 				return err
 			})
 			if err != nil {
@@ -68,6 +72,11 @@ func (b TimingBackfill) Execute(ctx context.Context) (int, error) {
 			break
 		}
 		after = ids[len(ids)-1]
+	}
+	for rider := range riders {
+		if err := b.RebuildTrainingLoad(ctx, rider); err != nil {
+			failures = append(failures, fmt.Errorf("rebuild training load for %s: %w", rider, err))
+		}
 	}
 	// Refresh even on a retry with zero changes, so an interrupted run can
 	// repair gear totals after it has already committed the activity updates.

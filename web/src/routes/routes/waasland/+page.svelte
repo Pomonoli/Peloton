@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { m } from '#lib/paraglide/messages.js';
-	import { formatDistance, formatElevation, intlLocale } from '#lib/format.js';
+	import { formatClockTime, formatDistance, formatElevation, intlLocale } from '#lib/format.js';
 	import ElevationProfile from '#lib/components/ElevationProfile.svelte';
 	import WaasRouteMap from '#lib/components/WaasRouteMap.svelte';
 	import { calculate, initialize } from '#lib/waas/service.js';
@@ -309,10 +309,10 @@
 						style:transform={`rotate(${wind.direction}deg)`}>↓</span
 					>{m.waas_weather_from({ direction: wind.compass, speed: number(wind.speed, 1) })}
 					<p class="mt-1 text-xs text-zinc-400">
-						{m.waas_weather_gusts({ speed: number(wind.gusts) })} · {new Intl.DateTimeFormat(
-							intlLocale(),
-							{ hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Brussels' }
-						).format(wind.timestamp)}
+						{m.waas_weather_gusts({ speed: number(wind.gusts) })} · {formatClockTime(
+							wind.timestamp,
+							{ timeZone: 'Europe/Brussels' }
+						)}
 					</p>{:else if windFailed}{m.waas_weather_unavailable()}{/if}
 			</div>
 			<a

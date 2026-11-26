@@ -209,7 +209,8 @@ type App struct {
 	// WebhookTokens lists and rotates the per-account webhook signing secrets.
 	WebhookTokens *webhooks.Tokens
 	// Maintenance runs the admin-triggered instance-wide recomputations.
-	Maintenance *maintenance.Runner
+	Maintenance            *maintenance.Runner
+	TrainingStressBackfill *maintenance.TrainingStressBackfill
 	// EmailAdapter / StorageAdapter name the operator's choices (env).
 	EmailAdapter, EmailFrom string
 	StorageAdapter          string
@@ -460,15 +461,31 @@ func wireAppSecondaryRepos(app *App, pool *pgxpool.Pool, secretBox *auth.SecretB
 }
 
 func backfillMovingTime(ctx context.Context, pool *pgxpool.Pool, archive port.ActivityTimingArchive) (int, error) {
+	activities, tx := postgres.NewActivityRepo(pool), postgres.NewTxManager(pool)
 	return (activity.TimingBackfill{
-		Activities:       postgres.NewActivityRepo(pool),
+		Activities:       activities,
 		ActivitiesToScan: postgres.NewMaintenanceRepo(pool),
 		Gear:             postgres.NewGearRepo(pool),
-		Tx:               postgres.NewTxManager(pool),
+		Tx:               tx,
 		Streams:          postgres.NewStreamRepo(pool),
 		Overrides:        postgres.NewClassificationOverrideRepo(pool),
 		Archive:          archive,
+		Recompute:        historicalStressRepair(pool, activities, tx),
+		RebuildTrainingLoad: rebuildTrainingLoad(trainingload.NewComputeTrainingLoadForUser(
+			activities, postgres.NewMetricRepo(pool), tx, nil, nil)),
 	}).Execute(ctx)
+}
+
+func historicalStressRepair(pool *pgxpool.Pool, activities *postgres.ActivityRepo, tx *postgres.TxManager) *activity.RecomputeActivityFromSources {
+	return activity.NewRecomputeActivityFromSources(activities, postgres.NewUserSettingsRepo(pool),
+		postgres.NewAthleteProfileRepo(pool), postgres.NewFieldOverrideRepo(pool), nil, nil, tx, nil)
+}
+
+func rebuildTrainingLoad(load *trainingload.ComputeTrainingLoadForUser) func(context.Context, domain.UserID) error {
+	return func(ctx context.Context, userID domain.UserID) error {
+		_, err := load.Rebuild(ctx, userID)
+		return err
+	}
 }
 
 func repairCyclingDistance(ctx context.Context, pool *pgxpool.Pool, id domain.ActivityID) (bool, error) {
@@ -1076,10 +1093,14 @@ func wireMaintenance(app *App, pool *pgxpool.Pool) {
 		r.RecomputeActivity = func(ctx context.Context, id domain.ActivityID) error { return reclusterAndRecompute(ctx, app, id) }
 	}
 	if app.ComputeTrainingLoad != nil {
-		r.TrainingLoad = func(ctx context.Context, id domain.UserID) error {
-			end := time.Now().UTC()
-			_, err := app.ComputeTrainingLoad.Execute(ctx, trainingload.Input{UserID: id, Start: end.AddDate(0, 0, -730), End: end, WarmUpDays: 42})
-			return err
+		r.TrainingLoad = rebuildTrainingLoad(app.ComputeTrainingLoad)
+		if app.RecomputeActivity != nil {
+			app.TrainingStressBackfill = &maintenance.TrainingStressBackfill{
+				Repo: postgres.NewMaintenanceRepo(pool), Tx: app.Tx, Rebuild: r.TrainingLoad,
+				Repair: func(ctx context.Context, id domain.ActivityID) (activity.TrainingStressRepairResult, error) {
+					return app.RecomputeActivity.RepairTrainingStress(ctx, app.Activities, id)
+				},
+			}
 		}
 	}
 	app.Maintenance = r

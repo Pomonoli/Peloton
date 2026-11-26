@@ -114,6 +114,23 @@ func makeGarminRide(idSeed string, userID UserID, activityID ActivityID, importO
 // Tests
 // ---------------------------------------------------------------------------
 
+func TestMergePrefersValidImportedTrainingStress(t *testing.T) {
+	user := makeUserID("training-stress")
+	id := makeActivityID("training-stress")
+	garmin := makeGarminRide("intensity-only", user, id, time.Hour)
+	garmin.Parsed.Summary.TSS = new(-1.0)
+	upload := makeGarminRide("with-score", user, id, 0)
+	upload.Provider = "upload"
+	upload.Parsed.Summary.TSS = new(0.0)
+	resolver := func(t ActivityType) MergePolicy { return DefaultMergePolicyFor(t) }
+	act, err := MergeWithOverrides(id, []ActivitySource{garmin, upload}, resolver,
+		map[FieldGroup]SourceID{FieldGroupTrainingLoad: garmin.ID}, fixedNow)
+	winner, _ := act.MergeProvenance.Winner(FieldGroupTrainingLoad)
+	if err != nil || winner != upload.ID || act.Summary.TSS == nil || *act.Summary.TSS != 0 {
+		t.Fatalf("valid imported zero score should win over invalid score: %+v, error %v", act.Summary, err)
+	}
+}
+
 func TestMerge_RideGarminWinsPower_StravaWinsTitle(t *testing.T) {
 	user := makeUserID("alice")
 	actID := makeActivityID("ride1")

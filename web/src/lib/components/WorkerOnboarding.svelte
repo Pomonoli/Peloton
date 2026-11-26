@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { intlLocale, formatDate } from '#lib/format.js';
+	import { formatDate } from '#lib/format.js';
 	import { enrollmentRequest, enrollmentStatus, providerError } from '#lib/enrollments.js';
 
 	type Enrollment = {
@@ -224,7 +224,7 @@
 											title="Build info — informational, may differ across pooled instances"
 										>
 											build{w.commit ? ` ${w.commit}` : ''}{w.build_date
-												? ` · ${new Date(w.build_date).toLocaleString(intlLocale())}`
+												? ` · ${formatDate(w.build_date, { seconds: true, numericDate: true })}`
 												: ''}{w.go_version ? ` · ${w.go_version}` : ''}
 										</div>
 									{/if}

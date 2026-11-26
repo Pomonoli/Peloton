@@ -17,6 +17,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/besteffort"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segment"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segmentrank"
+	"github.com/opencairn-org/cairn-core/internal/usecase/trainingload"
 )
 
 func newRecordsCmd() *cobra.Command {
@@ -62,8 +63,8 @@ func newRecordsCmd() *cobra.Command {
 				}
 				return withPool(cmd.Context(), func(ctx context.Context, pool *pgxpool.Pool) error {
 					result, err := recomputeHistoricalRecords(ctx, pool, blobs, mode.cyclingOnly)
-					cmd.Printf("Recomputed %d activities, recovered %d archived streams, and rematched %d cycling recordings\n",
-						result.activities, result.restored, result.rematched)
+					cmd.Printf("Recomputed %d activities, recovered %d archived streams, rematched %d cycling recordings, and repaired %d training stress scores\n",
+						result.activities, result.restored, result.rematched, result.stressRepaired)
 					return err
 				})
 			},
@@ -73,7 +74,7 @@ func newRecordsCmd() *cobra.Command {
 }
 
 type recordRebuildResult struct {
-	activities, restored, rematched int
+	activities, restored, rematched, stressRepaired int
 }
 
 func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs port.BlobStore, cyclingOnly bool) (recordRebuildResult, error) {
@@ -83,6 +84,8 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 	overrides := postgres.NewClassificationOverrideRepo(pool)
 	gear := postgres.NewGearRepo(pool)
 	tx := postgres.NewTxManager(pool)
+	stress := historicalStressRepair(pool, activities, tx)
+	load := trainingload.NewComputeTrainingLoadForUser(activities, postgres.NewMetricRepo(pool), tx, nil, nil)
 	records := postgres.NewBestEffortRepo(pool)
 	segments := postgres.NewSegmentRepo(pool)
 	compute := besteffort.NewComputeBestEffortsForSource(activities, streams, records, tx, nil, nil)
@@ -100,6 +103,7 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 	var after domain.ActivityID
 	var failures []error
 	var result recordRebuildResult
+	riders := make(map[domain.UserID]bool)
 	for {
 		ids, err := list(ctx, after, pageSize)
 		if err != nil {
@@ -110,6 +114,8 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 				return result, errors.Join(append(failures, ctx.Err())...)
 			}
 			var recovered, rematch []domain.SourceID
+			var owner domain.UserID
+			var repaired bool
 			err := tx.InTx(ctx, func(ctx context.Context) error {
 				act, err := activities.GetActivity(ctx, id)
 				if errors.Is(err, domain.ErrNotFound) {
@@ -128,6 +134,7 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 				if err != nil {
 					return err
 				}
+				owner = act.UserID
 				sources, err := activities.ListSourcesForActivity(ctx, id)
 				if err != nil {
 					return err
@@ -174,7 +181,11 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 						}
 					}
 				}
-				_, err = activity.RefreshCyclingSummary(ctx, activities, streams, activities, overrides, id)
+				if _, err := activity.RefreshCyclingSummary(ctx, activities, streams, activities, overrides, id); err != nil {
+					return err
+				}
+				repair, err := stress.RepairTrainingStress(ctx, activities, id)
+				repaired = repair.Changed
 				return err
 			})
 			if err != nil {
@@ -182,6 +193,12 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 				continue
 			}
 			result.activities++
+			if owner != (domain.UserID{}) {
+				riders[owner] = true
+			}
+			if repaired {
+				result.stressRepaired++
+			}
 			for _, source := range recovered {
 				result.restored++
 				if err := streams.RefreshAggregates(ctx, source); err != nil {
@@ -197,6 +214,11 @@ func recomputeHistoricalRecords(ctx context.Context, pool *pgxpool.Pool, blobs p
 			}
 		}
 		if len(ids) < pageSize {
+			for rider := range riders {
+				if _, err := load.Rebuild(ctx, rider); err != nil {
+					failures = append(failures, fmt.Errorf("rebuild training load for %s: %w", rider, err))
+				}
+			}
 			if err := records.DeleteDetachedCyclingEfforts(ctx); err != nil {
 				failures = append(failures, err)
 			}

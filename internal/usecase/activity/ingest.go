@@ -287,6 +287,13 @@ func (uc *IngestActivityFromWorker) handleCreateNew(
 		applyCyclingMaxSpeed(&merged, motion)
 	}
 	merged.RecalculateAverageSpeed()
+	var athlete port.AthleteProfileRepo
+	if uc.recompute != nil {
+		athlete = uc.recompute.athlete
+	}
+	if err := estimateTrainingStress(ctx, &merged, athlete); err != nil {
+		return err
+	}
 	if uc.recompute != nil {
 		if err := uc.recompute.assignGear(ctx, &merged, nil, []domain.ActivitySource{src}, nil, resolver); err != nil {
 			return fmt.Errorf("initial gear: %w", err)

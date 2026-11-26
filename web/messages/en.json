@@ -722,5 +722,9 @@
 	"analysis_form_zones": "Form zones",
 	"analysis_zone_below": "Below {value}",
 	"analysis_zone_above": "{value} and above",
-	"analysis_zone_between": "{from} to below {to}"
+	"analysis_zone_between": "{from} to below {to}",
+	"manual_start_zone": "Start ({zone})",
+	"manual_start_date": "Start date",
+	"manual_start_clock": "Start time in 24-hour format",
+	"manual_start_required": "Enter a start date and a time in HH:mm format."
 }

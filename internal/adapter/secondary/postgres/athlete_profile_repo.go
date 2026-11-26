@@ -21,7 +21,7 @@ func NewAthleteProfileRepo(pool *pgxpool.Pool) *AthleteProfileRepo {
 }
 
 func (r *AthleteProfileRepo) ListEntries(ctx context.Context, userID domain.UserID) ([]domain.AthleteMetricEntry, error) {
-	rows, err := r.pool.Query(ctx, `
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		SELECT id, user_id, metric_key, effective_date, value, created_at, updated_at
 		  FROM athlete_metrics
 		 WHERE user_id = $1

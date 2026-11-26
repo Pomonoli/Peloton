@@ -176,8 +176,17 @@ func CommunitySeries(ctx context.Context, reader port.ActivityReader, userID dom
 // RecordedSeries applies the persisted training-load recurrence to the full
 // history of recorded scores, returning only UTC days in [start, end).
 func RecordedSeries(stress []port.TrainingStressDay, start, end time.Time) []domain.TrainingLoadDay {
+	tss, first, _ := recordedDailyStress(stress)
+	if first.IsZero() {
+		return nil
+	}
+	return roundedSeries(first, start, truncateUTCDay(end.Add(-time.Nanosecond)), tss)
+}
+
+func recordedDailyStress(stress []port.TrainingStressDay) (map[time.Time]float64, time.Time, int) {
 	tss := make(map[time.Time]float64, len(stress))
 	var first time.Time
+	var scored int
 	for _, day := range stress {
 		if day.Scored() == 0 {
 			continue
@@ -190,11 +199,9 @@ func RecordedSeries(stress []port.TrainingStressDay, start, end time.Time) []dom
 			first = date
 		}
 		tss[date] = day.TSS
+		scored += day.Scored()
 	}
-	if first.IsZero() {
-		return nil
-	}
-	return roundedSeries(first, start, truncateUTCDay(end.Add(-time.Nanosecond)), tss)
+	return tss, first, scored
 }
 
 func roundedSeries(first, start, end time.Time, tss map[time.Time]float64) []domain.TrainingLoadDay {
@@ -222,38 +229,67 @@ func (uc *ComputeTrainingLoadForUser) Execute(ctx context.Context, in Input) (Re
 	startDay := truncateUTCDay(in.Start).AddDate(0, 0, -in.WarmUpDays)
 	endDay := truncateUTCDay(in.End)
 
-	// Pull activities covering the whole window (warm-up included). The
-	// upper bound is the end of the end-day so activities ending at
-	// 23:59 are included.
-	activities, err := uc.activities.ListActivitiesForUser(ctx, in.UserID, startDay, endDay.Add(24*time.Hour))
-	if err != nil {
-		return Result{}, fmt.Errorf("list activities: %w", err)
-	}
-
-	tssByDay, activitiesUsed := trainingLoadTSSByDay(activities)
-	rows, days := uc.trainingLoadRows(in.UserID, startDay, endDay, tssByDay)
-
-	// Persist atomically: delete the prior computed window, then upsert
-	// the fresh rows. Delete is bounded to the same window so prior data
-	// outside it stays put.
-	err = uc.tx.InTx(ctx, func(ctx context.Context) error {
-		if err := uc.metrics.DeleteComputedForUser(
-			ctx, in.UserID, domain.AllTrainingLoadKeys, startDay, endDay.Add(24*time.Hour),
-		); err != nil {
-			return err
+	var result Result
+	err := uc.withOwner(ctx, in.UserID, func(ctx context.Context) error {
+		activities, err := uc.activities.ListActivitiesForUser(ctx, in.UserID, startDay, endDay.Add(24*time.Hour))
+		if err != nil {
+			return fmt.Errorf("list activities: %w", err)
 		}
-		return uc.metrics.SaveMetrics(ctx, rows)
+		tss, scored := trainingLoadTSSByDay(activities)
+		result, err = uc.persist(ctx, in.UserID, startDay, startDay, endDay, tss, scored)
+		return err
 	})
-	if err != nil {
-		return Result{}, fmt.Errorf("persist training load: %w", err)
-	}
+	return result, err
+}
 
+// Rebuild replaces all computed history through today, starting with the
+// earliest scored activity. It uses the same daily recurrence as Execute.
+func (uc *ComputeTrainingLoadForUser) Rebuild(ctx context.Context, userID domain.UserID) (Result, error) {
+	today := truncateUTCDay(uc.now())
+	var result Result
+	err := uc.withOwner(ctx, userID, func(ctx context.Context) error {
+		stress, err := uc.activities.TrainingStressDays(ctx, userID, today.AddDate(0, 0, 1))
+		if err != nil {
+			return fmt.Errorf("read training stress history: %w", err)
+		}
+		tss, first, scored := recordedDailyStress(stress)
+		result, err = uc.persist(ctx, userID, time.Time{}, first, today, tss, scored)
+		return err
+	})
+	return result, err
+}
+
+func (uc *ComputeTrainingLoadForUser) withOwner(ctx context.Context, userID domain.UserID, fn func(context.Context) error) error {
+	return uc.tx.InTx(ctx, func(ctx context.Context) error {
+		if lock, ok := uc.tx.(port.UserLock); ok {
+			if err := lock.LockUser(ctx, userID); err != nil {
+				return err
+			}
+		}
+		return fn(ctx)
+	})
+}
+
+func (uc *ComputeTrainingLoadForUser) persist(ctx context.Context, userID domain.UserID, deleteFrom, start, end time.Time, tss map[time.Time]float64, scored int) (Result, error) {
+	if err := uc.metrics.DeleteComputedForUser(ctx, userID, domain.AllTrainingLoadKeys, deleteFrom, end.AddDate(0, 0, 1)); err != nil {
+		return Result{}, fmt.Errorf("delete previous training load: %w", err)
+	}
+	var (
+		rows []domain.Metric
+		days int
+	)
+	if !start.IsZero() {
+		rows, days = uc.trainingLoadRows(userID, start, end, tss)
+	}
+	if err := uc.metrics.SaveMetrics(ctx, rows); err != nil {
+		return Result{}, fmt.Errorf("save training load: %w", err)
+	}
 	return Result{
 		DaysComputed:   days,
-		ActivitiesUsed: activitiesUsed,
+		ActivitiesUsed: scored,
 		RowsWritten:    len(rows),
-		StartDay:       startDay,
-		EndDay:         endDay,
+		StartDay:       start,
+		EndDay:         end,
 	}, nil
 }
 

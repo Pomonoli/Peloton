@@ -237,7 +237,9 @@ func (uc *RecomputeActivityFromSources) applyOverlays(
 		return err
 	}
 	merged.RecalculateAverageSpeed()
-	uc.fillEstimatedTSS(ctx, merged)
+	if err := estimateTrainingStress(ctx, merged, uc.athlete); err != nil {
+		return err
+	}
 	return uc.assignGear(ctx, merged, prev, sources, overrides, resolver)
 }
 
@@ -281,42 +283,6 @@ func (uc *RecomputeActivityFromSources) applyClassificationOverride(ctx context.
 		merged.Discipline = domain.DisciplineNone
 	}
 	return overlay, nil
-}
-
-// fillEstimatedTSS derives a training-stress score when no source provided one,
-// so the training-load curves have per-activity TSS to integrate. A provider-
-// supplied TSS always wins; this only fills the (common) gap. Thresholds
-// (FTP / LTHR) are resolved from the athlete's profile AS OF the activity's
-// date, so re-computing an old activity uses the values that were true back then.
-func (uc *RecomputeActivityFromSources) fillEstimatedTSS(ctx context.Context, merged *domain.Activity) {
-	if merged.Summary.TSS != nil {
-		return
-	}
-	th := uc.thresholdsAt(ctx, merged.UserID, merged.StartTime)
-	if tss, if_, ok := domain.EstimateTSS(merged.Summary, merged.MovingDuration, th); ok {
-		merged.Summary.TSS = &tss
-		if merged.Summary.IntensityFactor == nil {
-			merged.Summary.IntensityFactor = &if_
-		}
-	}
-}
-
-// thresholdsAt resolves the athlete's FTP / threshold-HR as of the given date.
-// Returns the zero value (→ engine defaults) when no profile repo is wired or
-// the lookup fails — TSS estimation must always make forward progress.
-func (uc *RecomputeActivityFromSources) thresholdsAt(
-	ctx context.Context,
-	userID domain.UserID,
-	at time.Time,
-) domain.AthleteThresholds {
-	if uc.athlete == nil {
-		return domain.AthleteThresholds{}
-	}
-	entries, err := uc.athlete.ListEntries(ctx, userID)
-	if err != nil || len(entries) == 0 {
-		return domain.AthleteThresholds{}
-	}
-	return domain.NewAthleteProfile(entries).ThresholdsAt(at)
 }
 
 // buildResolver returns a PolicyResolver that reads from the user's
@@ -509,6 +475,8 @@ func (uc *RecomputeActivityFromSources) PreviewMerge(ctx context.Context, id dom
 	if _, err := uc.applyClassificationOverride(ctx, id, &merged); err != nil {
 		return domain.Activity{}, err
 	}
-	uc.fillEstimatedTSS(ctx, &merged)
+	if err := estimateTrainingStress(ctx, &merged, uc.athlete); err != nil {
+		return domain.Activity{}, err
+	}
 	return merged, nil
 }

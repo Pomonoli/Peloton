@@ -26,12 +26,33 @@ func NewActivityRepo(pool *pgxpool.Pool) *ActivityRepo {
 }
 
 func (r *ActivityRepo) SaveActivityTiming(ctx context.Context, act domain.Activity) error {
+	provenance, err := encodeProvenance(act.MergeProvenance)
+	if err != nil {
+		return err
+	}
 	tag, err := dbtx(ctx, r.pool).Exec(ctx, `
-		UPDATE activities SET moving_duration_s = $3, avg_speed_mps = $4, tss = $5, updated_at = now()
+		UPDATE activities SET moving_duration_s = $3, avg_speed_mps = $4, tss = $5, intensity_factor = $6,
+			merge_provenance = $7, updated_at = now()
 		WHERE id = $1 AND updated_at = $2 AND deleted_at IS NULL`,
-		act.ID.UUID(), act.UpdatedAt, int64(act.MovingDuration/time.Second), act.Summary.AvgSpeedMps, act.Summary.TSS)
+		act.ID.UUID(), act.UpdatedAt, int64(act.MovingDuration/time.Second), act.Summary.AvgSpeedMps,
+		act.Summary.TSS, act.Summary.IntensityFactor, provenance)
 	if err == nil && tag.RowsAffected() == 0 {
 		return errors.New("activity changed while rebuilding its timing")
+	}
+	return err
+}
+
+func (r *ActivityRepo) SaveActivityTrainingStress(ctx context.Context, act domain.Activity) error {
+	provenance, err := encodeProvenance(act.MergeProvenance)
+	if err != nil {
+		return err
+	}
+	tag, err := dbtx(ctx, r.pool).Exec(ctx, `
+		UPDATE activities SET tss = $3, intensity_factor = $4, merge_provenance = $5, updated_at = now()
+		WHERE id = $1 AND updated_at = $2 AND deleted_at IS NULL`,
+		act.ID.UUID(), act.UpdatedAt, act.Summary.TSS, act.Summary.IntensityFactor, provenance)
+	if err == nil && tag.RowsAffected() == 0 {
+		return errors.New("activity changed while repairing its training stress")
 	}
 	return err
 }
@@ -1693,13 +1714,16 @@ func (r *ActivityRepo) ActivitySportTotals(ctx context.Context, userID domain.Us
 	}, "scan sport totals", "iterate sport totals")
 }
 
+const missingTrainingStressSQL = `(a.tss IS NULL OR a.tss < 0 OR a.tss >= 'Infinity'::double precision)`
+
 func (r *ActivityRepo) TrainingStressDays(ctx context.Context, userID domain.UserID, end time.Time) ([]port.TrainingStressDay, error) {
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		WITH stress AS (
 			SELECT (a.start_time AT TIME ZONE 'UTC')::date AS day, a.tss, CASE
-				WHEN a.tss IS NULL OR a.tss < 0 OR a.tss >= 'Infinity'::double precision THEN 'missing'
+				WHEN `+missingTrainingStressSQL+` THEN 'missing'
 				WHEN EXISTS (
 					SELECT 1 FROM activity_sources src WHERE src.activity_id = a.id AND `+canonicalPerformanceSourceSQL+`
+					  AND src.id::text = a.merge_provenance ->> 'training_load'
 					  AND src.parsed #> '{summary,tss}' = to_jsonb(a.tss)
 				) THEN 'imported'
 				WHEN a.avg_power_w > 0 OR a.normalized_power_w > 0 OR a.avg_heart_rate_bpm > 0 THEN 'sensor'

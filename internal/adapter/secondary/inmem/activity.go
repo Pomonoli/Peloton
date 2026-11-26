@@ -612,14 +612,6 @@ func (r *ActivityRepo) ActivitySportTotals(ctx context.Context, userID domain.Us
 func (r *ActivityRepo) TrainingStressDays(ctx context.Context, userID domain.UserID, end time.Time) ([]port.TrainingStressDay, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	imported := make(map[domain.ActivityID][]float64)
-	for _, src := range r.Sources {
-		if src.Status != domain.SourceStatusDetached && domain.ValidTrainingStress(src.Parsed.Summary.TSS) &&
-			(src.Provider != "strava" || r.Activities[src.ActivityID].ProviderRestricted) {
-			imported[src.ActivityID] = append(imported[src.ActivityID], *src.Parsed.Summary.TSS)
-		}
-	}
-	sensor := func(value *int) bool { return value != nil && *value > 0 }
 	days := make(map[string]port.TrainingStressDay)
 	for _, a := range r.Activities {
 		if a.UserID != userID || a.IsDeleted() || !a.StartTime.Before(end) ||
@@ -633,12 +625,16 @@ func (r *ActivityRepo) TrainingStressDays(ctx context.Context, userID domain.Use
 		if valid {
 			day.TSS += *a.Summary.TSS
 		}
+		winner, _ := a.MergeProvenance.Winner(domain.FieldGroupTrainingLoad)
+		src := r.Sources[winner]
 		switch {
 		case !valid:
 			day.Missing++
-		case slices.Contains(imported[a.ID], *a.Summary.TSS):
+		case src.ActivityID == a.ID && src.Status != domain.SourceStatusDetached &&
+			(src.Provider != "strava" || a.ProviderRestricted) &&
+			domain.ValidTrainingStress(src.Parsed.Summary.TSS) && *src.Parsed.Summary.TSS == *a.Summary.TSS:
 			day.Imported++
-		case sensor(a.Summary.AvgPowerW) || sensor(a.Summary.NormalizedPowerW) || sensor(a.Summary.AvgHeartRateBpm):
+		case domain.HasTrainingStressSensor(a.Summary):
 			day.SensorEstimate++
 		default:
 			day.DurationEstimate++

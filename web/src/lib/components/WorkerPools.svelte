@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { intlLocale } from '#lib/format.js';
+	import { formatDate } from '#lib/format.js';
 	import { onMount } from 'svelte';
 
 	// The worker pool registry: a pool name is bound to one package for good.
@@ -47,7 +47,7 @@
 			busy = null;
 		}
 	}
-	const fmt = (s: string) => new Date(s).toLocaleString(intlLocale());
+	const fmt = (s: string) => formatDate(s, { seconds: true, numericDate: true });
 </script>
 
 <section class="rounded-lg border border-zinc-800 bg-panel p-5">

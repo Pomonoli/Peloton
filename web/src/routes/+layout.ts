@@ -46,7 +46,8 @@ export interface UserView {
 	role: 'user' | 'admin' | 'unknown';
 	units: 'metric' | 'imperial';
 	dateFormat: '' | 'iso' | 'us' | 'eu';
-	timeFormat: '' | '24h' | '12h';
+	// Forward the stored API preference unchanged when saving other display settings.
+	timeFormat: TimeFormat;
 }
 
 function dateFmt(d: DateFormat): UserView['dateFormat'] {
@@ -57,17 +58,6 @@ function dateFmt(d: DateFormat): UserView['dateFormat'] {
 			return 'us';
 		case DateFormat.EU:
 			return 'eu';
-		default:
-			return '';
-	}
-}
-
-function timeFmt(t: TimeFormat): UserView['timeFormat'] {
-	switch (t) {
-		case TimeFormat.TIME_FORMAT_24H:
-			return '24h';
-		case TimeFormat.TIME_FORMAT_12H:
-			return '12h';
 		default:
 			return '';
 	}
@@ -85,6 +75,6 @@ function userToView(u: User | undefined): UserView | null {
 		role: u.role === UserRole.ADMIN ? 'admin' : u.role === UserRole.USER ? 'user' : 'unknown',
 		units: u.units === UnitSystem.IMPERIAL ? 'imperial' : 'metric',
 		dateFormat: dateFmt(u.dateFormat),
-		timeFormat: timeFmt(u.timeFormat)
+		timeFormat: u.timeFormat
 	};
 }

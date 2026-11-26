@@ -15,7 +15,8 @@
 	let discipline = $state('');
 	let title = $state('');
 	let description = $state('');
-	let startLocal = $state(''); // datetime-local value
+	let startDate = $state('');
+	let startClock = $state('');
 	let durationMin = $state<number | ''>('');
 	let movingMin = $state<number | ''>('');
 	let distanceKm = $state<number | ''>('');
@@ -46,8 +47,9 @@
 
 	async function create() {
 		errMsg = null;
-		if (!startLocal) {
-			errMsg = 'Pick a start date & time.';
+		const start = new Date(`${startDate}T${startClock}`);
+		if (!Number.isFinite(start.getTime())) {
+			errMsg = m.manual_start_required();
 			return;
 		}
 		if (!durationMin || durationMin <= 0) {
@@ -60,7 +62,7 @@
 			discipline,
 			title: title.trim(),
 			description: description.trim(),
-			start_time: new Date(startLocal).toISOString(),
+			start_time: start.toISOString(),
 			timezone: browserTz,
 			elapsed_duration_s: Number(durationMin) * 60,
 			moving_duration_s: movingMin ? Number(movingMin) * 60 : 0,
@@ -166,17 +168,32 @@
 		</div>
 
 		<div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-			<div>
-				<label class="block text-xs uppercase tracking-wide text-zinc-500" for="start"
-					>Start ({browserTz})</label
-				>
-				<input
-					id="start"
-					type="datetime-local"
-					bind:value={startLocal}
-					class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
-				/>
-			</div>
+			<fieldset>
+				<legend class="block text-xs uppercase tracking-wide text-zinc-500">
+					{m.manual_start_zone({ zone: browserTz })}
+				</legend>
+				<div class="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2">
+					<label class="sr-only" for="start-date">{m.manual_start_date()}</label>
+					<input
+						id="start-date"
+						type="date"
+						bind:value={startDate}
+						required
+						class="mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm"
+					/>
+					<label class="sr-only" for="start-clock">{m.manual_start_clock()}</label>
+					<input
+						id="start-clock"
+						type="text"
+						bind:value={startClock}
+						pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]"
+						placeholder="HH:mm"
+						maxlength="5"
+						required
+						class="mt-1 w-full rounded border border-zinc-800 bg-panel px-2 py-2 text-sm tabular-nums"
+					/>
+				</div>
+			</fieldset>
 			<div class="grid grid-cols-2 gap-2">
 				<div>
 					<label class="block text-xs uppercase tracking-wide text-zinc-500" for="dur"

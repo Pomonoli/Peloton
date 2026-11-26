@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import uPlot, { type AlignedData, type Options } from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
-	import { formatDateOnly, intlLocale } from '#lib/format.js';
+	import { formatClockTime, formatDateOnly, intlLocale } from '#lib/format.js';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { m } from '#lib/paraglide/messages.js';
 
@@ -137,7 +137,18 @@
 					: [])
 			],
 			series: [
-				{ label: m.detail_label_time() },
+				{
+					label: m.detail_label_time(),
+					...(calendar
+						? {
+								value: (_plot: uPlot, value: number | null) => {
+									if (value == null) return '—';
+									const date = new Date(value * 1000);
+									return `${date.toLocaleDateString('sv-SE')} ${formatClockTime(date)}`;
+								}
+							}
+						: {})
+				},
 				...ordered.map((s, i) => {
 					const stroke = s.color.startsWith('var(')
 						? appearanceColor(s.color.slice(4, -1))
