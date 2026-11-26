@@ -8,7 +8,7 @@
 	<header class="flex items-baseline justify-between">
 		<div>
 			<a href="/admin" class="text-xs text-accent-400 hover:text-accent-300">← back</a>
-			<h1 class="mt-2 text-3xl font-semibold tracking-tight max-md:text-2xl">Identity Providers</h1>
+			<h1 class="mt-2 page-title">Identity Providers</h1>
 			<p class="mt-1 text-sm text-zinc-400">
 				OIDC providers are configured entirely through <code class="text-zinc-300"
 					>CAIRN_OIDC_*</code
@@ -18,7 +18,7 @@
 		</div>
 	</header>
 
-	<section class="rounded-lg border border-zinc-800 bg-panel">
+	<section class="surface">
 		<header
 			class="border-b border-zinc-800 px-5 py-3 text-xs uppercase tracking-wide text-zinc-500"
 		>

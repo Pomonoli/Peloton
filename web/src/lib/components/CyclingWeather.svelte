@@ -64,7 +64,7 @@
 
 <div
 	role="status"
-	class="flex min-h-18 w-27 flex-col items-end justify-center text-right text-xs text-quiet sm:w-28"
+	class="surface flex min-h-18 w-28 flex-col items-end justify-center px-2 py-2 text-right text-xs text-quiet sm:w-34 sm:px-3"
 >
 	{#if weather}
 		{@const bearing = windToward(weather.wind_direction_10m)}

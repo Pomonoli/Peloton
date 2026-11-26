@@ -181,7 +181,7 @@
 
 {#snippet gearForm()}
 	<form
-		class="space-y-4 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-5"
+		class="space-y-4 surface p-3 sm:p-5"
 		onsubmit={(e) => {
 			e.preventDefault();
 			submitForm();
@@ -252,7 +252,7 @@
 <section class="space-y-4 md:space-y-6">
 	<header class="flex items-start justify-between gap-4 max-md:flex-wrap">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{m.gear_title()}</h1>
+			<h1 class="page-title">{m.gear_title()}</h1>
 			<p class="mt-1 text-sm text-zinc-400">{m.gear_intro()}</p>
 		</div>
 		{#if !data.member}
@@ -275,7 +275,7 @@
 			<p class="mt-1 text-sm text-amber-200/70">{m.gear_pending_intro()}</p>
 			<ul class="mt-4 space-y-3">
 				{#each openPending as r (refKey(r))}
-					<li class="rounded-lg border border-zinc-800 bg-panel p-4">
+					<li class="surface p-4">
 						<div class="flex flex-wrap items-center gap-2 text-sm">
 							<span class="{badge} bg-zinc-800 text-zinc-300">{r.provider}</span>
 							<span class="font-medium">{r.providerName || r.externalId}</span>
@@ -336,7 +336,7 @@
 		{:else}
 			<ul class="mt-3 space-y-3">
 				{#each active as g (g.id)}
-					<li class="rounded-lg border border-zinc-800 bg-panel p-4">
+					<li class="surface p-4">
 						{#if editingId === g.id}
 							{@render gearForm()}
 						{:else}
@@ -422,7 +422,7 @@
 	</div>
 
 	{#if !data.member && data.gear.length > 0}
-		<div class="rounded-xl border border-zinc-800 bg-panel p-3 sm:p-5">
+		<div class="surface p-3 sm:p-5">
 			<h2 class="text-lg font-semibold">{m.gear_section_defaults()}</h2>
 			<p class="mt-1 text-sm text-zinc-500">{m.gear_defaults_intro()}</p>
 			<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

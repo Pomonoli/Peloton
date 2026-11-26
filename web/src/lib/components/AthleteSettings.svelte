@@ -138,13 +138,13 @@
 
 <div class="space-y-6">
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{m.health_athlete_settings()}</h1>
+		<h1 class="page-title">{m.health_athlete_settings()}</h1>
 		<p class="mt-1 max-w-2xl text-sm text-zinc-400">
 			Dated physiological values, used to calculate Training Stress Score (TSS) and the fitness
 			curves. Calculations interpolate between the nearest dates.
 		</p>
 	</header>
-	<div class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-panel p-4">
+	<div class="flex flex-wrap items-center gap-3 surface p-4">
 		<div class="text-sm text-zinc-300">
 			Changed your values? Recompute TSS + the training-load history with the new numbers.
 		</div>
@@ -171,7 +171,7 @@
 			{#each specs as spec (spec.key)}
 				{@const why = WHY[spec.key]}
 				{@const dr = draft[spec.key]}
-				<section class="rounded-xl border border-zinc-800 bg-panel p-4">
+				<section class="surface p-4">
 					<div class="mb-1 flex items-baseline justify-between">
 						<h2 class="text-sm font-medium text-zinc-200">{spec.label}</h2>
 						<span class="text-xs text-zinc-500">{spec.unit}</span>

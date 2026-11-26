@@ -55,7 +55,7 @@
 
 <div class="mx-auto max-w-3xl px-4 py-6">
 	<div class="mb-4 flex items-center justify-between">
-		<h1 class="text-xl font-semibold">Moderation queue</h1>
+		<h1 class="page-title">Moderation queue</h1>
 		<select bind:value={statusFilter} class="rounded border border-zinc-700 px-2 py-1 text-sm">
 			<option value="open">Open</option>
 			<option value="reviewed">Reviewed</option>

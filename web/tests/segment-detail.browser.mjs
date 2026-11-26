@@ -59,10 +59,10 @@ const entries = riders.map((rider, index) => ({
 try {
 	for (const { member, width } of [
 		{ member: null, width: 1440 },
-		{ member: 'mira', width: 390 }
+		{ member: 'mira', width: 424 }
 	]) {
 		const page = await browser.newPage({
-			viewport: { width, height: 900 },
+			viewport: { width, height: width === 424 ? 933 : 900 },
 			locale: 'en-US',
 			timezoneId: 'UTC'
 		});
@@ -145,13 +145,7 @@ try {
 		const expectSegment = async (id, name) => {
 			await main.getByRole('heading', { name, exact: true }).waitFor();
 			await main.getByRole('heading', { name: 'Local KOM' }).waitFor();
-			await main
-				.getByRole('heading', { name: member ? 'Member’s efforts' : 'Your efforts' })
-				.waitFor();
-			await main
-				.locator(`a[href="/activities/${id}-${member ?? 'ada'}-ride${memberQuery}"]`)
-				.waitFor();
-			await main.getByText('PR', { exact: true }).waitFor();
+			await main.getByText(member ? 'Mira’s Best' : 'Your Best', { exact: true }).waitFor();
 			await main.locator('.maplibregl-canvas').waitFor();
 			await chart.waitFor();
 		};
@@ -211,9 +205,31 @@ try {
 			await assertRequests('canal', []);
 			assert.deepEqual(
 				await main.locator('table').first().getByRole('columnheader').allTextContents(),
-				['Rank', 'Rider', 'Time', 'Speed', 'Attempts', 'Date']
+				['Rank', 'Rider', 'Time', 'Speed', 'Date']
 			);
-			await main.getByRole('heading', { name: 'Performance trend' }).waitFor();
+			const overviewTab = main.getByRole('tab', { name: 'Overview' });
+			const leaderboardTab = main.getByRole('tab', { name: 'Leaderboard' });
+			const attemptsTab = main.getByRole('tab', { name: 'Attempts' });
+			await overviewTab.focus();
+			await page.keyboard.press('ArrowRight');
+			assert.equal(await leaderboardTab.getAttribute('aria-selected'), 'true');
+			const fullBoard = main.getByRole('tabpanel', { name: 'Leaderboard' });
+			assert.equal(await fullBoard.locator('tbody tr').count(), 5);
+			await fullBoard.getByRole('columnheader', { name: 'Attempts' }).waitFor();
+			await page.keyboard.press('End');
+			assert.equal(await attemptsTab.getAttribute('aria-selected'), 'true');
+			const attempts = main.getByRole('tabpanel', { name: 'Attempts' });
+			await attempts.getByRole('heading', { name: 'Performance trend' }).waitFor();
+			await attempts
+				.getByRole('heading', { name: member ? 'Member’s efforts' : 'Your efforts' })
+				.waitFor();
+			await attempts
+				.locator(`a[href="/activities/${'canal'}-${member ?? 'ada'}-ride${memberQuery}"]`)
+				.waitFor();
+			await attempts.getByText('PR', { exact: true }).waitFor();
+			await overviewTab.click();
+			await chart.waitFor();
+			await assertRequests('canal', []);
 
 			const period = main.getByLabel('Period');
 			const cutoff = await page.evaluate(() =>
@@ -224,7 +240,7 @@ try {
 			await assertRequests('canal', defaultRiders, { board: true, cutoff });
 			assert.equal(mapStyles, 1);
 
-			await page.goBack();
+			await main.getByRole('link', { name: 'Segments', exact: true }).click();
 			await clickSegment('forest', 'Forest Road');
 			await expectSegment('forest', 'Forest Road');
 			await assertRequests('forest', defaultRiders, { detail: true, board: true });
@@ -232,6 +248,7 @@ try {
 			assert.equal(mapStyles, 2);
 
 			failure = { id: 'forest', resource: 'leaderboard', status: 500 };
+			await leaderboardTab.click();
 			await period.selectOption('year');
 			await main
 				.getByRole('status')
@@ -240,11 +257,12 @@ try {
 			await assertRequests('forest', [], { board: true, cutoff });
 			failure = { id: 'forest', resource: 'efforts', status: 500 };
 			await main.getByRole('button', { name: 'Try again' }).click();
+			await overviewTab.click();
 			await main.getByRole('status').getByText('Unable to load effort history.').waitFor();
 			await main.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' });
 			await assertRequests('forest', defaultRiders, { board: true, cutoff });
 
-			await page.goBack();
+			await main.getByRole('link', { name: 'Segments', exact: true }).click();
 			failure = { id: 'canal', status: 401 };
 			await clickSegment('canal', 'Canal Sprint');
 			await main.getByRole('status').getByText('Could not load the segment.').waitFor();

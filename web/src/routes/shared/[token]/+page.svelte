@@ -63,7 +63,7 @@
 		<header class="mb-4 flex items-center gap-3">
 			<SportIcon type={activity.type} size={28} />
 			<div>
-				<h1 class="text-xl font-semibold">{activity.title || 'Untitled'}</h1>
+				<h1 class="page-title">{activity.title || 'Untitled'}</h1>
 				<div class="text-sm text-zinc-400">
 					{#if owner}by {owner.display_name || owner.username} ·
 					{/if}{formatRelativeDate(activity.start_time)}

@@ -196,7 +196,7 @@
 
 <div class="mb-3 flex flex-wrap items-start justify-between gap-2 md:mb-5">
 	<div>
-		<h1 class="text-2xl font-semibold text-zinc-100">{m.waas_title()}</h1>
+		<h1 class="page-title text-zinc-100">{m.waas_title()}</h1>
 		<p class="mt-1 max-w-2xl text-sm text-zinc-400">{m.waas_intro()}</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
@@ -217,7 +217,7 @@
 
 <div class="grid items-start gap-3 lg:grid-cols-[310px_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr]">
 	<form
-		class="order-2 space-y-3 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4 lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-3"
+		class="order-2 space-y-3 surface p-3 sm:p-4 lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-3"
 		onchange={dirty}
 		onsubmit={(event) => {
 			event.preventDefault();
@@ -415,9 +415,7 @@
 			>{/if}
 		{#if error}<p role="alert" class="rounded bg-red-950 p-3 text-sm text-red-300">{error}</p>{/if}
 	</form>
-	<section
-		class="order-3 min-w-0 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4 lg:order-none lg:col-start-2 lg:row-start-1"
-	>
+	<section class="order-3 min-w-0 surface p-3 sm:p-4 lg:order-none lg:col-start-2 lg:row-start-1">
 		<h2 class="text-lg font-semibold text-zinc-100">
 			{ride?.chunks[0]?.scheldeRound
 				? m.waas_schelde_round()
@@ -489,12 +487,12 @@
 				>
 					{m.waas_gain_warning()}
 				</p>{/if}
-			<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-4">
+			<section class="surface p-3 sm:p-4">
 				<h2 class="mb-4 text-sm font-semibold text-zinc-200">{m.waas_elevation_profile()}</h2>
 				<ElevationProfile track={elevationTrack} />
 				<p class="mt-3 text-xs leading-relaxed text-zinc-400">{m.waas_estimate_help()}</p>
 			</section>
-			<section class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-4">
+			<section class="surface p-3 sm:p-4">
 				<h2 class="text-sm font-semibold text-zinc-200">{m.waas_sections()}</h2>
 				<p class="mt-2 text-sm text-zinc-400">
 					{m.waas_reuse({

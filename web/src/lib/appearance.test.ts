@@ -14,10 +14,16 @@ function start({ dark = false, saved = new Map<string, string>(), blocked = fals
 	const media = Object.assign(new EventTarget(), { matches: dark });
 	const root = Object.assign(new EventTarget(), { dataset: {} as DOMStringMap });
 	const icon = { href: 'http://localhost/favicon.svg' };
-	const setAttribute = vi.fn();
+	const colorScheme = { setAttribute: vi.fn() };
+	const themeColor = { setAttribute: vi.fn() };
+	const elements = new Map<string, typeof icon | typeof colorScheme>([
+		['app-icon', icon],
+		['app-color-scheme', colorScheme],
+		['app-theme-color', themeColor]
+	]);
 	const document = {
 		documentElement: root,
-		getElementById: (id: string) => (id === 'app-icon' ? icon : { setAttribute })
+		getElementById: (id: string) => elements.get(id) ?? null
 	};
 	const localStorage = {
 		getItem: (name: string) => saved.get(name) ?? null,
@@ -36,7 +42,8 @@ function start({ dark = false, saved = new Map<string, string>(), blocked = fals
 	return {
 		root,
 		icon,
-		setAttribute,
+		colorScheme,
+		themeColor,
 		saved,
 		changeSystem(matches: boolean) {
 			media.matches = matches;
@@ -56,10 +63,12 @@ describe('appearance', () => {
 	it('defaults to System and follows changes to the device color scheme', () => {
 		const app = start({ dark: true });
 		expect(app.root.dataset).toEqual({ appearance: 'system', theme: 'dark' });
+		expect(app.themeColor.setAttribute).toHaveBeenLastCalledWith('content', '#131e31');
 		app.changeSystem(false);
 		expect(app.root.dataset.theme).toBe('light');
 		expect(app.icon.href).toBe('http://localhost/favicon.svg#light');
-		expect(app.setAttribute).toHaveBeenLastCalledWith('content', 'light');
+		expect(app.colorScheme.setAttribute).toHaveBeenLastCalledWith('content', 'light');
+		expect(app.themeColor.setAttribute).toHaveBeenLastCalledWith('content', '#fbfdff');
 	});
 
 	it.each(['light', 'dark'] satisfies AppearancePreference[])(

@@ -20,6 +20,9 @@
 		const icon = document.getElementById('app-icon');
 		if (icon) icon.href = `${icon.href.split('#')[0]}#${mode}`;
 		document.getElementById('app-color-scheme')?.setAttribute('content', mode);
+		document
+			.getElementById('app-theme-color')
+			?.setAttribute('content', mode === 'dark' ? '#131e31' : '#fbfdff');
 		root.dispatchEvent(new Event('peloton:appearancechange'));
 	}
 

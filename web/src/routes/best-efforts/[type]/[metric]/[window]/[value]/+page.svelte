@@ -94,7 +94,7 @@
 <section class="space-y-8">
 	<header>
 		<a href="/" class="text-xs text-accent-400 hover:text-accent-300">← Overview</a>
-		<h1 class="mt-2 text-2xl font-semibold tracking-tight">
+		<h1 class="mt-2 page-title">
 			Best effort · {recordLabel(bucket, false)}
 		</h1>
 		<p class="mt-1 text-sm text-zinc-400">
@@ -108,13 +108,13 @@
 		</div>
 	{:else if payload && payload.count > 0}
 		<dl class="grid grid-cols-2 gap-4 sm:grid-cols-3">
-			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
+			<div class="surface p-4">
 				<dt class="text-xs uppercase tracking-wide text-zinc-500">All-time best</dt>
 				<dd class="mt-1 text-2xl font-semibold tabular-nums text-emerald-300">
 					{recordValue(bucket, payload.best)}
 				</dd>
 			</div>
-			<div class="rounded-lg border border-zinc-800 bg-panel p-4">
+			<div class="surface p-4">
 				<dt class="text-xs uppercase tracking-wide text-zinc-500">Activities</dt>
 				<dd class="mt-1 text-2xl font-semibold tabular-nums">{payload.count}</dd>
 			</div>

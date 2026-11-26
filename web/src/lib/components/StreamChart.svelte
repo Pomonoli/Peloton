@@ -107,6 +107,7 @@
 			axes: [
 				{
 					stroke: appearanceColor('--plot-axis'),
+					font: appearanceColor('--plot-font'),
 					grid: { stroke: appearanceColor('--plot-grid') },
 					values: (_u, splits) =>
 						splits.map((s) =>
@@ -123,6 +124,8 @@
 										? `${ordered[0].label} (${ordered[0].unit})`
 										: (ordered[0]?.label ?? '')),
 								stroke: appearanceColor('--plot-axis'),
+								font: appearanceColor('--plot-font'),
+								labelFont: appearanceColor('--plot-font'),
 								grid: { stroke: appearanceColor('--plot-grid') },
 								values: (_u: uPlot, splits: number[]) =>
 									splits.map((value) =>
@@ -163,7 +166,7 @@
 									? formatValue(value)
 									: `${number.format(value)}${s.unit ? ' ' + s.unit : ''}`,
 						stroke,
-						width: s.fill ? 1 : 1.5,
+						width: s.fill ? 1 : 1.8,
 						...(s.fill ? { fill: stroke + '2e' } : {}),
 						scale: calendar ? 'y' : `y${i}`,
 						spanGaps: calendar,

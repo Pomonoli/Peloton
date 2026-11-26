@@ -24,7 +24,7 @@
 			<a href={`/activities/${a.id}`} class="text-xs text-accent-400 hover:text-accent-300">
 				← {a.title || 'Activity'}
 			</a>
-			<h1 class="truncate text-xl font-semibold tracking-tight">Streams</h1>
+			<h1 class="truncate page-title">Streams</h1>
 		</div>
 	</header>
 
@@ -43,7 +43,7 @@
 	{#if series.length > 0}
 		<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
 			{#each series as s (s.label)}
-				<div class="rounded-lg border border-zinc-800 bg-panel p-3">
+				<div class="surface p-3">
 					<div class="mb-1 text-xs font-medium uppercase tracking-wide" style:color={s.color}>
 						{s.label}{s.unit ? ` (${s.unit})` : ''}
 					</div>

@@ -21,7 +21,7 @@
 		>
 			← {m.record_leaderboards()}
 		</a>
-		<h1 class="mt-2 text-2xl font-semibold">
+		<h1 class="mt-2 page-title">
 			{recordLabel(bucket)}
 		</h1>
 		<p class="mt-1 text-sm text-quiet">{recordSport(bucket.activity_type)}</p>
@@ -32,7 +32,7 @@
 			</p>{/if}
 	</header>
 	{#if records.length === 0}
-		<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+		<p class="surface p-4 text-sm text-quiet">
 			{m.record_no_results()}
 		</p>
 	{:else}

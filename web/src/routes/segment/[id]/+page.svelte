@@ -4,14 +4,20 @@
 	import { page } from '$app/state';
 	import SegmentRivalries from '#lib/components/SegmentRivalries.svelte';
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
-	import SportIcon from '#lib/components/SportIcon.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import MetricStrip from '#lib/components/MetricStrip.svelte';
+	import SectionTabs from '#lib/components/SectionTabs.svelte';
+	import StreamChart from '#lib/components/StreamChart.svelte';
 	import { decodePolylineLonLat } from '#lib/polyline.js';
-	import { segmentSpeedRange } from '#lib/segment-rivalries.js';
+	import { alignEffortHistory, segmentSpeedRange } from '#lib/segment-rivalries.js';
 	import {
 		formatMetricDistance,
 		formatDistanceEffort,
 		segmentSpeedKmh,
 		formatDate,
+		formatDuration,
+		formatSpeedKmh,
+		intlLocale,
 		formatElevation
 	} from '#lib/format.js';
 
@@ -46,7 +52,20 @@
 	let efforts = $state<Effort[]>([]);
 	let loading = $state(true);
 	let failure = $state<'not-found' | 'request' | null>(null);
+	const tabs = $derived([
+		{ key: 'overview', label: m.segment_overview() },
+		{ key: 'leaderboard', label: m.segment_leaderboard_tab() },
+		{ key: 'attempts', label: m.segment_attempts() }
+	] as const);
+	let tab = $state<'overview' | 'leaderboard' | 'attempts'>('overview');
+	let hovered = $state<number | null>(null);
+	const attemptPageSize = 25;
+	// The detail endpoint returns at most this many attempts.
+	const detailAttemptLimit = 1000;
+	let visibleAttempts = $state(attemptPageSize);
+	let retry = $state(0);
 	const segmentId = $derived(page.params.id);
+	const number = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 }));
 	const detailURL = $derived(segmentId && memberURL(`/api/segments/${segmentId}`, data.member));
 
 	async function loadSegment(url: string, signal: AbortSignal) {
@@ -71,11 +90,14 @@
 	$effect(() => {
 		const url = detailURL;
 		if (!url) return;
+		void retry;
 		loading = true;
 		failure = null;
 		segment = null;
 		efforts = [];
-		activeEffort = undefined;
+		tab = 'overview';
+		visibleAttempts = attemptPageSize;
+		hovered = null;
 		const controller = new AbortController();
 		void loadSegment(url, controller.signal);
 		return () => controller.abort();
@@ -85,220 +107,372 @@
 		segment?.polyline ? decodePolylineLonLat(segment.polyline, segment.polyline_precision || 5) : []
 	);
 
-	// Efforts oldest→newest for the trend chart.
-	const chrono = $derived(
-		efforts
-			.flatMap((effort) => {
-				const speed = segmentSpeedKmh(segment?.distance_m, effort.elapsed_s);
-				return speed === null || !Number.isFinite(Date.parse(effort.start_time))
-					? []
-					: [{ ...effort, speed }];
-			})
-			.sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))
+	const best = $derived(
+		efforts.find((attempt) => attempt.is_personal_record && attempt.elapsed_s > 0) ??
+			efforts.find((attempt) => attempt.elapsed_s > 0)
 	);
-	const best = $derived(chrono.reduce((speed, effort) => Math.max(speed, effort.speed), 0));
-	let activeEffort = $state<number>();
-	function inspectEffort(event: PointerEvent) {
-		const rect = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
-		const i = Math.round(
-			((((event.clientX - rect.left) / rect.width) * W - PAD.l) / plotW) * (chrono.length - 1)
-		);
-		activeEffort = Math.min(chrono.length - 1, Math.max(0, i));
-	}
+	const bestLabel = $derived(
+		data.member
+			? m.segment_rider_best({ rider: data.member.display_name || data.member.username })
+			: m.segment_your_best()
+	);
+	const trend = $derived(alignEffortHistory([efforts], segment?.distance_m ?? 0));
+	const trendSeries = $derived([
+		{ label: m.segment_speed_column(), color: 'var(--plot-speed)', values: trend.values[0] ?? [] }
+	]);
+	const inspected = $derived(
+		hovered === null ? undefined : trend.times[0]?.[trend.offsets.indexOf(hovered)]
+	);
 
-	// ---- inline SVG trend chart (speed per effort) ----------
-	const W = 760;
-	const H = 200;
-	const PAD = { t: 12, r: 12, b: 22, l: 59 };
-	const plotW = W - PAD.l - PAD.r;
-	const plotH = H - PAD.t - PAD.b;
-	const bounds = $derived.by(() => {
-		if (chrono.length === 0) return { min: 0, max: 1 };
-		let min = Infinity,
-			max = -Infinity;
-		for (const e of chrono) {
-			min = Math.min(min, e.speed);
-			max = Math.max(max, e.speed);
+	const trace = $derived.by(() => {
+		if (coordinates.length < 2) return '';
+		const first = coordinates[0]!;
+		const latitudeScale = Math.cos((first[1] * Math.PI) / 180);
+		const points = coordinates.map(([lon, lat]) => {
+			const longitudeDelta = ((lon - first[0] + 540) % 360) - 180;
+			return [longitudeDelta * latitudeScale, first[1] - lat] as const;
+		});
+		let left = 0,
+			right = 0,
+			top = 0,
+			bottom = 0;
+		for (const [x, y] of points) {
+			left = Math.min(left, x);
+			right = Math.max(right, x);
+			top = Math.min(top, y);
+			bottom = Math.max(bottom, y);
 		}
-		const [lower, upper] = segmentSpeedRange(min, max);
-		return { min: lower, max: upper };
+		const scale = Math.min(240 / (right - left || 1e-9), 104 / (bottom - top || 1e-9));
+		return points
+			.map(
+				([x, y]) =>
+					`${140 + (x - (left + right) / 2) * scale},${64 + (y - (top + bottom) / 2) * scale}`
+			)
+			.join(' ');
 	});
-	function x(i: number): number {
-		const n = chrono.length;
-		return n <= 1 ? PAD.l + plotW / 2 : PAD.l + (i / (n - 1)) * plotW;
-	}
-	function y(v: number): number {
-		const { min, max } = bounds;
-		return PAD.t + plotH - ((v - min) / (max - min || 1)) * plotH;
-	}
-	const linePath = $derived(
-		chrono
-			.map((e, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(e.speed).toFixed(1)}`)
-			.join(' ')
-	);
 </script>
 
-<div class="space-y-6">
+<svelte:head><title>{segment?.name || m.segment_page_title()}</title></svelte:head>
+
+<div class="space-y-3 md:space-y-4">
+	<a href={memberURL('/segments', data.member)} class="back-link">
+		<Icon name="back" size={18} />{m.nav_segments()}
+	</a>
+
 	{#if loading}
-		<div class="text-sm text-zinc-500">{m.community_loading()}</div>
+		<p role="status" class="surface state-panel">{m.ride_loading()}</p>
 	{:else if failure || !segment}
-		<div
-			role="status"
-			class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400"
-		>
+		<div role="status" class="surface state-panel">
 			{failure === 'request' ? m.segment_detail_failed() : m.segment_not_found()}
+			{#if failure === 'request'}
+				<button type="button" class="action ml-2" onclick={() => (retry += 1)}
+					>{m.community_retry()}</button
+				>
+			{/if}
 		</div>
 	{:else}
-		<header class="flex items-center gap-3">
-			<span
-				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-accent-400"
-			>
-				<SportIcon type={segment.activity_type} size={20} />
-			</span>
-			<div>
-				<h1 class="text-2xl font-semibold tracking-tight">{segment.name || 'Segment'}</h1>
-				<div class="mt-0.5 flex flex-wrap gap-x-4 text-xs text-zinc-500">
-					<span>{formatMetricDistance(segment.distance_m)}</span>
-					{#if segment.source === 'strava_catalog'}<span>{m.segment_strava_source()}</span>{/if}
-					{#if segment.elevation_gain_m}<span
-							>{formatElevation(segment.elevation_gain_m)} climb</span
-						>{/if}
-					{#if segment.avg_grade != null}<span>{segment.avg_grade.toFixed(1)}% avg</span>{/if}
-					{#if segment.climb_category}<span>Cat {segment.climb_category}</span>{/if}
-				</div>
+		<header class="segment-hero">
+			{#if trace}
+				<svg viewBox="0 0 280 128" aria-hidden="true" class="segment-trace">
+					<polyline points={trace} class="trace-casing" />
+					<polyline points={trace} class="trace-line" />
+				</svg>
+			{/if}
+			<div class="relative grid gap-2">
+				<p class="flex items-center gap-1.5 text-xs font-semibold">
+					<Icon name="segments" size={16} />{m.segment_page_title()}
+				</p>
+				<h1 class="page-title">{segment.name || m.segment_page_title()}</h1>
+				<ul class="flex flex-wrap gap-x-2.5 gap-y-1 text-xs font-semibold tabular-nums">
+					<li>{formatMetricDistance(segment.distance_m)}</li>
+					{#if segment.avg_grade != null}<li>
+							{m.segment_gradient_average({ grade: number.format(segment.avg_grade) })}
+						</li>{/if}
+					{#if segment.max_grade != null}<li>
+							{m.segment_gradient_maximum({ grade: number.format(segment.max_grade) })}
+						</li>{/if}
+					{#if segment.elevation_gain_m != null}<li>
+							{formatElevation(segment.elevation_gain_m)}
+						</li>{/if}
+					{#if segment.climb_category}<li>
+							{m.segment_climb_category({ category: segment.climb_category })}
+						</li>{/if}
+					{#if segment.source === 'strava_catalog'}<li>{m.segment_strava_source()}</li>{/if}
+				</ul>
 			</div>
 		</header>
 
-		{#if coordinates.length > 1}
-			<section class="h-72 overflow-hidden rounded-xl border border-zinc-800">
-				<ActivityMap {coordinates} />
-			</section>
-		{/if}
+		<SectionTabs
+			{tabs}
+			active={tab}
+			id="segment"
+			label={m.segment_page_title()}
+			onchange={(next) => (tab = next)}
+		/>
 
-		<SegmentRivalries id={segment.id} distanceM={segment.distance_m} member={data.member} />
-
-		{#if chrono.length}
-			<section>
-				<h2 class="mb-2 text-sm font-medium text-zinc-300">{m.segment_performance_trend()}</h2>
-				<div class="rounded-xl border border-zinc-800 bg-panel p-3">
-					<svg
-						viewBox={`0 0 ${W} ${H}`}
-						class="w-full"
-						role="img"
-						aria-label={m.segment_speed_trend_label()}
-						onpointermove={inspectEffort}
-						onpointerdown={inspectEffort}
-						onpointerleave={(event) => {
-							if (event.pointerType === 'mouse') activeEffort = undefined;
-						}}
+		{#key segment.id}
+			<SegmentRivalries id={segment.id} distanceM={segment.distance_m} member={data.member}>
+				{#snippet children(leaderboard, history)}
+					<div
+						role="tabpanel"
+						id="segment-panel-overview"
+						aria-labelledby="segment-tab-overview"
+						hidden={tab !== 'overview'}
+						class="space-y-3 md:space-y-4"
 					>
-						<text
-							x="13"
-							y={H / 2}
-							transform={`rotate(-90 13 ${H / 2})`}
-							text-anchor="middle"
-							class="fill-quiet text-xs">{m.segment_speed_axis()}</text
-						>
-						{#each [0, 0.5, 1] as t (t)}
-							{@const gy = PAD.t + plotH * t}
-							{@const val = bounds.max - (bounds.max - bounds.min) * t}
-							<line
-								x1={PAD.l}
-								y1={gy}
-								x2={W - PAD.r}
-								y2={gy}
-								stroke="var(--plot-grid)"
-								stroke-width="1"
-							/>
-							<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-quiet text-[10px]">
-								{val.toFixed(2)}
-							</text>
-						{/each}
-						<path d={linePath} fill="none" stroke="var(--plot-speed)" stroke-width="1.8" />
-						{#each chrono as e, i (e.id)}
-							<circle
-								cx={x(i)}
-								cy={y(e.speed)}
-								r={e.speed === best || activeEffort === i ? 5 : 3}
-								fill={e.speed === best ? 'var(--plot-cadence)' : 'var(--plot-speed)'}
-							>
-								<title
-									>{formatDate(e.start_time)} · {formatDistanceEffort(
-										segment.distance_m,
-										e.elapsed_s
-									)}{e.speed === best ? ' (PR)' : ''}</title
-								>
-							</circle>
-						{/each}
-					</svg>
-					<p class="mt-1 text-center text-[10px] text-quiet">
-						{m.segment_speed_trend_caption()}
-						{#if activeEffort !== undefined && chrono[activeEffort]}
-							{@const effort = chrono[activeEffort]!}
-							<span class="block text-xs"
-								>{formatDate(effort.start_time)} · {formatDistanceEffort(
-									segment.distance_m,
-									effort.elapsed_s
-								)}</span
-							>
-						{/if}
-					</p>
-				</div>
-			</section>
-		{/if}
+						<MetricStrip
+							label={bestLabel}
+							metrics={[
+								{
+									label: bestLabel,
+									value: formatDuration(best?.elapsed_s),
+									icon: 'records',
+									href: best ? memberURL(`/activities/${best.activity_id}`, data.member) : undefined
+								},
+								{
+									label: m.segment_avg_speed(),
+									value: formatSpeedKmh(segmentSpeedKmh(segment?.distance_m, best?.elapsed_s)),
+									icon: 'speed'
+								},
+								{
+									label: m.segment_attempts(),
+									value:
+										number.format(efforts.length) +
+										(efforts.length >= detailAttemptLimit ? '+' : ''),
+									icon: 'activities'
+								}
+							]}
+						/>
+						<div class="overview-grid">
+							<div class="space-y-3 md:space-y-4">
+								{#if tab === 'overview'}
+									{@render leaderboard(true, () => {
+										tab = 'leaderboard';
+										document.getElementById('segment-tab-leaderboard')?.focus();
+									})}
+									{@render history()}
+								{/if}
+							</div>
+							{#if coordinates.length > 1}
+								<section class="surface min-w-0 overflow-hidden">
+									<h2 class="section-title px-3 py-2 sm:px-4">{m.segment_route()}</h2>
+									<div class="h-52 md:h-72"><ActivityMap {coordinates} /></div>
+								</section>
+							{/if}
+						</div>
+					</div>
 
-		<section>
-			<h2 class="mb-3 text-sm font-medium text-zinc-300">
-				{data.member ? m.member_segment_efforts() : m.segment_leaderboard_only_yours()}
-			</h2>
-			{#if efforts.length === 0}
-				<p class="text-sm text-quiet">
-					{data.member ? m.member_segment_no_efforts() : m.segment_no_personal_efforts()}
-				</p>
-			{:else}
-				<div class="overflow-x-auto rounded-xl border border-zinc-800">
-					<table class="w-full text-sm">
-						<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
+					<div
+						role="tabpanel"
+						id="segment-panel-leaderboard"
+						aria-labelledby="segment-tab-leaderboard"
+						hidden={tab !== 'leaderboard'}
+					>
+						{#if tab === 'leaderboard'}{@render leaderboard(false, () => {})}{/if}
+					</div>
+				{/snippet}
+			</SegmentRivalries>
+		{/key}
+
+		<div
+			role="tabpanel"
+			id="segment-panel-attempts"
+			aria-labelledby="segment-tab-attempts"
+			hidden={tab !== 'attempts'}
+			class="space-y-3 md:space-y-4"
+		>
+			{#if tab === 'attempts' && trend.offsets.length}
+				<section class="surface p-3 sm:p-4">
+					<h2 class="section-title mb-2">{m.segment_performance_trend()}</h2>
+					<StreamChart
+						offsets={trend.offsets}
+						series={trendSeries}
+						height={200}
+						calendar
+						legend={false}
+						yAxis={{
+							label: m.segment_speed_axis(),
+							format: (value) => number.format(value),
+							range: segmentSpeedRange
+						}}
+						onHover={(value) => (hovered = value)}
+					/>
+					{#if hovered !== null && inspected != null}
+						<p class="mt-1 text-xs text-quiet">
+							{formatDate(new Date(hovered * 1000).toISOString())} · {formatDistanceEffort(
+								segment.distance_m,
+								inspected
+							)}
+						</p>
+					{/if}
+				</section>
+			{/if}
+			<section class="surface min-w-0 overflow-hidden">
+				<h2 class="section-title px-3 py-2.5 sm:px-4">
+					{data.member ? m.member_segment_efforts() : m.segment_leaderboard_only_yours()}
+				</h2>
+				{#if !efforts.length}
+					<p class="state-panel">
+						{data.member ? m.member_segment_no_efforts() : m.segment_no_personal_efforts()}
+					</p>
+				{:else}
+					<table class="attempts-table w-full text-sm">
+						<thead class="text-xs text-quiet">
 							<tr>
-								<th class="px-4 py-2 text-left font-medium">Date</th>
-								<th class="px-4 py-2 text-right font-medium">Time</th>
-								<th class="px-4 py-2 text-right font-medium">Rank</th>
-								<th class="px-4 py-2 text-right font-medium">HR</th>
-								<th class="px-4 py-2 text-right font-medium">Power</th>
+								<th scope="col" class="text-left">{m.segment_leaderboard_date()}</th>
+								<th scope="col">{m.detail_label_time()}</th>
+								<th scope="col">{m.segment_leaderboard_rank()}</th>
+								<th scope="col">{m.segment_heart_rate()}</th>
+								<th scope="col">{m.segment_power()}</th>
 							</tr>
 						</thead>
-						<tbody>
-							{#each efforts as e (e.id)}
-								<tr class="border-t border-zinc-800/70 hover:bg-panel">
-									<td class="px-4 py-2">
+						<tbody class="divide-y divide-zinc-800">
+							{#each efforts.slice(0, visibleAttempts) as effort (effort.id)}
+								<tr>
+									<th scope="row" class="text-left font-semibold">
 										<a
-											href={memberURL(`/activities/${e.activity_id}`, data.member)}
-											class="text-accent-400 hover:text-accent-300 hover:underline"
+											href={memberURL(`/activities/${effort.activity_id}`, data.member)}
+											class="text-accent-300 hover:underline"
 										>
-											{formatDate(e.start_time)}
+											{formatDate(effort.start_time)}
 										</a>
+									</th>
+									<td>
+										{formatDuration(effort.elapsed_s)}
+										<span class="block text-xs text-quiet"
+											>{formatSpeedKmh(segmentSpeedKmh(segment.distance_m, effort.elapsed_s))}</span
+										>
 									</td>
-									<td class="px-4 py-2 text-right tabular-nums">
-										{formatDistanceEffort(segment.distance_m, e.elapsed_s)}
-										{#if e.is_personal_record}<span
-												class="ml-1 rounded bg-amber-500/15 px-1 text-[10px] text-amber-300"
-												>PR</span
+									<td>
+										{effort.personal_rank > 0 ? effort.personal_rank : '—'}
+										{#if effort.is_personal_record}<span
+												title={m.segment_personal_record()}
+												class="attempt-pr">PR</span
 											>{/if}
 									</td>
-									<td class="px-4 py-2 text-right tabular-nums text-zinc-400">#{e.personal_rank}</td
-									>
-									<td class="px-4 py-2 text-right tabular-nums text-zinc-400"
-										>{e.avg_heart_rate ?? '—'}</td
-									>
-									<td class="px-4 py-2 text-right tabular-nums text-zinc-400"
-										>{e.avg_power ?? '—'}</td
-									>
+									<td>{effort.avg_heart_rate ?? '—'}</td>
+									<td>{effort.avg_power ?? '—'}</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
-				</div>
-			{/if}
-		</section>
+					{#if visibleAttempts < efforts.length}
+						<button
+							type="button"
+							class="action m-3"
+							onclick={() => (visibleAttempts += attemptPageSize)}
+							>{m.segment_more_attempts()}</button
+						>
+					{/if}
+				{/if}
+			</section>
+		</div>
 	{/if}
 </div>
+
+<style>
+	.back-link {
+		display: inline-flex;
+		min-height: var(--target-size);
+		align-items: center;
+		gap: 0.3rem;
+		border-radius: var(--radius-control);
+		color: var(--accent-text);
+		font-size: 0.8125rem;
+		font-weight: 650;
+	}
+
+	.back-link:hover {
+		text-decoration: underline;
+	}
+
+	.segment-hero {
+		position: relative;
+		isolation: isolate;
+		display: flex;
+		min-height: 8.25rem;
+		align-items: flex-end;
+		overflow: hidden;
+		border-radius: var(--radius-panel);
+		padding: clamp(0.9rem, 3vw, 1.5rem);
+		background: #162e59;
+		color: #e1edff;
+	}
+
+	.segment-hero h1 {
+		color: #fff;
+	}
+
+	.segment-trace {
+		position: absolute;
+		z-index: -1;
+		inset: 0 0 0 auto;
+		width: min(62%, 26rem);
+		height: 100%;
+		opacity: 0.55;
+	}
+
+	.segment-trace polyline {
+		fill: none;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.trace-casing {
+		stroke: #2d5393;
+		stroke-width: 9;
+	}
+
+	.trace-line {
+		stroke: #82b0ff;
+		stroke-width: 3;
+	}
+
+	.segment-hero li + li::before {
+		margin-inline-end: 0.5rem;
+		content: '·';
+	}
+
+	.overview-grid {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.attempts-table {
+		table-layout: fixed;
+	}
+
+	.attempts-table :is(th, td) {
+		padding: 0.55rem 0.3rem;
+		text-align: right;
+		overflow-wrap: anywhere;
+	}
+
+	.attempts-table th:first-child {
+		width: 29%;
+		padding-inline-start: 0.7rem;
+		text-align: left;
+	}
+
+	.attempts-table :is(th, td):last-child {
+		padding-inline-end: 0.7rem;
+	}
+
+	.attempt-pr {
+		display: block;
+		color: var(--warning-strong);
+		font-size: 0.625rem;
+		font-weight: 750;
+	}
+
+	@media (width >= 69rem) {
+		.segment-hero {
+			min-height: 9.5rem;
+		}
+
+		.overview-grid {
+			grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+			align-items: start;
+		}
+	}
+</style>

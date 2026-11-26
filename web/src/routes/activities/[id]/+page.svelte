@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
+	import MetricStrip from '#lib/components/MetricStrip.svelte';
 	import SortHeader from '#lib/components/SortHeader.svelte';
 	import { compareSortedValues, promoteSort, type SortCriterion } from '#lib/stacked-sort.js';
 	import { memberURL } from '#lib/member.js';
@@ -342,18 +344,18 @@
 	const beCount = $derived(bestEfforts.length);
 </script>
 
-<section class="space-y-8">
+<section class="space-y-4 md:space-y-6">
 	<header>
 		<ActivityNav id={a.id} isOwner={data.isOwner} member={data.activityOwner} />
-		<div class="mt-2 flex items-start gap-4">
+		<div class="surface mt-2 flex items-start gap-3 p-3 sm:gap-4 sm:p-5">
 			<span
-				class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-accent-300"
+				class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent-500/10 text-accent-300 sm:size-14"
 				title={a.discipline || a.type}
 			>
 				<SportIcon type={a.discipline || a.type} size={30} />
 			</span>
 			<div class="min-w-0">
-				<h1 class="text-3xl font-semibold leading-tight tracking-tight max-md:text-2xl">
+				<h1 class="page-title">
 					{a.title || `${a.discipline || a.type} Activity`}
 				</h1>
 				<p class="mt-1 text-sm text-zinc-400">
@@ -381,17 +383,23 @@
 		</div>
 	</header>
 
-	<!-- Primary stats: the four headline numbers. -->
-	<dl
-		class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800 sm:grid-cols-4"
-	>
-		{#each [{ label: m.detail_stat_distance(), value: formatDistance(a.summary.distanceM ?? null) }, { label: m.detail_stat_moving(), value: formatDuration(a.movingDurationS) }, { label: primaryPace.label, value: primaryPace.value }, { label: m.detail_stat_elevation(), value: formatElevation(a.summary.elevationGainM ?? null) }] as c (c.label)}
-			<div class="bg-panel p-4">
-				<dt class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</dt>
-				<dd class="mt-1.5 text-2xl font-semibold tabular-nums">{c.value}</dd>
-			</div>
-		{/each}
-	</dl>
+	<MetricStrip
+		label={m.activity_key_metrics()}
+		metrics={[
+			{
+				label: m.detail_stat_distance(),
+				value: formatDistance(a.summary.distanceM ?? null),
+				icon: 'routes'
+			},
+			{ label: m.detail_stat_moving(), value: formatDuration(a.movingDurationS), icon: 'clock' },
+			{ label: primaryPace.label, value: primaryPace.value, icon: 'speed' },
+			{
+				label: m.detail_stat_elevation(),
+				value: formatElevation(a.summary.elevationGainM ?? null),
+				icon: 'segments'
+			}
+		]}
+	/>
 
 	<!-- Achievements -->
 	{#if beCount > 0 || segCount > 0}
@@ -402,18 +410,19 @@
 					aria-expanded={showPRs}
 					aria-controls="segment-prs"
 					onclick={() => (showPRs = !showPRs)}
-					class="rounded-full bg-emerald-500/15 px-3 py-2 text-emerald-300 hover:bg-emerald-500/25"
+					class="action text-emerald-300"
 				>
-					🏆 {prCount} segment PR{prCount === 1 ? '' : 's'}
+					<Icon name="records" size={16} />
+					{prCount} segment PR{prCount === 1 ? '' : 's'}
 				</button>
 			{/if}
 			{#if segCount > 0}
-				<span class="rounded-full bg-zinc-800 px-3 py-1 text-zinc-300">
+				<span class="inline-flex items-center rounded-lg bg-zinc-800 px-3 py-1 text-zinc-300">
 					{segCount} segment effort{segCount === 1 ? '' : 's'}
 				</span>
 			{/if}
 			{#if beCount > 0}
-				<span class="rounded-full bg-zinc-800 px-3 py-1 text-zinc-300">
+				<span class="inline-flex items-center rounded-lg bg-zinc-800 px-3 py-1 text-zinc-300">
 					{beCount} best effort{beCount === 1 ? '' : 's'}
 				</span>
 			{/if}
@@ -421,11 +430,7 @@
 	{/if}
 
 	{#if showPRs}
-		<section
-			id="segment-prs"
-			aria-label={m.segment_personal_record()}
-			class="rounded-lg border border-zinc-800 bg-panel p-3"
-		>
+		<section id="segment-prs" aria-label={m.segment_personal_record()} class="surface p-3">
 			<ul class="divide-y divide-zinc-800">
 				{#each achievements as effort (effort.id)}
 					<li
@@ -451,9 +456,7 @@
 
 	<!-- Secondary stats: only those that carry a value. -->
 	{#if secondaryStats.length > 0}
-		<dl
-			class="grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-zinc-800 bg-panel p-5 sm:grid-cols-3 lg:grid-cols-4"
-		>
+		<dl class="grid grid-cols-2 gap-x-6 gap-y-3 surface p-5 sm:grid-cols-3 lg:grid-cols-4">
 			{#each secondaryStats as s (s.label)}
 				<div class="flex items-baseline justify-between gap-2 border-b border-zinc-800/60 pb-1.5">
 					<dt class="text-xs text-zinc-500">{s.label}</dt>
@@ -466,7 +469,7 @@
 	{#if coordinates.length > 0}
 		<section>
 			<div class="mb-3 flex items-center justify-between">
-				<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">
+				<h2 class="section-title">
 					{m.detail_section_route()}
 				</h2>
 				<div class="flex items-center gap-4 text-sm text-accent-300">
@@ -552,7 +555,7 @@
 	{#if series.length > 0}
 		<section>
 			<div class="mb-3 flex items-center justify-between">
-				<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">
+				<h2 class="section-title">
 					{m.detail_section_streams()}
 				</h2>
 				<a
@@ -601,7 +604,7 @@
 
 	{#if bestEfforts.length > 0}
 		<section>
-			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">Best Efforts</h2>
+			<h2 class="section-title mb-3">Best Efforts</h2>
 			<div class="overflow-x-auto rounded-lg border border-zinc-800">
 				<table class="w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
@@ -698,7 +701,7 @@
 		{@const dc = zones.decoupling}
 		<section>
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Aerobic decoupling</h2>
-			<div class="flex flex-wrap items-center gap-4 rounded-xl border border-zinc-800 bg-panel p-4">
+			<div class="flex flex-wrap items-center gap-4 surface p-4">
 				<div
 					class="text-3xl font-semibold tabular-nums {dc.coupled
 						? 'text-emerald-400'
@@ -724,7 +727,7 @@
 				{#each [{ key: 'hr', title: 'Heart rate', set: zones?.hr, unit: 'bpm' }, { key: 'power', title: 'Power', set: zones?.power, unit: 'W' }] as col (col.key)}
 					{#if col.set && col.set.total_seconds > 0}
 						{@const zset = col.set}
-						<div class="rounded-xl border border-zinc-800 bg-panel p-4">
+						<div class="surface p-4">
 							<div class="mb-2 flex items-baseline justify-between">
 								<h3 class="text-sm font-medium text-zinc-200">{col.title}</h3>
 								{#if zset.reference}
@@ -791,7 +794,7 @@
 	{#if segmentEfforts.length > 0 || canRescan}
 		<section>
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-				<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">
+				<h2 class="section-title">
 					{m.nav_segments()} <span class="text-quiet">({segmentEfforts.length})</span>
 				</h2>
 				{#if canRescan}
@@ -905,7 +908,7 @@
 
 	{#if a.description}
 		<section>
-			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">
+			<h2 class="section-title mb-3">
 				{m.detail_section_description()}
 			</h2>
 			<p class="whitespace-pre-line text-sm text-zinc-300">{a.description}</p>
@@ -914,7 +917,7 @@
 
 	{#if data.isOwner && a.sources.length > 0}
 		<section>
-			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">Sources</h2>
+			<h2 class="section-title mb-3">Sources</h2>
 			<p class="mb-3 text-xs text-zinc-500">
 				This activity is merged from {activeSources.length} source{activeSources.length === 1
 					? ''

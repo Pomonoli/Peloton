@@ -94,7 +94,7 @@
 
 <div class="analysis-page">
 	<header>
-		<h1>{m.nav_analysis()}</h1>
+		<h1 class="page-title">{m.nav_analysis()}</h1>
 		<div class="segmented ranges" role="group" aria-label={m.analysis_period()}>
 			{#each ranges as range (range.value)}
 				<button
@@ -290,7 +290,7 @@
 
 <style>
 	.analysis-page {
-		--card-border: color-mix(in srgb, var(--surface-muted) 76%, var(--line-strong));
+		--card-border: var(--line-subtle);
 		--zone-very-fatigued: light-dark(#df8799, #be526f);
 		--zone-accumulated: light-dark(#edb480, #b47746);
 		--zone-balanced: light-dark(#f1d885, #b19b50);
@@ -304,12 +304,6 @@
 		display: grid;
 		gap: 0.75rem;
 	}
-	h1 {
-		font-size: clamp(1.75rem, 4vw, 2.1rem);
-		letter-spacing: -0.045em;
-		font-weight: 750;
-		line-height: 1.12;
-	}
 	h2 {
 		font-size: 1.1rem;
 		font-weight: 730;
@@ -319,7 +313,7 @@
 	.card {
 		min-width: 0;
 		border: 1px solid var(--card-border);
-		border-radius: 0.85rem;
+		border-radius: var(--radius-panel);
 		background: var(--surface-card);
 		box-shadow: var(--panel-shadow);
 		padding: clamp(0.8rem, 2vw, 1.2rem);
@@ -338,7 +332,7 @@
 		width: min(100%, 24rem);
 	}
 	.segmented button {
-		min-height: 2.25rem;
+		min-height: var(--target-size);
 		border-radius: 0.48rem;
 		padding: 0.1rem 0.75rem;
 		color: var(--text-secondary);
@@ -357,11 +351,7 @@
 		--tone: var(--accent-text);
 		--tone-wash: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-card));
 		border-color: color-mix(in srgb, var(--tone) 26%, var(--card-border));
-		background: linear-gradient(
-			117deg,
-			var(--surface-card) 16%,
-			color-mix(in srgb, var(--tone-wash) 60%, var(--surface-card))
-		);
+		background: color-mix(in srgb, var(--tone-wash) 44%, var(--surface-card));
 	}
 	.status[data-tone='fresh'] {
 		--tone: var(--plot-form);

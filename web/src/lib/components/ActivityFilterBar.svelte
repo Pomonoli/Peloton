@@ -58,9 +58,7 @@
 </script>
 
 {#if facets || controls}
-	<div
-		class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4 max-md:rounded-none max-md:border-0 max-md:p-0"
-	>
+	<div class="space-y-3 surface p-4 max-md:rounded-none max-md:border-0 max-md:p-0">
 		{#if controls}
 			{@render controls()}
 		{/if}

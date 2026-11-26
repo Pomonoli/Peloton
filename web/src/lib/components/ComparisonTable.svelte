@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
 	import FilterSheet from './FilterSheet.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
@@ -53,22 +54,23 @@
 		}}
 	>
 		{#snippet toolbar()}
-			<label class="min-w-0">
+			<label class="relative block min-w-0">
+				<Icon
+					name="search"
+					size={16}
+					class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-quiet"
+				/>
 				<span class="sr-only">{searchLabel}</span>
 				<input
 					type="search"
 					bind:value={query}
 					placeholder={searchLabel}
-					class="min-h-10 w-full rounded-lg border border-zinc-700 bg-panel px-3 text-sm"
+					class="field w-full pl-9"
 				/>
 			</label>
 		{/snippet}
 		<div class="grid gap-2 sm:grid-cols-2">
-			<select
-				aria-label={m.comparison_filter()}
-				bind:value={winner}
-				class="min-h-10 w-full rounded-lg border border-zinc-700 bg-panel px-2 text-sm"
-			>
+			<select aria-label={m.comparison_filter()} bind:value={winner} class="field w-full">
 				<option value="">{m.comparison_all_results()}</option>
 				<option value="you">{first}</option>
 				<option value="opponent">{opponent}</option>
@@ -79,7 +81,7 @@
 					aria-label={m.comparison_sort_by()}
 					value={sort}
 					onchange={(event) => sortBy(event.currentTarget.value as SortKey)}
-					class="min-h-10 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-panel px-2 text-sm"
+					class="field flex-1"
 				>
 					{#if defaultSort === 'category'}
 						<option value="category">{m.comparison_record_order()}</option>
@@ -91,7 +93,7 @@
 				<button
 					type="button"
 					onclick={() => (descending = !descending)}
-					class="min-h-10 min-w-10 rounded-lg border border-zinc-700 bg-panel hover:border-accent-500"
+					class="action"
 					aria-label={descending ? m.segment_sort_descending() : m.segment_sort_ascending()}
 				>
 					{descending ? '↓' : '↑'}
@@ -102,11 +104,11 @@
 </div>
 
 {#if shown.length === 0}
-	<p role="status" class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+	<p role="status" class="surface p-4 text-sm text-quiet">
 		{query.trim() || winner ? m.comparison_no_matches() : empty}
 	</p>
 {:else}
-	<div class="overflow-hidden rounded-xl border border-zinc-800 bg-panel">
+	<div class="overflow-hidden surface">
 		<table class="comparison-table w-full text-left text-sm">
 			<thead class="bg-zinc-950/70">
 				<tr>
@@ -115,6 +117,8 @@
 							scope="col"
 							class="px-3 py-1 text-quiet"
 							class:distance-cell={col.key === 'distance'}
+							class:first-rider={col.key === 'you'}
+							class:second-rider={col.key === 'opponent'}
 							aria-sort={sort === col.key ? (descending ? 'descending' : 'ascending') : undefined}
 						>
 							<button
@@ -141,6 +145,8 @@
 							<td
 								class="min-w-0 px-3 py-2.5 align-middle tabular-nums"
 								class:distance-cell={col.key === 'distance'}
+								class:first-rider={col.key === 'you'}
+								class:second-rider={col.key === 'opponent'}
 							>
 								{#if col.key === 'winner'}
 									<span
@@ -153,10 +159,13 @@
 									<a
 										href={cell.href}
 										class="text-accent-300 hover:underline"
-										class:font-bold={won || col.key === 'name' || descendingResults}>{cell.text}</a
+										class:font-bold={won || col.key === 'name'}
+										class:result-win={won}>{cell.text}</a
 									>
 								{:else}
-									<span class:font-semibold={col.key === 'name'}>{cell?.text}</span>
+									<span class:font-semibold={won || col.key === 'name'} class:result-win={won}
+										>{cell?.text}</span
+									>
 								{/if}
 								{#if col.key === 'name' && row.cells.distance}
 									<span class="inline-distance text-xs text-quiet">{row.cells.distance.text}</span>
@@ -184,13 +193,21 @@
 		background: var(--surface-muted);
 		color: var(--text-secondary);
 	}
+	.first-win,
+	.first-rider .result-win,
+	th.first-rider {
+		color: var(--rider-first);
+	}
+	.second-win,
+	.second-rider .result-win,
+	th.second-rider {
+		color: var(--rider-second);
+	}
 	.first-win {
-		background: var(--success-surface);
-		color: var(--success-text);
+		background: var(--rider-first-wash);
 	}
 	.second-win {
-		background: var(--warning-surface);
-		color: var(--warning-text);
+		background: var(--rider-second-wash);
 	}
 
 	@media (width < 64rem) {

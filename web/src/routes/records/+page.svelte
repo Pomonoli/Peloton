@@ -86,7 +86,7 @@
 <svelte:head><title>Records · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-4xl space-y-3">
-	<h1 class="text-2xl font-semibold tracking-tight">{m.member_records()}</h1>
+	<h1 class="page-title">{m.member_records()}</h1>
 	{#snippet downhillFilter()}
 		<label class="inline-flex min-h-11 items-center gap-2 text-sm font-medium">
 			<input
@@ -99,10 +99,7 @@
 		{#if excludeDownhills}<p class="text-xs text-quiet">{m.records_downhill_help()}</p>{/if}
 	{/snippet}
 	{#snippet recordTabs()}
-		<nav
-			class="inline-flex gap-1 rounded-lg border border-zinc-800 bg-panel p-1"
-			aria-label={m.member_records()}
-		>
+		<nav class="inline-flex gap-1 surface p-1" aria-label={m.member_records()}>
 			<a
 				href={tabURL(false)}
 				aria-current={!boards ? 'page' : undefined}
@@ -151,9 +148,7 @@
 						<SportIcon {type} size={16} />
 						{recordSport(type)}
 					</h2>
-					<div
-						class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-panel"
-					>
+					<div class="divide-y divide-zinc-800 overflow-hidden surface">
 						{#each list as r (r.metric + r.window_kind + r.window_value)}
 							<a
 								href={memberURL(

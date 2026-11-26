@@ -2,6 +2,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { MediaQuery } from 'svelte/reactivity';
 	import type { Snippet } from 'svelte';
+	import Icon from './Icon.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 
 	let {
@@ -37,14 +38,14 @@
 </script>
 
 {#if toolbar || mobile.current}
-	<div class="flex min-w-0 items-center justify-between gap-2">
+	<div class="flex min-w-0 items-start justify-between gap-2">
 		{#if toolbar}
 			<div class="min-w-0 flex-1">{@render toolbar()}</div>
 		{/if}
 		{#if mobile.current}
 			<button
 				type="button"
-				class="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-zinc-800 bg-panel px-3 text-xs font-semibold text-zinc-300 data-[active=true]:border-accent-500/40 data-[active=true]:text-accent-300"
+				class="action ml-auto shrink-0 data-[active=true]:border-accent-500/40 data-[active=true]:text-accent-300"
 				data-active={active}
 				aria-label={active ? label + ' (' + m.mobile_filters_active() + ')' : label}
 				aria-haspopup="dialog"
@@ -55,20 +56,7 @@
 					open = !!dialog?.open;
 				}}
 			>
-				<svg
-					aria-hidden="true"
-					class="size-4"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<path d="M4 7h16M7 12h10M10 17h4" />
-					<circle cx="8" cy="7" r="1.5" fill="var(--surface-panel)" />
-					<circle cx="15" cy="12" r="1.5" fill="var(--surface-panel)" />
-				</svg>
+				<Icon name="filter" size={16} />
 				{label}
 				{#if active}<span class="size-1.5 rounded-full bg-accent-500" aria-hidden="true"
 					></span>{/if}
@@ -112,16 +100,12 @@
 			</div>
 			<footer class="sheet-footer flex gap-2 border-t border-zinc-800 px-4 pt-2.5">
 				{#if reset}
-					<button
-						type="button"
-						class="min-h-11 flex-1 rounded-xl border border-zinc-800 text-sm font-semibold text-zinc-300"
-						onclick={reset}>{m.mobile_filters_reset()}</button
+					<button type="button" class="action flex-1" onclick={reset}
+						>{m.mobile_filters_reset()}</button
 					>
 				{/if}
-				<button
-					type="button"
-					class="min-h-11 flex-1 rounded-xl bg-accent-500 text-sm font-semibold text-on-accent"
-					onclick={() => dialog?.close()}>{m.mobile_filters_done()}</button
+				<button type="button" class="action action-primary flex-1" onclick={() => dialog?.close()}
+					>{m.mobile_filters_done()}</button
 				>
 			</footer>
 		</div>

@@ -66,7 +66,7 @@
 	};
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+<section class="surface p-5">
 	<h2 class="mb-1 text-sm font-medium text-zinc-300">API tokens</h2>
 	<p class="mb-3 text-xs text-zinc-500">
 		Personal access tokens authenticate CLI and API clients as you. Send them as

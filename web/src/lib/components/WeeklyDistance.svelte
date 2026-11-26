@@ -13,7 +13,7 @@
 		})
 	);
 	const tick = $derived.by(() => {
-		const target = Math.max(1, ...weeks.map((week) => week.distance_m / 4000));
+		const target = Math.max(0.1, ...weeks.map((week) => week.distance_m / 4000));
 		const base = 10 ** Math.floor(Math.log10(target));
 		return ([1, 2, 5, 10].find((n) => n * base >= target) ?? 10) * base;
 	});
@@ -34,18 +34,18 @@
 		})
 	);
 	const detail = $derived(points.find((point) => point.start === active)?.detail ?? '');
+	const hasDistance = $derived(weeks.some((week) => week.distance_m > 0));
 </script>
 
-<section
-	class="min-w-0 rounded-2xl border border-zinc-800 bg-panel p-3 sm:p-4"
-	aria-labelledby="weekly-distance"
->
+<section class="min-w-0 surface p-3 sm:p-4" aria-labelledby="weekly-distance">
 	<div class="flex flex-wrap items-baseline justify-between gap-x-3">
 		<h2 id="weekly-distance" class="text-sm font-bold">{m.overview_weekly_distance()}</h2>
 		<p class="text-xs text-quiet">{m.overview_weekly_calendar()}</p>
 	</div>
-	<p class="mb-0.5 min-h-5 text-right text-xs text-accent-300" aria-live="polite">{detail}</p>
-	<div class="flex h-27 gap-2 sm:h-32">
+	<p class="mb-0.5 min-h-5 text-right text-xs text-accent-300" aria-live="polite">
+		{detail || (!hasDistance ? m.overview_no_cycling_distance() : '')}
+	</p>
+	<div class="flex h-32 gap-2 sm:h-43 xl:h-49">
 		<div
 			class="flex shrink-0 flex-col justify-between text-right text-xs tabular-nums text-quiet"
 			aria-hidden="true"
@@ -74,7 +74,8 @@
 					class="group z-10 flex min-w-0 items-end justify-center rounded-sm pt-2 pb-2 focus-visible:outline-2 focus-visible:outline-accent-400"
 				>
 					<span
-						class="w-full max-w-12 rounded-t-[4px] bg-linear-to-t from-accent-500 to-indigo-400 group-hover:to-accent-400 group-focus:to-accent-400"
+						class="distance-bar w-full max-w-12 rounded-t-[4px]"
+						class:selected={point.start === active}
 						style:height={point.distance_m > 0
 							? `${(point.distance_m / (4000 * tick)) * 100}%`
 							: '2px'}
@@ -92,3 +93,12 @@
 		{/each}
 	</div>
 </section>
+
+<style>
+	.distance-bar {
+		background: color-mix(in srgb, var(--accent-primary) 80%, var(--surface-card));
+	}
+	.distance-bar.selected {
+		background: var(--accent-hover);
+	}
+</style>

@@ -36,7 +36,7 @@
 			<BrandMark class="h-5 w-5" />
 			{APP_NAME}
 		</div>
-		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Reset your password</h1>
+		<h1 class="mt-2 page-title">Reset your password</h1>
 		<p class="mt-1 text-sm text-zinc-400">We'll email you a link to choose a new one.</p>
 	</header>
 
@@ -50,7 +50,7 @@
 			>Back to sign in</a
 		>
 	{:else}
-		<form onsubmit={submit} class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
+		<form onsubmit={submit} class="surface space-y-3 p-4 sm:p-5">
 			<label class="block">
 				<span class="text-xs text-zinc-400">Email</span>
 				<input
@@ -58,14 +58,10 @@
 					type="email"
 					autocomplete="email"
 					required
-					class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none"
+					class="mt-1 field w-full"
 				/>
 			</label>
-			<button
-				type="submit"
-				disabled={busy || !email.trim()}
-				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
-			>
+			<button type="submit" disabled={busy || !email.trim()} class="action action-primary w-full">
 				{busy ? 'Sending…' : 'Send reset link'}
 			</button>
 			<div class="text-center">

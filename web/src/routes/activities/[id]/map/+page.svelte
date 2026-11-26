@@ -16,7 +16,7 @@
 			<a href={`/activities/${a.id}`} class="text-xs text-accent-400 hover:text-accent-300">
 				← {a.title || m.ride_activity()}
 			</a>
-			<h1 class="truncate text-xl font-semibold tracking-tight">{m.detail_section_route()}</h1>
+			<h1 class="truncate page-title">{m.detail_section_route()}</h1>
 		</div>
 		{#if a.type === 'ride' && track.length > 1}
 			<a class="text-sm text-accent-300 hover:underline" href={`/activities/${a.id}/replay`}

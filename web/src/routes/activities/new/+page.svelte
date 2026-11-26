@@ -90,7 +90,7 @@
 
 <div class="mx-auto max-w-2xl px-4 py-6">
 	<a href="/activities" class="text-sm text-zinc-400 hover:text-zinc-200">← Activities</a>
-	<h1 class="mt-2 flex items-center gap-2 text-2xl font-semibold">
+	<h1 class="mt-2 flex items-center gap-2 page-title">
 		<SportIcon {type} size={24} /> New activity
 	</h1>
 	<p class="mt-1 text-sm text-zinc-500">

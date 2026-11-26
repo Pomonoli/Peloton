@@ -70,7 +70,7 @@
 	};
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-panel">
+<section class="surface">
 	<header class="border-b border-zinc-800 px-5 py-3">
 		<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">Invites</h2>
 		<p class="mt-1 text-xs text-zinc-500">

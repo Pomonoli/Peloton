@@ -284,9 +284,7 @@
 </script>
 
 <div class="space-y-3">
-	<div
-		class="relative h-[min(62dvh,38rem)] min-h-72 overflow-hidden rounded-lg border border-zinc-800 bg-panel"
-	>
+	<div class="relative h-[min(62dvh,38rem)] min-h-72 overflow-hidden surface">
 		<div bind:this={container} class="h-full w-full" aria-label={m.segment_map_label()}></div>
 		{#if unavailable}
 			<p

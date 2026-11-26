@@ -190,7 +190,7 @@
 <section class="space-y-8">
 	<header>
 		<ActivityNav id={init.id} title={init.title} />
-		<h1 class="mt-2 flex items-center gap-2 text-2xl font-semibold tracking-tight">
+		<h1 class="mt-2 flex items-center gap-2 page-title">
 			<SportIcon {type} size={24} /> Edit activity
 		</h1>
 		<p class="mt-1 text-sm text-zinc-400">
@@ -364,7 +364,7 @@
 
 	<!-- Source data from another activity (e.g. borrow a route you rode without
 	     your watch). Creates a derived source pinned to the chosen fields. -->
-	<section class="max-w-2xl rounded-xl border border-zinc-800 bg-panel p-5">
+	<section class="max-w-2xl surface p-5">
 		<h2 class="text-lg font-semibold">Source data from another activity</h2>
 		<p class="mt-1 text-sm text-zinc-500">
 			Borrow the route or metrics from one of your other activities. The route is rebased to this

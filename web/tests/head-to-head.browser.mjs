@@ -57,9 +57,9 @@ const records = [
 ];
 
 try {
-	for (const width of [320, 360, 390, 430, 1440]) {
+	for (const width of [320, 360, 390, 424, 430, 1440]) {
 		const mobile = width < 768;
-		const page = await browser.newPage({ viewport: { width, height: 940 } });
+		const page = await browser.newPage({ viewport: { width, height: width === 424 ? 933 : 940 } });
 		page.setDefaultTimeout(7500);
 		const errors = [];
 		let improved = false;
@@ -81,8 +81,14 @@ try {
 				'/api/riders': { members: [you, rider, third] },
 				'/api/members/mira': rider,
 				'/api/head-to-head': {
-					first: url.searchParams.get('first') === 'sam' ? third : you,
-					opponent: rider,
+					first:
+						[you, third, rider].find(
+							(member) => member.username === url.searchParams.get('first')
+						) ?? you,
+					opponent:
+						[you, third, rider].find(
+							(member) => member.username === url.searchParams.get('second')
+						) ?? rider,
 					segments: improved
 						? [segment('canal', 'Canal Sprint', 100, 90, 'opponent'), ...segments.slice(1)]
 						: segments,
@@ -183,10 +189,22 @@ try {
 		assert.equal(await picker.locator('option[value="sam"]').count(), 0);
 		await canal.getByText('1:30', { exact: true }).waitFor();
 		assert.equal(await page.getByRole('main').locator('dl dd').first().textContent(), '0');
+		const bar = page.locator('.score-bar');
+		assert.deepEqual(
+			await bar
+				.locator('span')
+				.evaluateAll((spans) => spans.map((span) => Number(span.style.flexGrow))),
+			[0, 1, 2]
+		);
+		await page.getByRole('button', { name: 'Swap riders' }).click();
+		await page.waitForURL(
+			(url) => url.searchParams.get('first') === 'mira' && url.searchParams.get('member') === 'sam'
+		);
+		assert.equal(await picker.inputValue(), 'sam');
 		assert.deepEqual(errors, []);
 		await page.close();
 	}
-	console.log('Head-to-Head passed at 320px, 360px, 390px, 430px, and 1440px.');
+	console.log('Head-to-Head passed at 320px, 360px, 390px, 424px, 430px, and 1440px.');
 } finally {
 	await browser.close();
 }

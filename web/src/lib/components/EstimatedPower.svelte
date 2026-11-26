@@ -132,7 +132,7 @@
 </script>
 
 <details
-	class="rounded-xl border border-zinc-800 bg-panel p-4"
+	class="surface p-4"
 	ontoggle={(event) => {
 		if (event.currentTarget.open) void open();
 	}}

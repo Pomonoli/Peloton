@@ -63,7 +63,7 @@
 <svelte:head><title>Review · {APP_NAME}</title></svelte:head>
 
 <div class="mx-auto max-w-3xl px-4 py-6">
-	<h1 class="mb-1 text-xl font-semibold text-zinc-100">Review queue</h1>
+	<h1 class="mb-1 page-title text-zinc-100">Review queue</h1>
 	<p class="mb-6 text-sm text-zinc-500">
 		Activities the merge engine combined from multiple sources with only medium confidence. Confirm
 		the ones that look right, or open an activity to split a wrong merge.
@@ -78,9 +78,7 @@
 	{:else}
 		<ul class="space-y-2">
 			{#each items as it (itemKey(it))}
-				<li
-					class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-panel p-3 max-md:flex-wrap"
-				>
+				<li class="flex items-center gap-3 surface p-3 max-md:flex-wrap">
 					<SportIcon type={it.type} size={18} />
 					<div class="min-w-0 flex-1">
 						<a

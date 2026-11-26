@@ -132,10 +132,10 @@ function trainingFixture(days, rider) {
 }
 
 try {
-	for (const width of [360, 390, 430, 1440]) {
+	for (const width of [360, 390, 424, 430, 900, 1440]) {
 		const mobile = width < 768;
 		const page = await browser.newPage({
-			viewport: { width, height: 900 },
+			viewport: { width, height: width === 424 ? 933 : 900 },
 			locale: mobile ? 'en-US' : 'de-DE',
 			timezoneId: 'Europe/Brussels',
 			hasTouch: mobile,
@@ -291,7 +291,10 @@ try {
 				},
 				'/api/stats': {
 					totals,
-					by_year: [],
+					by_year: [
+						{ year: 2026, ...totals },
+						{ year: 2025, ...totals }
+					],
 					by_discipline: [],
 					records: { longest_distance: recent },
 					sport_totals: [
@@ -334,7 +337,10 @@ try {
 		const sheet = page.getByRole('dialog');
 		const done = () => sheet.getByRole('button', { name: 'Done' }).click();
 		await open('/');
-		await main.getByRole('heading', { name: /Ada/ }).waitFor();
+		await main.getByRole('heading', { name: /Good (morning|afternoon|evening), Ada/ }).waitFor();
+		await main.getByRole('term').filter({ hasText: 'Activities' }).first().waitFor();
+		await main.getByRole('link', { name: 'Add activity' }).waitFor();
+		await noPageOverflow('/');
 		await main.getByText('36.00 km/h', { exact: true }).waitFor();
 		assert.equal(
 			await page.locator('html').getAttribute('data-theme'),
@@ -433,7 +439,7 @@ try {
 
 			await noPageOverflow('/activities');
 		} else {
-			assert.equal(await page.getByRole('navigation', { name: 'Main navigation' }).count(), 0);
+			assert.equal(await page.getByRole('navigation', { name: 'Main navigation' }).count(), 1);
 			await open('/riders');
 			await main.getByRole('button', { name: 'Cycling distance' }).click();
 			assert.equal(
@@ -518,6 +524,13 @@ try {
 		await page.getByRole('heading', { name: 'By sport' }).waitFor();
 		await page.getByRole('cell', { name: '36.00 km/h' }).waitFor();
 		await main.getByText('Moving time 1:15:00 · 36.00 km/h', { exact: true }).waitFor();
+		await main.getByLabel('Year', { exact: true }).selectOption('2025');
+		assert.equal(await main.getByRole('rowheader', { name: '2026' }).count(), 0);
+		await main.getByRole('rowheader', { name: '2025' }).waitFor();
+		assert.equal(
+			await main.getByRole('link', { name: /Longest distance/ }).getAttribute('href'),
+			'/activities/mira-ride?member=mira'
+		);
 		await noPageOverflow('/stats');
 		await open('/analysis?member=mira');
 		await page.getByRole('button', { name: 'About Fitness (CTL)' }).click();
@@ -532,7 +545,7 @@ try {
 		const trends = main.getByRole('region', { name: 'Training Load Trends' });
 		const metricsBox = await metrics.boundingBox();
 		const trendsBox = await trends.boundingBox();
-		if (mobile) assert.ok(trendsBox.y > metricsBox.y + metricsBox.height);
+		if (width <= 900) assert.ok(trendsBox.y > metricsBox.y + metricsBox.height);
 		else
 			assert.ok(
 				trendsBox.x > metricsBox.x + metricsBox.width && trendsBox.width > metricsBox.width
@@ -689,7 +702,7 @@ try {
 		await page.close();
 	}
 	console.log(
-		'Peloton views, navigation, filters, and responsive layouts passed at 360px, 390px, 430px, and 1440px.'
+		'Peloton views, navigation, filters, and responsive layouts passed at 360px, 390px, 424px, 430px, 900px, and 1440px.'
 	);
 } finally {
 	await browser.close();

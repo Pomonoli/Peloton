@@ -149,7 +149,7 @@
 	>
 		{#snippet toolbar()}
 			<header>
-				<h1 class="text-2xl font-semibold tracking-tight">{m.nav_segments()}</h1>
+				<h1 class="page-title">{m.nav_segments()}</h1>
 				<p class="mt-1 text-sm text-zinc-400">{m.segment_catalog_coverage()}</p>
 			</header>
 		{/snippet}
@@ -174,9 +174,7 @@
 	</FilterSheet>
 
 	<div class="flex flex-wrap items-center justify-between gap-2">
-		<div
-			class="flex min-w-0 flex-1 items-stretch rounded-md border border-zinc-700 bg-panel focus-within:border-accent-500"
-		>
+		<div class="field flex min-w-0 flex-1 items-stretch p-0 focus-within:border-accent-500">
 			<label class="sr-only" for="segment-search">{m.segment_search_placeholder()}</label>
 			<input
 				type="search"
@@ -199,11 +197,7 @@
 				>
 			{/if}
 		</div>
-		<div
-			class="inline-flex rounded-md border border-zinc-700 bg-panel p-0.5"
-			role="group"
-			aria-label={m.segment_view_label()}
-		>
+		<div class="surface inline-flex p-0.5" role="group" aria-label={m.segment_view_label()}>
 			{#each [{ id: 'list', label: m.segment_view_list() }, { id: 'map', label: m.segment_view_map() }] as option (option.id)}
 				<button
 					type="button"
@@ -238,7 +232,7 @@
 		{/await}
 	{:else}
 		{#if segments.length > 0 || sorting}
-			<div class="overflow-x-auto rounded-lg border border-zinc-800">
+			<div class="surface overflow-x-auto">
 				<table class="catalog-table w-full bg-panel text-sm" aria-busy={loading}>
 					<thead class="bg-zinc-950/65 text-xs text-zinc-500">
 						<tr>

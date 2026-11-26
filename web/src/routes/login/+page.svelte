@@ -131,7 +131,7 @@
 
 <svelte:head><title>{APP_NAME}</title></svelte:head>
 
-<div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center space-y-8">
+<div class="mx-auto flex max-w-md flex-col space-y-4 pt-4 sm:pt-10">
 	<header class="text-center">
 		<div
 			class="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-accent-300"
@@ -139,8 +139,7 @@
 			<BrandMark class="h-5 w-5" />
 			{APP_NAME}
 		</div>
-		<h1 class="mt-2 text-3xl font-semibold tracking-tight">Sign in</h1>
-		<p class="mt-1 text-sm text-zinc-400">Self-hosted activity tracker.</p>
+		<h1 class="mt-2 page-title">Sign in</h1>
 	</header>
 
 	{#if notice}
@@ -157,10 +156,7 @@
 	{/if}
 
 	{#if setPassword}
-		<form
-			onsubmit={finishPasswordChange}
-			class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4"
-		>
+		<form onsubmit={finishPasswordChange} class="surface space-y-3 p-4 sm:p-5">
 			<h2 class="text-sm font-medium text-zinc-200">Choose a new password</h2>
 			<p class="text-xs text-zinc-400">
 				Your password was set by an administrator. Replace it before you continue.
@@ -173,7 +169,7 @@
 					required
 					minlength="12"
 					bind:value={newPassword}
-					class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none"
+					class="mt-1 field w-full"
 				/>
 			</label>
 			<label class="block">
@@ -184,14 +180,10 @@
 					required
 					minlength="12"
 					bind:value={newPasswordConfirm}
-					class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none"
+					class="mt-1 field w-full"
 				/>
 			</label>
-			<button
-				type="submit"
-				disabled={setPasswordBusy}
-				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
-			>
+			<button type="submit" disabled={setPasswordBusy} class="action action-primary w-full">
 				{setPasswordBusy ? 'Saving…' : 'Set password and continue'}
 			</button>
 			{#if setPasswordError}
@@ -204,7 +196,7 @@
 			>
 		</form>
 	{:else if challenge}
-		<section class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
+		<section class="surface space-y-3 p-4 sm:p-5">
 			<h2 class="text-sm font-medium text-zinc-200">Confirm it's you</h2>
 			<p class="text-xs text-zinc-400">
 				Your account requires a passkey after the password. Use Touch ID, Windows Hello or your
@@ -214,7 +206,7 @@
 				type="button"
 				onclick={finishSecondFactor}
 				disabled={challengeBusy || !passkeysSupported()}
-				class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
+				class="action action-primary w-full"
 			>
 				{challengeBusy ? 'Waiting for passkey…' : 'Continue with passkey'}
 			</button>
@@ -236,7 +228,7 @@
 				{#each data.oidcClients as client (client.id)}
 					<a
 						href={`/auth/oidc/${client.id}/start`}
-						class="flex items-center justify-between rounded-lg border border-zinc-800 bg-panel px-4 py-3 text-sm hover:border-accent-500 hover:bg-zinc-900"
+						class="flex items-center justify-between surface px-4 py-3 text-sm hover:border-accent-500 hover:bg-zinc-900"
 					>
 						<span class="flex items-center gap-3">
 							<span
@@ -265,7 +257,7 @@
 					type="button"
 					onclick={signInWithPasskey}
 					disabled={passkeyBusy}
-					class="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-panel px-4 py-3 text-sm font-medium hover:border-accent-500 hover:bg-zinc-900 disabled:opacity-50"
+					class="flex w-full items-center justify-center gap-2 surface px-4 py-3 text-sm font-medium hover:border-accent-500 hover:bg-zinc-900 disabled:opacity-50"
 				>
 					<svg
 						class="h-4 w-4"
@@ -300,11 +292,7 @@
 						<span class="h-px flex-1 bg-zinc-800"></span>
 					</div>
 				{/if}
-				<form
-					method="POST"
-					action="/auth/password"
-					class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4"
-				>
+				<form method="POST" action="/auth/password" class="surface space-y-3 p-4 sm:p-5">
 					<input type="hidden" name="redirect" value={nextDest} />
 					{#if loginError}
 						<div
@@ -320,7 +308,7 @@
 							type="text"
 							autocomplete="username"
 							required
-							class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none"
+							class="mt-1 field w-full"
 						/>
 					</label>
 					<label class="block">
@@ -330,15 +318,10 @@
 							type="password"
 							autocomplete="current-password"
 							required
-							class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none"
+							class="mt-1 field w-full"
 						/>
 					</label>
-					<button
-						type="submit"
-						class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600"
-					>
-						Sign in
-					</button>
+					<button type="submit" class="action action-primary w-full"> Sign in </button>
 					<div class="text-center">
 						<a href="/forgot-password" class="text-xs text-zinc-500 hover:text-accent-300"
 							>Forgot password?</a

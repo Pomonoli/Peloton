@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { onMount } from 'svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import MetricStrip from '#lib/components/MetricStrip.svelte';
+	import { activityMetrics, type ActivityTotals } from '#lib/dashboard-metrics.js';
 	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import SortControls from '#lib/components/SortControls.svelte';
 	import SortHeader from '#lib/components/SortHeader.svelte';
 	import { compareSortedValues, promoteSort, type SortCriterion } from '#lib/stacked-sort.js';
-	import SportIcon from '#lib/components/SportIcon.svelte';
 	import {
 		intlLocale,
 		formatDistance,
@@ -35,7 +36,7 @@
 		avg_speed_mps: number | null;
 	} | null;
 	type Stats = {
-		totals: { count: number; distance_m: number; moving_s: number; elevation_gain_m: number };
+		totals: ActivityTotals;
 		sport_totals: {
 			value: string;
 			count: number;
@@ -71,14 +72,32 @@
 
 	let loading = $state(true);
 
-	onMount(async () => {
-		try {
-			const res = await fetch(memberURL('/api/stats', data.member));
-			if (res.ok) s = await res.json();
-		} catch {
-			/* ignore */
-		}
-		loading = false;
+	let selectedYear = $state('all');
+	const years = $derived(s?.by_year ?? []);
+	const displayedYears = $derived(
+		selectedYear === 'all' ? years : years.filter((year) => String(year.year) === selectedYear)
+	);
+
+	$effect(() => {
+		const url = memberURL('/api/stats', data.member);
+		const controller = new AbortController();
+		const { signal } = controller;
+		loading = true;
+		s = null;
+		selectedYear = 'all';
+		void (async () => {
+			try {
+				const res = await fetch(url, { signal });
+				if (!res.ok) return;
+				const next: Stats = await res.json();
+				if (!signal.aborted) s = next;
+			} catch {
+				// The error state below covers unavailable statistics.
+			} finally {
+				if (!signal.aborted) loading = false;
+			}
+		})();
+		return () => controller.abort();
 	});
 
 	function humanize(v: string): string {
@@ -89,80 +108,76 @@
 	const maxYearDist = $derived(s ? Math.max(1, ...s.by_year.map((y) => y.distance_m)) : 1);
 </script>
 
+<svelte:head><title>{m.nav_stats()}</title></svelte:head>
+
 <div class="space-y-5 max-md:space-y-4">
 	<header>
-		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Stats</h1>
-		<p class="mt-1 text-sm text-zinc-400">
-			{m.stats_lifetime()}
-		</p>
+		<h1 class="page-title">{m.nav_stats()}</h1>
 	</header>
 
 	{#if loading}
-		<div class="text-sm text-zinc-500">Loading…</div>
+		<p role="status" class="surface state-panel">{m.ride_loading()}</p>
 	{:else if !s}
-		<p role="alert" class="text-sm text-red-300">{m.stats_failed()}</p>
+		<p role="alert" class="surface state-panel">{m.stats_failed()}</p>
 	{:else if s.totals.count === 0}
-		<div class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400">
-			No activities yet.
-		</div>
+		<p class="surface state-panel">{m.activities_empty()}</p>
 	{:else}
-		<!-- lifetime totals -->
-		<dl
-			class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800 lg:grid-cols-4"
-		>
-			{#each [{ label: 'Activities', value: s.totals.count.toLocaleString(intlLocale()) }, { label: 'Distance', value: formatDistance(s.totals.distance_m) }, { label: 'Moving time', value: formatDuration(s.totals.moving_s) }, { label: 'Elevation', value: formatElevation(s.totals.elevation_gain_m) }] as c (c.label)}
-				<div class="bg-zinc-900 p-3 sm:p-4">
-					<dt class="text-xs font-medium text-quiet">{c.label}</dt>
-					<dd class="mt-0.5 text-lg font-bold tabular-nums sm:text-2xl">{c.value}</dd>
-				</div>
-			{/each}
-		</dl>
+		<section aria-labelledby="lifetime-totals">
+			<h2 id="lifetime-totals" class="section-title mb-2">{m.stats_lifetime()}</h2>
+			<MetricStrip metrics={activityMetrics(s.totals)} label={m.stats_lifetime()} />
+		</section>
 
-		<!-- records -->
-		<section>
-			<h2 class="mb-3 text-sm font-medium text-zinc-300">Records</h2>
-			<div class="grid gap-2 sm:grid-cols-2">
-				{#each [{ label: 'Longest distance', r: s.records.longest_distance, distanceRecord: true }, { label: m.stats_longest_moving(), r: s.records.longest_duration, distanceRecord: false }] as card (card.label)}
-					<div class="rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4">
-						<div class="text-xs uppercase tracking-wide text-zinc-500">{card.label}</div>
-						{#if card.r}
-							<a
-								href={`/activities/${card.r.id}`}
-								class="mt-2 flex items-center gap-3 hover:text-accent-300"
-							>
-								<span
-									class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300"
-								>
-									<SportIcon type={card.r.discipline || card.r.type} size={18} />
+		<section aria-labelledby="stats-records">
+			<header class="mb-2 flex items-center justify-between gap-3">
+				<h2 id="stats-records" class="section-title">{m.member_records()}</h2>
+				<a
+					href={memberURL('/records', data.member)}
+					class="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-accent-300 hover:underline"
+				>
+					{m.overview_view_all()}
+					<Icon name="chevron" size={14} />
+				</a>
+			</header>
+			<div class="grid grid-cols-2 gap-2 sm:gap-3">
+				{#each [{ label: m.stats_longest_distance(), r: s.records.longest_distance, distanceRecord: true }, { label: m.stats_longest_moving(), r: s.records.longest_duration, distanceRecord: false }] as card (card.label)}
+					{#snippet highlight()}
+						<span class="record-icon" class:trophy={card.distanceRecord}>
+							<Icon name={card.distanceRecord ? 'records' : 'clock'} size={18} />
+						</span>
+						<span class="grid min-w-0 gap-0.5">
+							<span class="text-xs font-medium text-quiet">{card.label}</span>
+							<strong class="text-base leading-tight tracking-tight tabular-nums sm:text-xl">
+								{card.r
+									? card.distanceRecord
+										? formatDistance(card.r.distance_m)
+										: formatDuration(card.r.moving_duration_s)
+									: '—'}
+							</strong>
+							{#if card.r}
+								<span class="truncate text-xs text-quiet">
+									{card.r.title || humanize(card.r.discipline || card.r.type)}
 								</span>
-								<div class="min-w-0 flex-1">
-									<div class="truncate text-sm font-medium">
-										{card.r.title || `${humanize(card.r.discipline || card.r.type)} Activity`}
-									</div>
-								</div>
-								<div class="text-right tabular-nums">
-									<div class="text-lg font-semibold text-zinc-100">
-										{card.distanceRecord
-											? formatDistance(card.r.distance_m)
-											: formatDuration(card.r.moving_duration_s)}
-									</div>
-									{#if card.distanceRecord && card.r.type === 'ride'}
-										<div class="text-sm text-quiet">
-											{m.col_moving()}
-											{formatDuration(
-												card.r.moving_duration_s > 0 ? card.r.moving_duration_s : null
-											)}
-											{#if card.r.avg_speed_mps != null}
-												· {formatSpeed(card.r.avg_speed_mps)}
-											{/if}
-										</div>
-									{/if}
-								</div>
-							</a>
-						{:else}
-							<div class="mt-2 text-sm text-zinc-500">—</div>
-						{/if}
-					</div>
+								{#if card.distanceRecord && card.r.type === 'ride'}
+									<span class="text-[0.6875rem] text-quiet tabular-nums">
+										{m.metric_moving_time()}
+										{formatDuration(card.r.moving_duration_s || null)}
+										{#if card.r.avg_speed_mps != null}
+											· {formatSpeed(card.r.avg_speed_mps)}{/if}
+									</span>
+								{/if}
+							{/if}
+						</span>
+					{/snippet}
+					{#if card.r}
+						<a
+							href={memberURL(`/activities/${card.r.id}`, data.member)}
+							class="surface record-highlight"
+						>
+							{@render highlight()}
+						</a>
+					{:else}
+						<div class="surface record-highlight">{@render highlight()}</div>
+					{/if}
 				{/each}
 			</div>
 		</section>
@@ -170,24 +185,35 @@
 		<!-- by year -->
 		{#if s.by_year.length > 0}
 			<section>
-				<h2 class="mb-3 text-sm font-medium text-zinc-300">By year</h2>
-				<div class="overflow-hidden rounded-xl border border-zinc-800">
+				<header class="mb-2 flex items-center justify-between gap-2">
+					<h2 class="section-title">{m.stats_by_year()}</h2>
+					<select class="field" aria-label={m.stats_year()} bind:value={selectedYear}>
+						<option value="all">{m.stats_all_years()}</option>
+						{#each years as year (year.year)}
+							<option value={String(year.year)}>{year.year}</option>
+						{/each}
+					</select>
+				</header>
+				<div class="surface overflow-hidden">
 					<div class="overflow-x-auto">
 						<table class="stats-table w-full text-sm">
-							<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
+							<thead class="text-xs text-quiet">
 								<tr>
-									<th class="px-4 py-2 text-left font-medium">Year</th>
-									<th class="px-4 py-2 text-right font-medium">Activities</th>
-									<th class="px-4 py-2 text-right font-medium">Distance</th>
-									<th class="px-4 py-2 text-right font-medium">Moving</th>
-									<th class="px-4 py-2 text-right font-medium">Elevation</th>
+									<th class="px-4 py-2 text-left font-medium">{m.stats_year()}</th>
+									<th class="px-4 py-2 text-right font-medium">{m.nav_activities()}</th>
+									<th class="px-4 py-2 text-right font-medium">{m.col_distance()}</th>
+									<th class="px-4 py-2 text-right font-medium">{m.col_moving()}</th>
+									<th class="px-4 py-2 text-right font-medium">{m.col_elevation()}</th>
 									<th class="w-1/4 px-4 py-2 max-md:hidden"></th>
 								</tr>
 							</thead>
 							<tbody>
-								{#each s.by_year as y (y.year)}
-									<tr class="border-t border-zinc-800/70">
-										<td class="px-4 py-2 font-medium text-zinc-200">{y.year}</td>
+								{#each displayedYears as y (y.year)}
+									<tr
+										class="border-t border-zinc-800/70"
+										class:current-year={y.year === new Date().getFullYear()}
+									>
+										<th scope="row" class="px-4 py-2 text-left font-semibold">{y.year}</th>
 										<td class="px-4 py-2 text-right tabular-nums text-zinc-300">{y.count}</td>
 										<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
 											>{formatDistance(y.distance_m)}</td
@@ -224,7 +250,7 @@
 					reset={() => (sportOrder = initialSportOrder)}
 				>
 					{#snippet toolbar()}
-						<h2 class="text-sm font-semibold">{m.stats_by_sport()}</h2>
+						<h2 class="section-title">{m.stats_by_sport()}</h2>
 					{/snippet}
 					<SortControls
 						columns={sportColumns}
@@ -232,7 +258,7 @@
 						onchange={(next) => (sportOrder = next)}
 					/>
 				</FilterSheet>
-				<div class="mt-2 overflow-x-auto rounded-xl border border-zinc-800">
+				<div class="surface mt-2 overflow-x-auto">
 					<table class="stats-table w-full bg-panel text-sm">
 						<thead class="text-xs text-quiet">
 							<tr>
@@ -278,6 +304,38 @@
 </div>
 
 <style>
+	.record-highlight {
+		display: flex;
+		min-width: 0;
+		align-items: flex-start;
+		gap: clamp(0.35rem, 2vw, 0.75rem);
+		padding: clamp(0.55rem, 2.5vw, 1rem);
+	}
+
+	a.record-highlight:hover {
+		background: var(--surface-hover);
+	}
+
+	.record-icon {
+		display: grid;
+		width: 1.8rem;
+		height: 1.8rem;
+		flex: none;
+		place-items: center;
+		border-radius: 0.5rem;
+		background: var(--surface-active);
+		color: var(--accent-text);
+	}
+
+	.record-icon.trophy {
+		background: var(--warning-surface);
+		color: var(--warning-strong);
+	}
+
+	.current-year {
+		background: var(--surface-active);
+	}
+
 	@media (width < 48rem) {
 		.stats-table {
 			table-layout: fixed;

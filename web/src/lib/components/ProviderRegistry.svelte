@@ -49,7 +49,7 @@
 	const fmt = (s: string) => formatDate(s, { seconds: true, numericDate: true });
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+<section class="surface p-5">
 	<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">Providers</h2>
 	<p class="mt-1 text-xs text-zinc-500">
 		How each provider is connected, as its worker declared it, bound to the package that declared it

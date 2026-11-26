@@ -72,7 +72,7 @@
 		</div>
 	{/if}
 
-	<div class="rounded-lg border border-zinc-800 bg-panel p-4">
+	<div class="surface p-4">
 		<h2 class="mb-1 font-medium">{m.settings_privacy_zones()}</h2>
 		<p class="mb-3 text-sm text-zinc-400">
 			{m.settings_privacy_zones_help()}

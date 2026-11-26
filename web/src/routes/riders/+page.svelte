@@ -87,7 +87,7 @@
 <section class="space-y-3">
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{m.friends_title()}</h1>
+			<h1 class="page-title">{m.friends_title()}</h1>
 			{#if !loading && !failed}<p class="text-xs text-quiet">
 					{m.riders_count({ count: filtered.length })}
 				</p>{/if}
@@ -111,11 +111,11 @@
 			>{m.community_retry()}</button
 		>
 	{:else if filtered.length === 0}
-		<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+		<p class="surface p-4 text-sm text-quiet">
 			{m.friends_empty()}
 		</p>
 	{:else}
-		<div class="overflow-hidden rounded-xl border border-zinc-800 bg-panel">
+		<div class="overflow-hidden surface">
 			<table class="w-full table-fixed text-sm">
 				<thead class="border-b border-zinc-800 bg-zinc-950/75 text-xs text-quiet">
 					<tr>

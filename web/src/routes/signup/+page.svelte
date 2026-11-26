@@ -12,8 +12,7 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
-	const inputCls =
-		'mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none';
+	const inputCls = 'mt-1 field w-full';
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
@@ -50,11 +49,11 @@
 			<BrandMark class="h-5 w-5" />
 			{APP_NAME}
 		</div>
-		<h1 class="mt-2 text-3xl font-semibold tracking-tight">Create your account</h1>
+		<h1 class="mt-2 page-title">Create your account</h1>
 		<p class="mt-1 text-sm text-zinc-400">You need an invite code to join this instance.</p>
 	</header>
 
-	<form onsubmit={submit} class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-4">
+	<form onsubmit={submit} class="surface space-y-3 p-4 sm:p-5">
 		{#if error}
 			<div class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
 				{error}
@@ -86,11 +85,7 @@
 				class={inputCls}
 			/>
 		</label>
-		<button
-			type="submit"
-			disabled={busy}
-			class="w-full rounded bg-accent-500 px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-600 disabled:opacity-50"
-		>
+		<button type="submit" disabled={busy} class="action action-primary w-full">
 			{busy ? 'Creating…' : 'Create account'}
 		</button>
 	</form>

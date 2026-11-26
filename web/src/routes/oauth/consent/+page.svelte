@@ -77,12 +77,12 @@
 </script>
 
 <div class="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center">
-	<div class="rounded-2xl border border-zinc-800 bg-panel p-6 shadow-xl">
+	<div class="surface p-6 shadow-xl">
 		<div class="mb-5 flex items-center gap-3">
 			<BrandMark class="h-10 w-10" />
 			<div>
 				<div class="text-xs uppercase tracking-widest text-accent-400">Authorize</div>
-				<h1 class="text-lg font-semibold tracking-tight">Connect an application</h1>
+				<h1 class="page-title">Connect an application</h1>
 			</div>
 		</div>
 

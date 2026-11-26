@@ -74,12 +74,12 @@
 </script>
 
 <div class="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center">
-	<div class="rounded-2xl border border-zinc-800 bg-panel p-6 shadow-xl">
+	<div class="surface p-6 shadow-xl">
 		<div class="mb-5 flex items-center gap-3">
 			<BrandMark class="h-10 w-10" />
 			<div>
 				<div class="text-xs uppercase tracking-widest text-accent-400">Sign in a device</div>
-				<h1 class="text-lg font-semibold tracking-tight">Enter the code shown on your device</h1>
+				<h1 class="page-title">Enter the code shown on your device</h1>
 			</div>
 		</div>
 

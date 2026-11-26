@@ -209,7 +209,7 @@
 <div class="space-y-4 md:space-y-6">
 	<header class="flex items-start justify-between gap-2 max-md:flex-wrap">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{m.connections_title()}</h1>
+			<h1 class="page-title">{m.connections_title()}</h1>
 			<p class="mt-1 max-w-2xl text-sm text-zinc-400">
 				Each connection is a separate link to a provider with its own credentials. Add several per
 				provider if you like — <strong class="text-zinc-300"
@@ -350,7 +350,7 @@
 	{/if}
 
 	{#each connections as c (c.id)}
-		<div class="rounded-lg border border-zinc-800 bg-panel p-3 sm:p-5">
+		<div class="surface p-3 sm:p-5">
 			<div class="flex items-center justify-between gap-4 max-md:flex-col max-md:items-start">
 				<div>
 					<div class="text-base font-medium">

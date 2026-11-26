@@ -73,7 +73,7 @@
 		<a href={`/activities/${data.activity.id}`} class="text-sm text-accent-300 hover:underline">
 			← {data.activity.title || m.ride_activity()}
 		</a>
-		<h1 class="text-xl font-semibold">{m.ride_replay()}</h1>
+		<h1 class="page-title">{m.ride_replay()}</h1>
 	</header>
 
 	{#if point && duration > 0}
@@ -92,7 +92,7 @@
 				}}
 			/>
 		{/key}
-		<div class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-3">
+		<div class="space-y-3 surface p-3">
 			<label class="flex items-center gap-3">
 				<span class="sr-only">{m.ride_replay_progress()}</span>
 				<span class="shrink-0 text-sm tabular-nums" aria-hidden="true"
@@ -174,7 +174,7 @@
 			{terrainFailed ? m.ride_terrain_fallback() : terrain ? m.ride_terrain_accuracy() : ''}
 		</p>
 	{:else}
-		<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+		<p class="surface p-4 text-sm text-quiet">
 			{m.ride_replay_no_gps()}
 		</p>
 	{/if}

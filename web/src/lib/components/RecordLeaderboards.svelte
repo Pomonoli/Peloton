@@ -126,9 +126,7 @@
 				<h2 class="mb-2 flex items-center gap-2 text-sm font-semibold">
 					<SportIcon {type} size={16} />{recordSport(type)}
 				</h2>
-				<div
-					class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-panel"
-				>
+				<div class="divide-y divide-zinc-800 overflow-hidden surface">
 					{#each records as row (recordPath(row))}
 						<a
 							href={memberURL(

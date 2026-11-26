@@ -225,7 +225,7 @@
 	});
 </script>
 
-<div class="relative overflow-hidden rounded-lg border border-zinc-800 bg-panel">
+<div class="relative overflow-hidden surface">
 	<div
 		bind:this={container}
 		class={compact ? 'h-56 w-full sm:h-64' : 'h-[440px] w-full max-md:h-[42dvh] max-md:min-h-60'}
@@ -241,7 +241,7 @@
 		/>
 	{/if}
 	<div
-		class="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1 rounded-lg border border-zinc-800 bg-panel p-1 shadow-sm"
+		class="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1 surface p-1 shadow-sm"
 	>
 		{#if !compact}
 			<button

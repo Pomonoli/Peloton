@@ -45,7 +45,7 @@
 	}
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+<section class="surface p-5">
 	<h2 class="mb-1 text-sm font-medium text-zinc-300">Authorized apps</h2>
 	<p class="mb-3 text-xs text-zinc-500">
 		Apps you signed into with this account (mobile clients, integrations). Revoking ends every token

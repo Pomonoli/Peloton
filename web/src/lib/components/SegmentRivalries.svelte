@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+	import Icon from './Icon.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		formatDateOnly,
@@ -18,8 +20,17 @@
 	} from '#lib/segment-rivalries.js';
 	import StreamChart from './StreamChart.svelte';
 
-	let { id, distanceM, member }: { id: string; distanceM: number; member: MemberView | null } =
-		$props();
+	let {
+		id,
+		distanceM,
+		member,
+		children
+	}: {
+		id: string;
+		distanceM: number;
+		member: MemberView | null;
+		children: Snippet<[Snippet<[boolean, () => void]>, Snippet]>;
+	} = $props();
 
 	interface Entry {
 		rank: number;
@@ -33,6 +44,7 @@
 	}
 
 	const pageSize = 20;
+	const previewSize = 3;
 	const boardFetchSize = 200;
 	const historySize = 200;
 	let period = $state<RivalryPeriod>('all');
@@ -59,8 +71,9 @@
 	function riderColor(uid: string) {
 		const existing = colorsByRider.get(uid);
 		if (existing) return existing;
-		const hue = (colorsByRider.size * 137.508 + 205) % 360;
-		const color = `hsl(${hue} 72% 52%)`;
+		const index = colorsByRider.size;
+		const hue = (index * 137.508 + 205) % 360;
+		const color = index < 6 ? `var(--plot-rider-${index + 1})` : `hsl(${hue} 65% 51%)`;
 		colorsByRider.set(uid, color);
 		return color;
 	}
@@ -165,92 +178,113 @@
 	}
 </script>
 
-<section class="space-y-3">
-	<div class="flex flex-wrap items-end justify-between gap-2">
-		<div>
-			<h2 class="font-medium">{m.segment_local_kom()}</h2>
-			<p class="text-sm text-quiet">{m.segment_rivalry_description()}</p>
+{#snippet leaderboard(compact: boolean, showLeaderboard: () => void)}
+	<section class="surface space-y-3 p-3 sm:p-4">
+		<div class="flex flex-wrap items-end justify-between gap-2">
+			<div>
+				<h2 class="section-title">{m.segment_local_kom()}</h2>
+				{#if !compact}<p class="text-sm text-quiet">{m.segment_leaderboard_intro()}</p>{/if}
+			</div>
+			{#if compact}
+				{#if board.length}
+					<button
+						type="button"
+						class="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-accent-300 hover:underline"
+						onclick={showLeaderboard}
+						>{m.overview_view_all()} <Icon name="chevron" size={14} /></button
+					>
+				{/if}
+			{:else}
+				{@render periodPicker()}
+			{/if}
 		</div>
-		<label class="flex items-center gap-2 text-sm">
-			{m.segment_rivalry_period()}
-			<select bind:value={period} class="min-h-10 rounded-md border border-zinc-700 bg-panel px-2">
-				<option value="all">{m.segment_rivalry_all()}</option>
-				<option value="year">{m.segment_rivalry_year()}</option>
-				<option value="recent">{m.segment_rivalry_recent()}</option>
-			</select>
-		</label>
-	</div>
 
-	{#if board.length}
-		<div class="overflow-x-auto rounded-xl border border-zinc-800">
-			<table class="w-full text-xs sm:text-sm">
-				<thead class="bg-panel text-xs text-quiet">
-					<tr>
-						<th scope="col" class="px-1.5 py-2 text-left sm:px-3">{m.segment_leaderboard_rank()}</th
-						>
-						<th scope="col" class="px-1.5 py-2 text-left sm:px-3"
-							>{m.segment_leaderboard_rider()}</th
-						>
-						<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.detail_label_time()}</th>
-						<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.segment_speed_column()}</th>
-						<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.segment_attempts()}</th>
-						<th scope="col" class="px-1.5 py-2 text-right sm:px-3"
-							>{m.segment_leaderboard_date()}</th
-						>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-zinc-800">
-					{#each board.slice(0, visibleCount) as entry (entry.user_id)}
+		{#if board.length}
+			<div class="overflow-x-auto rounded-lg border border-zinc-800">
+				<table class="leaderboard-table w-full text-xs sm:text-sm" class:compact>
+					<thead class="bg-panel text-xs text-quiet">
 						<tr>
-							<td class="px-1.5 py-2 tabular-nums sm:px-3">#{entry.rank}</td>
-							<td
-								class="px-1.5 py-2 sm:px-3"
-								class:font-semibold={entry.elapsed_s === board[0]?.elapsed_s}
-								>{entry.display_name}</td
+							<th scope="col" class="px-1.5 py-2 text-left sm:px-3"
+								>{m.segment_leaderboard_rank()}</th
 							>
-							<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
-								>{formatDuration(entry.elapsed_s)}</td
+							<th scope="col" class="px-1.5 py-2 text-left sm:px-3"
+								>{m.segment_leaderboard_rider()}</th
 							>
-							<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
-								>{formatSpeedKmh(entry.average_speed_kmh)}</td
+							<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.detail_label_time()}</th>
+							<th scope="col" class="px-1.5 py-2 text-right sm:px-3">{m.segment_speed_column()}</th>
+							<th scope="col" class="attempt-count px-1.5 py-2 text-right sm:px-3"
+								>{m.segment_attempts()}</th
 							>
-							<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
-								>{number.format(entry.effort_count)}</td
+							<th scope="col" class="px-1.5 py-2 text-right sm:px-3"
+								>{m.segment_leaderboard_date()}</th
 							>
-							<td class="px-1.5 py-2 text-right sm:px-3">
-								<a
-									href={memberURL(`/activities/${entry.activity_id}`, member)}
-									class="text-accent-300 hover:underline">{formatDateOnly(entry.start_time)}</a
-								>
-							</td>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-		{#if visibleCount < board.length}
+					</thead>
+					<tbody class="divide-y divide-zinc-800">
+						{#each board.slice(0, compact ? previewSize : visibleCount) as entry (entry.user_id)}
+							<tr class:leading-rider={entry.rank === 1}>
+								<td class="px-1.5 py-2 tabular-nums sm:px-3">
+									<span class="rank" class:rank-first={entry.rank === 1}>
+										{#if entry.rank === 1}<Icon name="records" size={13} />{/if}
+										{entry.rank}
+									</span>
+								</td>
+								<td
+									class="px-1.5 py-2 sm:px-3"
+									class:font-semibold={entry.elapsed_s === board[0]?.elapsed_s}
+								>
+									<span class="rider-marker" style:background={riderColor(entry.user_id)}></span>
+									{entry.display_name}</td
+								>
+								<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
+									>{formatDuration(entry.elapsed_s)}</td
+								>
+								<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
+									>{formatSpeedKmh(entry.average_speed_kmh)}</td
+								>
+								<td class="attempt-count px-1.5 py-2 text-right tabular-nums sm:px-3"
+									>{number.format(entry.effort_count)}</td
+								>
+								<td class="px-1.5 py-2 text-right sm:px-3">
+									<a
+										href={memberURL(`/activities/${entry.activity_id}`, member)}
+										class="text-accent-300 hover:underline">{formatDateOnly(entry.start_time)}</a
+									>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			{#if !compact && visibleCount < board.length}
+				<button
+					type="button"
+					class="min-h-10 text-sm text-accent-300 hover:underline"
+					onclick={() => (visibleCount += pageSize)}>{m.segment_leaderboard_next()}</button
+				>
+			{/if}
+		{:else if loading}
+			<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
+		{:else if boardError}
+			<p role="status" class="text-sm text-quiet">{m.segment_leaderboard_failed()}</p>
 			<button
 				type="button"
 				class="min-h-10 text-sm text-accent-300 hover:underline"
-				onclick={() => (visibleCount += pageSize)}>{m.segment_leaderboard_next()}</button
+				onclick={() => (boardRetry += 1)}>{m.community_retry()}</button
 			>
+		{:else}
+			<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
 		{/if}
-	{:else if loading}
-		<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
-	{:else if boardError}
-		<p role="status" class="text-sm text-quiet">{m.segment_leaderboard_failed()}</p>
-		<button
-			type="button"
-			class="min-h-10 text-sm text-accent-300 hover:underline"
-			onclick={() => (boardRetry += 1)}>{m.community_retry()}</button
-		>
-	{:else}
-		<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
-	{/if}
+	</section>
+{/snippet}
 
+{#snippet history()}
 	{#if board.length}
-		<div class="space-y-2 rounded-xl border border-zinc-800 bg-panel p-3">
-			<h3 class="text-sm font-medium">{m.segment_rivalry_history()}</h3>
+		<section class="surface space-y-2 p-3 sm:p-4">
+			<header class="flex flex-wrap items-center justify-between gap-2">
+				<h2 class="section-title">{m.segment_rivalry_history()}</h2>
+				{@render periodPicker()}
+			</header>
 			{#if historyError}
 				<p role="status" class="text-sm text-quiet">{m.segment_rivalry_history_failed()}</p>
 				<button
@@ -308,6 +342,78 @@
 			{:else if !historyError}
 				<p class="text-sm text-quiet">{m.segment_leaderboard_empty()}</p>
 			{/if}
-		</div>
+		</section>
 	{/if}
-</section>
+{/snippet}
+
+{#snippet periodPicker()}
+	<label class="flex items-center gap-2 text-sm">
+		{m.segment_rivalry_period()}
+		<select bind:value={period} class="field">
+			<option value="all">{m.segment_rivalry_all()}</option>
+			<option value="year">{m.segment_rivalry_year()}</option>
+			<option value="recent">{m.segment_rivalry_recent()}</option>
+		</select>
+	</label>
+{/snippet}
+
+{@render children(leaderboard, history)}
+
+<style>
+	.leading-rider {
+		background: var(--surface-inset);
+	}
+
+	.rank {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		border-radius: 0.3rem;
+		padding-inline: 0.25rem;
+	}
+
+	.rank-first {
+		background: var(--warning-surface);
+		color: var(--warning-strong);
+		font-weight: 750;
+	}
+
+	.rider-marker {
+		display: inline-block;
+		width: 0.45rem;
+		height: 0.45rem;
+		margin-inline-end: 0.15rem;
+		border-radius: 50%;
+		vertical-align: 0.09em;
+	}
+
+	.compact .attempt-count {
+		display: none;
+	}
+
+	@media (width < 50rem) {
+		.leaderboard-table {
+			table-layout: fixed;
+		}
+		.leaderboard-table :is(th, td) {
+			padding-inline: 0.25rem;
+			font-size: 0.6875rem;
+			overflow-wrap: anywhere;
+		}
+		.leaderboard-table th:nth-child(2) {
+			width: 24%;
+		}
+		.leaderboard-table th:nth-child(5) {
+			width: 17%;
+		}
+		.leaderboard-table th:last-child {
+			width: 21%;
+		}
+		.compact th:last-child {
+			width: 26%;
+		}
+		.leaderboard-table td:nth-child(4) {
+			white-space: nowrap;
+		}
+	}
+</style>

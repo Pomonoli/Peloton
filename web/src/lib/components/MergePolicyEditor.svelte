@@ -77,7 +77,7 @@
 	}
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-panel p-4">
+<section class="surface p-4">
 	<h2 class="text-sm font-semibold text-zinc-200">Merge priority</h2>
 	<p class="mt-1 text-xs text-zinc-500">
 		When several providers report the same activity, the first provider in the list that has a value

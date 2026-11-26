@@ -3,6 +3,8 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import ComparisonRider from '#lib/components/ComparisonRider.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import SectionTabs from '#lib/components/SectionTabs.svelte';
 	import ComparisonTable from '#lib/components/ComparisonTable.svelte';
 	import { intlLocale } from '#lib/format.js';
 	import {
@@ -154,65 +156,64 @@
 		if (data.viewedMember) query.set('viewing', data.viewedMember.username);
 		void goto(query.size ? `/head-to-head?${query}` : '/head-to-head', { reset: false });
 	}
-
-	function moveTab(event: KeyboardEvent) {
-		if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-		event.preventDefault();
-		tab =
-			event.key === 'Home'
-				? 'segments'
-				: event.key === 'End'
-					? 'records'
-					: tab === 'segments'
-						? 'records'
-						: 'segments';
-		document.getElementById(`comparison-tab-${tab}`)?.focus();
-	}
 </script>
 
 <svelte:head><title>{m.comparison_title()}</title></svelte:head>
 
 <section class="mx-auto min-w-0 max-w-6xl space-y-3 md:space-y-4">
-	<header class="flex flex-wrap items-end justify-between gap-3">
-		<h1 class="text-2xl font-semibold tracking-tight">{m.comparison_title()}</h1>
-		<div class="grid w-full min-w-0 grid-cols-2 gap-2 sm:w-auto">
-			<div class="min-w-0">
-				<label for="comparison-first" class="mb-1 block text-xs text-quiet"
-					>{m.comparison_first_rider()}</label
-				>
+	<header>
+		<h1 class="page-title">{m.comparison_title()}</h1>
+		<p class="mt-1 text-sm text-quiet">{m.comparison_pair_intro()}</p>
+	</header>
+	<div class="comparison-pickers">
+		<div class="surface rider-picker first">
+			<label for="comparison-first">{m.comparison_first_rider()}</label>
+			<div class="flex min-w-0 items-center gap-1">
+				<ComparisonRider rider={you} />
 				<select
 					id="comparison-first"
 					value={firstListed?.username ?? ''}
 					onchange={(event) => selectPair(event.currentTarget.value, data.member)}
 					disabled={directoryLoading || directoryError}
-					class="min-h-11 w-full rounded-lg border border-zinc-800 bg-panel px-2 text-sm"
+					class="field w-full"
 				>
 					{#each members as rider (rider.id)}
 						<option value={rider.username} disabled={rider.id === listed?.id}
-							>{riderName(rider)} (@{rider.username})</option
+							>{riderName(rider)}</option
 						>
 					{/each}
 				</select>
 			</div>
-			<div class="min-w-0">
-				<label for="comparison-member" class="mb-1 block text-xs text-quiet"
-					>{m.comparison_second_rider()}</label
-				>
+		</div>
+		<button
+			type="button"
+			class="action swap-riders"
+			aria-label={m.comparison_swap()}
+			title={m.comparison_swap()}
+			disabled={!listed || !firstListed || directoryLoading || directoryError}
+			onclick={() => {
+				if (listed && firstListed) selectPair(listed.username, firstListed.username);
+			}}><Icon name="swap" size={18} /></button
+		>
+		<div class="surface rider-picker second">
+			<label for="comparison-member">{m.comparison_second_rider()}</label>
+			<div class="flex min-w-0 items-center gap-1">
+				<ComparisonRider rider={opponent} />
 				<select
 					id="comparison-member"
 					value={listed?.username ?? ''}
 					onchange={(event) => selectPair(firstListed?.username ?? '', event.currentTarget.value)}
 					disabled={directoryLoading || directoryError}
-					class="min-h-11 w-full rounded-lg border border-zinc-800 bg-panel px-2 text-sm"
+					class="field w-full"
 				>
 					<option value="">{m.comparison_choose_member()}</option>
 					{#each opponents as rider (rider.id)}
-						<option value={rider.username}>{riderName(rider)} (@{rider.username})</option>
+						<option value={rider.username}>{riderName(rider)}</option>
 					{/each}
 				</select>
 			</div>
 		</div>
-	</header>
+	</div>
 
 	{#if directoryError}
 		<p role="status" class="text-sm text-quiet">{m.friends_failed()}</p>
@@ -223,17 +224,10 @@
 		>
 	{/if}
 
-	{#if opponent}
-		<div class="grid grid-cols-2 gap-2 rounded-xl border border-zinc-800 bg-panel p-2.5 sm:p-4">
-			<ComparisonRider rider={you} label={m.comparison_first_rider()} />
-			<ComparisonRider rider={opponent} label={m.comparison_second_rider()} />
-		</div>
-	{/if}
-
 	{#if loading || (directoryLoading && !comparison)}
 		<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
 	{:else if error}
-		<p role="status" class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+		<p role="status" class="surface p-4 text-sm text-quiet">
 			{error}
 		</p>
 		<button
@@ -244,53 +238,40 @@
 			{m.community_retry()}
 		</button>
 	{:else if !comparison && !directoryError}
-		<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+		<p class="surface p-4 text-sm text-quiet">
 			{opponents.length ? m.comparison_pair_intro() : m.comparison_no_members()}
 		</p>
 	{/if}
 
 	{#if comparison && score}
-		<div
-			role="tablist"
-			aria-label={m.comparison_title()}
-			class="flex gap-2 border-b border-zinc-800"
-		>
-			{#each tabs as item (item.key)}
-				<button
-					type="button"
-					role="tab"
-					id={`comparison-tab-${item.key}`}
-					aria-selected={tab === item.key}
-					aria-controls={`comparison-panel-${item.key}`}
-					tabindex={tab === item.key ? 0 : -1}
-					onclick={() => (tab = item.key)}
-					onkeydown={moveTab}
-					class="min-h-11 border-b-2 px-3 text-sm font-medium {tab === item.key
-						? 'border-accent-500 text-accent-300'
-						: 'border-transparent text-quiet hover:text-accent-300'}"
-				>
-					{item.label}
-				</button>
-			{/each}
-		</div>
-
-		<dl
-			class="grid grid-cols-4 divide-x divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-panel"
-			aria-live="polite"
-		>
-			{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins, accent: 'text-accent-300' }, { label: m.comparison_ties(), value: score.ties, accent: '' }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses, accent: 'text-violet-400' }, { label: m.comparison_total(), value: score.comparable, accent: 'text-quiet' }] as stat, index (index)}
-				<div class="min-w-0 px-2 py-2.5 text-center sm:px-4">
-					<dt class="break-words text-[11px] leading-4 text-quiet sm:text-xs">{stat.label}</dt>
-					<dd
-						class="font-bold tabular-nums {index === 0 || index === 2
-							? 'text-xl'
-							: 'text-base'} {stat.accent}"
-					>
-						{number.format(stat.value)}
-					</dd>
+		<div class="surface comparison-score">
+			<dl class="score-grid" aria-live="polite">
+				{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins, key: 'first' }, { label: m.comparison_ties(), value: score.ties, key: 'tie' }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses, key: 'second' }] as stat (stat.key)}
+					<div class={stat.key}>
+						<dt>{stat.label}</dt>
+						<dd>{number.format(stat.value)}</dd>
+					</div>
+				{/each}
+				<div class="score-total">
+					<dt>{m.comparison_total()}</dt>
+					<dd>{number.format(score.comparable)}</dd>
 				</div>
-			{/each}
-		</dl>
+			</dl>
+			<div class="score-bar" aria-hidden="true">
+				{#if score.comparable > 0}
+					<span class="first" style:flex-grow={score.wins}></span>
+					<span class="tie" style:flex-grow={score.ties}></span>
+					<span class="second" style:flex-grow={score.losses}></span>
+				{/if}
+			</div>
+		</div>
+		<SectionTabs
+			{tabs}
+			active={tab}
+			id="comparison"
+			label={m.comparison_title()}
+			onchange={(next) => (tab = next)}
+		/>
 
 		<div
 			role="tabpanel"
@@ -329,3 +310,126 @@
 		</div>
 	{/if}
 </section>
+
+<style>
+	.comparison-pickers {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+		align-items: center;
+		gap: clamp(0.25rem, 1vw, 0.75rem);
+		max-width: 44rem;
+	}
+
+	.rider-picker {
+		min-width: 0;
+		padding: 0.5rem;
+		color: var(--rider-color);
+	}
+
+	.rider-picker label {
+		display: block;
+		padding-inline: 0.2rem;
+		font-size: 0.6875rem;
+		font-weight: 650;
+	}
+
+	.rider-picker select {
+		padding-inline: 0.25rem;
+		border-color: transparent;
+		background: transparent;
+		font-size: 0.8125rem;
+		font-weight: 650;
+		text-overflow: ellipsis;
+	}
+
+	.swap-riders {
+		width: 2.75rem;
+		padding: 0;
+	}
+
+	.first {
+		--rider-color: var(--rider-first);
+		--rider-wash: var(--rider-first-wash);
+	}
+
+	.second {
+		--rider-color: var(--rider-second);
+		--rider-wash: var(--rider-second-wash);
+	}
+
+	.tie {
+		--rider-color: var(--rider-tie);
+	}
+
+	.comparison-score {
+		display: grid;
+		gap: 0.45rem;
+		padding: 0.75rem;
+	}
+
+	.score-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		row-gap: 0.4rem;
+		text-align: center;
+	}
+
+	.score-grid > div + div:not(.score-total) {
+		border-inline-start: 1px solid var(--line-subtle);
+	}
+
+	.score-grid dt {
+		color: var(--text-muted);
+		font-size: 0.6875rem;
+		font-weight: 600;
+		overflow-wrap: anywhere;
+	}
+
+	.score-grid dd {
+		font-size: clamp(1.125rem, 4vw, 1.5rem);
+		font-weight: 750;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.035em;
+	}
+
+	.score-grid :is(.first, .second) dd {
+		color: var(--rider-color);
+	}
+
+	.score-grid .score-total {
+		display: flex;
+		grid-column: 1 / -1;
+		justify-content: flex-end;
+		align-items: baseline;
+		gap: 0.3rem;
+		color: var(--text-muted);
+	}
+
+	.score-total dd {
+		font-size: 0.6875rem;
+	}
+
+	.score-bar {
+		display: flex;
+		height: 0.5rem;
+		overflow: hidden;
+		border-radius: 2rem;
+		background: var(--surface-muted);
+	}
+
+	.score-bar span {
+		flex-basis: 0;
+		background: var(--rider-color);
+	}
+
+	@media (width >= 48rem) {
+		.rider-picker,
+		.comparison-score {
+			padding: 0.875rem;
+		}
+
+		.score-grid dt {
+			font-size: 0.75rem;
+		}
+	}
+</style>

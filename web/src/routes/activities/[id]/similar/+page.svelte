@@ -110,7 +110,7 @@
 		<a href={`/activities/${a.id}`} class="text-xs text-accent-400 hover:text-accent-300">
 			← {a.title || 'Activity'}
 		</a>
-		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Similar routes</h1>
+		<h1 class="mt-2 page-title">Similar routes</h1>
 		<p class="mt-1 text-sm text-zinc-400">
 			Activities of the same sport that share at least 80% of both GPS routes in the same direction.
 		</p>
@@ -123,7 +123,7 @@
 	{:else if payload && payload.summary.count > 1}
 		<dl class="grid grid-cols-2 gap-4 sm:grid-cols-4">
 			{#each [{ label: 'Times on this route', value: String(payload.summary.count) }, { label: 'This effort ranks', value: payload.summary.current_rank ? `#${payload.summary.current_rank}` : '—' }, { label: 'Your best', value: performance(payload.summary.best_speed_kmh) }, { label: 'This effort', value: performance(payload.summary.current_speed_kmh) }] as c (c.label)}
-				<div class="rounded-lg border border-zinc-800 bg-panel p-4">
+				<div class="surface p-4">
 					<dt class="text-xs uppercase tracking-wide text-zinc-500">{c.label}</dt>
 					<dd class="mt-1 text-xl font-semibold tabular-nums">{c.value}</dd>
 				</div>

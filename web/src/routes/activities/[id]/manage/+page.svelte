@@ -347,7 +347,7 @@
 <section class="space-y-8">
 	<header>
 		<ActivityNav id={a.id} title={a.title} isOwner={data.isOwner} member={data.activityOwner} />
-		<h1 class="mt-2 text-2xl font-semibold tracking-tight">
+		<h1 class="mt-2 page-title">
 			{data.isOwner ? 'Manage & insights' : m.member_activity_insights()}
 		</h1>
 		<p class="mt-1 text-sm text-zinc-400">
@@ -364,7 +364,7 @@
 	{/if}
 
 	<!-- Export -->
-	<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+	<section class="surface p-5">
 		<h2 class="mb-1 text-sm font-medium text-zinc-300">Export</h2>
 		<p class="mb-4 text-xs text-zinc-500">
 			Download the merged activity as a standard file, generated from data stored in {APP_NAME} (works
@@ -418,7 +418,7 @@
 
 	{#if data.isOwner}
 		<!-- Share links -->
-		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+		<section class="surface p-5">
 			<h2 class="mb-1 text-sm font-medium text-zinc-300">Share</h2>
 			<p class="mb-4 text-xs text-zinc-500">
 				{m.community_share_link_help()}
@@ -461,7 +461,7 @@
 		</section>
 
 		<!-- Maintenance actions -->
-		<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+		<section class="surface p-5">
 			<h2 class="mb-1 text-sm font-medium text-zinc-300">Maintenance</h2>
 			<p class="mb-4 text-xs text-zinc-500">
 				These re-run the internal calculations in {APP_NAME} from the data already stored — they don't
@@ -541,7 +541,7 @@
 		{#if payload && payload.sources.length > 0}
 			<ul class="space-y-4">
 				{#each payload.sources as s (s.id)}
-					<li class="rounded-lg border border-zinc-800 bg-panel p-4">
+					<li class="surface p-4">
 						<div class="flex flex-wrap items-center justify-between gap-2">
 							<div class="flex items-center gap-2">
 								<span class="font-medium text-zinc-200">{s.provider}</span>

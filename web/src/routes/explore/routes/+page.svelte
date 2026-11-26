@@ -56,7 +56,7 @@
 	});
 	const count = $derived(new Intl.NumberFormat(intlLocale()).format(total));
 	const control =
-		'min-h-10 w-full min-w-0 rounded-lg border border-zinc-800 bg-panel px-2.5 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none';
+		'min-h-10 w-full min-w-0 surface px-2.5 text-sm text-zinc-100 focus:border-accent-500 focus:outline-none';
 
 	let memberRequest: AbortController | undefined;
 	async function loadMembers() {
@@ -166,7 +166,7 @@
 <div class="catalog-layout grid min-w-0 gap-4 xl:gap-5">
 	<section class="min-w-0">
 		<header class="mb-4">
-			<h1 class="text-3xl font-semibold tracking-tight text-zinc-100">{m.routes_title()}</h1>
+			<h1 class="page-title text-zinc-100">{m.routes_title()}</h1>
 			<p class="mt-1 text-sm text-quiet sm:text-[0.94rem]">{m.routes_intro()}</p>
 		</header>
 		<div class="hidden space-y-2 md:block">
@@ -205,11 +205,11 @@
 
 		<div class="mt-4" aria-busy={busy}>
 			{#if busy && !loaded}
-				<p role="status" class="rounded-xl border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+				<p role="status" class="surface p-4 text-sm text-quiet">
 					{m.routes_loading()}
 				</p>
 			{:else if failed}
-				<p role="alert" class="rounded-xl border border-zinc-800 bg-panel p-4 text-sm">
+				<p role="alert" class="surface p-4 text-sm">
 					{m.routes_load_failed()}
 					<button class="ml-1 text-accent-300 underline" onclick={() => retry++}
 						>{m.routes_retry()}</button
@@ -220,7 +220,7 @@
 					{total === 1 ? m.routes_count_one() : m.routes_count({ count })}
 				</p>
 				{#if !routes.length}
-					<div class="rounded-xl border border-zinc-800 bg-panel p-4 text-sm text-quiet">
+					<div class="surface p-4 text-sm text-quiet">
 						{active ? m.routes_empty() : m.routes_empty_catalog()}
 						{#if active}
 							<button class="ml-1 text-accent-300 underline" onclick={reset}
@@ -253,7 +253,7 @@
 
 				{#if offset < total && routes.length > 0}
 					<button
-						class="mt-3 min-h-11 w-full rounded-lg border border-zinc-800 bg-panel px-3 text-sm font-semibold text-accent-300 hover:border-accent-500 disabled:opacity-50"
+						class="mt-3 min-h-11 w-full surface px-3 text-sm font-semibold text-accent-300 hover:border-accent-500 disabled:opacity-50"
 						onclick={() => loadPage(filters, true)}
 						disabled={busy}>{busy ? m.routes_loading() : m.routes_more_routes()}</button
 					>
@@ -281,7 +281,7 @@
 			</p>
 		</div>
 		{#if desktop.current && selected}
-			<div class="rounded-xl border border-zinc-800 bg-panel p-3.5 xl:p-4" aria-busy={detailBusy}>
+			<div class="surface p-3.5 xl:p-4" aria-busy={detailBusy}>
 				{@render details(true)}
 			</div>
 		{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import { memberURL } from '#lib/member.js';
 	import { onDestroy } from 'svelte';
@@ -185,19 +186,30 @@
 <section class="space-y-4 max-md:space-y-3">
 	<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
 		<div>
-			<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">
+			<h1 class="page-title">
 				{m.activities_title()}
 			</h1>
 			{#if feed}
 				<p class="mt-1 text-sm text-zinc-400">
 					{#if filter.active}
-						<span class="font-medium text-zinc-200">{feed.matched}</span> of {feed.total} activities
+						{m.activity_list_filtered({ matched: feed.matched, total: feed.total })}
 					{:else}
-						<span class="font-medium text-zinc-200">{feed.total}</span> activities
+						{feed.total === 1
+							? m.overview_one_activity()
+							: m.overview_activity_count({ count: feed.total })}
 					{/if}
 				</p>
 			{/if}
 		</div>
+		{#if !data.member}
+			<a
+				href="/review"
+				class="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-accent-300 hover:underline"
+			>
+				{m.activity_review_queue()}
+				<Icon name="chevron" size={14} />
+			</a>
+		{/if}
 	</header>
 	<FilterSheet
 		active={filter.active || filter.sort !== 'date_desc'}
@@ -209,25 +221,19 @@
 		{#snippet toolbar()}
 			{#if !data.member}
 				<div class="flex flex-wrap items-center gap-2">
-					<a
-						href="/activities/new"
-						class="inline-flex min-h-10 items-center rounded-lg border border-zinc-800 bg-panel px-3 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
-					>
-						New activity
+					<a href="/activities/new" class="action">
+						{m.activity_new()}
 					</a>
 					<button
 						type="button"
 						disabled={uploading}
 						onclick={() => fileInput?.click()}
-						class="min-h-10 rounded-lg bg-accent-500 px-3 text-xs font-semibold text-on-accent hover:bg-accent-600 disabled:opacity-50"
+						class="action action-primary"
 					>
-						{uploading ? 'Uploading…' : 'Upload files'}
+						<Icon name="upload" size={16} />{uploading
+							? m.activity_uploading()
+							: m.activity_upload_files()}
 					</button>
-					<a
-						href="/review"
-						class="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-accent-300 hover:underline"
-						>Review queue</a
-					>
 				</div>
 			{/if}
 		{/snippet}
@@ -277,31 +283,26 @@
 	{/if}
 
 	{#if items.length === 0 && !loading}
-		<div
-			class="rounded-lg border border-zinc-800 bg-panel p-8 text-center text-sm text-zinc-400 max-md:p-4"
-		>
+		<div class="surface p-8 text-center text-sm text-zinc-400 max-md:p-4">
 			{filter.active ? 'No activities match this filter.' : m.activities_empty()}
 		</div>
 	{:else}
 		<ul
-			class="space-y-3 transition-opacity duration-200 max-md:divide-y max-md:divide-zinc-800 max-md:space-y-0 max-md:rounded-2xl max-md:border max-md:border-zinc-800 max-md:bg-panel"
+			class="activity-list surface divide-y divide-zinc-800 transition-opacity duration-200"
 			class:opacity-50={loading}
 		>
 			{#each items as activity (activity.id)}
 				<li>
-					<a
-						href={memberURL(`/activities/${activity.id}`, data.member)}
-						class="flex flex-wrap items-center gap-5 rounded-lg border border-zinc-800 bg-panel px-5 py-4 max-md:gap-x-2.5 max-md:gap-y-1.5 max-md:rounded-none max-md:border-0 max-md:px-2.5 max-md:py-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900/80"
-					>
+					<a href={memberURL(`/activities/${activity.id}`, data.member)} class="activity-row">
 						<div
-							class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 max-md:size-9 max-md:rounded-xl max-md:bg-accent-500/10 max-md:text-accent-300"
+							class="grid size-9 shrink-0 place-items-center rounded-full bg-accent-500/10 text-accent-300 sm:size-11"
 							title={activity.discipline || activity.type}
 						>
 							<SportIcon type={activity.discipline || activity.type} size={24} />
 						</div>
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center gap-2">
-								<span class="truncate font-medium">
+								<span class="truncate font-semibold">
 									{activity.title || `${humanize(activity.discipline || activity.type)} Activity`}
 								</span>
 								{#if activity.gear_unset}
@@ -321,11 +322,11 @@
 							src={`/api/activities/${activity.id}/map.png`}
 							alt=""
 							loading="lazy"
-							class="hidden h-8 w-24 shrink-0 rounded border border-zinc-800 object-cover lg:block"
+							class="activity-map h-9 w-24 shrink-0 rounded-md border border-zinc-800 object-cover"
 							onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 						/>
 						<dl
-							class="grid grid-cols-3 gap-x-4 gap-y-2 text-xs text-zinc-400 max-md:ml-[2.875rem] max-md:w-full max-md:gap-x-1.5 md:grid-cols-5 md:text-right"
+							class="activity-metrics grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs text-quiet tabular-nums"
 						>
 							<div>
 								<dt class="text-zinc-500">{m.col_distance()}</dt>
@@ -353,7 +354,7 @@
 							</div>
 							<div>
 								<dt class="text-zinc-500">{m.col_average_speed()}</dt>
-								<dd class="font-medium tabular-nums">
+								<dd class="mt-0.5 font-bold text-accent-300 tabular-nums">
 									{formatSpeed(activity.avg_speed_mps)}
 								</dd>
 							</div>
@@ -364,7 +365,7 @@
 		</ul>
 
 		{#if feed && totalPages > 1}
-			<nav class="mt-6 flex items-center justify-center gap-1" aria-label="Pagination">
+			<nav class="mt-3 flex flex-wrap items-center justify-center gap-1" aria-label="Pagination">
 				<button
 					type="button"
 					onclick={() => goToPage(pageNum - 1)}
@@ -381,7 +382,7 @@
 							type="button"
 							onclick={() => goToPage(p)}
 							aria-current={p === pageNum ? 'page' : undefined}
-							class="min-w-9 rounded px-2.5 py-1.5 text-sm tabular-nums {p === pageNum
+							class="min-h-10 min-w-9 rounded-lg px-2 py-1.5 text-sm tabular-nums {p === pageNum
 								? 'bg-accent-500 font-medium text-on-accent'
 								: 'text-zinc-300 hover:bg-zinc-800'}"
 						>
@@ -404,3 +405,54 @@
 		{/if}
 	{/if}
 </section>
+
+<style>
+	.activity-list {
+		container-type: inline-size;
+	}
+
+	.activity-row {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 0.55rem;
+		border-radius: var(--radius-panel);
+		padding: 0.7rem;
+	}
+
+	.activity-row:hover {
+		background: var(--surface-hover);
+	}
+
+	.activity-metrics {
+		grid-column: 2;
+	}
+
+	.activity-map {
+		display: none;
+	}
+
+	@container (width >= 43rem) {
+		.activity-row {
+			grid-template-columns: auto minmax(9.5rem, 1fr) minmax(0, 1.5fr);
+			gap: 0.9rem;
+			padding: 0.85rem 1rem;
+		}
+
+		.activity-metrics {
+			grid-column: auto;
+			grid-template-columns: repeat(5, minmax(0, 1fr));
+			text-align: right;
+		}
+	}
+
+	@container (width >= 62rem) {
+		.activity-row {
+			grid-template-columns: auto minmax(9.5rem, 1fr) auto minmax(0, 1.35fr);
+		}
+
+		.activity-map {
+			display: block;
+		}
+	}
+</style>

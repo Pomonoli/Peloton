@@ -25,34 +25,24 @@
 <section class="space-y-6">
 	<header class="flex items-baseline justify-between max-md:flex-col max-md:gap-3">
 		<div>
-			<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">{m.admin_title()}</h1>
+			<h1 class="page-title">{m.admin_title()}</h1>
 			<p class="mt-1 text-sm text-zinc-400">{m.admin_intro()}</p>
 		</div>
 		<div class="flex gap-2">
-			<a
-				href="/admin/moderation"
-				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
-			>
-				Moderation →
-			</a>
-			<a
-				href="/admin/oidc"
-				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300"
-			>
-				Identity Providers →
-			</a>
+			<a href="/admin/moderation" class="action"> Moderation → </a>
+			<a href="/admin/oidc" class="action"> Identity Providers → </a>
 		</div>
 	</header>
 
-	<section class="rounded-lg border border-zinc-800 bg-panel">
+	<section class="surface">
 		<header class="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-			<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">{m.stat_users()}</h2>
+			<h2 class="section-title">{m.stat_users()}</h2>
 			<span class="text-xs text-zinc-500">{data.users.length}</span>
 		</header>
 		<ul class="divide-y divide-zinc-800">
 			{#each data.users as u (u.id)}
 				<li
-					class="grid grid-cols-[1fr_1fr_auto] items-center gap-5 px-5 py-3 text-sm max-md:grid-cols-1 max-md:gap-2"
+					class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 text-sm wrap-anywhere max-md:grid-cols-1 max-md:gap-2"
 				>
 					<div>
 						<div class="flex items-center gap-2 font-medium">
@@ -76,7 +66,7 @@
 						<select
 							value={u.role}
 							onchange={(e) => setRole(u.id, (e.currentTarget as HTMLSelectElement).value)}
-							class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300"
+							class="field"
 							aria-label="user role"
 						>
 							<option value="user">user</option>

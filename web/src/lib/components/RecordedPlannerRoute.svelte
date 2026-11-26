@@ -74,7 +74,7 @@
 <div class="mb-4 flex flex-wrap items-start justify-between gap-2">
 	<div>
 		<p class="text-xs font-semibold text-accent-300">{m.routes_recorded_in_planner()}</p>
-		<h1 class="text-2xl font-semibold tracking-tight text-zinc-100">
+		<h1 class="page-title text-zinc-100">
 			{route?.name ?? m.waas_title()}
 		</h1>
 	</div>
@@ -85,7 +85,7 @@
 	>
 </div>
 {#if failed}
-	<p class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm" role="alert">
+	<p class="surface p-4 text-sm" role="alert">
 		{m.routes_detail_failed()}
 	</p>
 {:else if !route}
@@ -94,7 +94,7 @@
 	<p role="status" class="text-sm text-quiet">{m.routes_map_unavailable()}</p>
 {:else}
 	<div class="grid items-start gap-3 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
-		<section class="order-2 space-y-3 rounded-xl border border-zinc-800 bg-panel p-4 lg:order-1">
+		<section class="order-2 space-y-3 surface p-4 lg:order-1">
 			<p class="text-sm text-zinc-300">{m.routes_recorded_help()}</p>
 			<p class="text-lg font-semibold tabular-nums text-zinc-100">{routeDistance(distance)}</p>
 			<label class="flex items-center gap-2 text-sm">
@@ -183,12 +183,12 @@
 			{#if track.length}
 				<WaasRouteMap recorded={track} />
 			{:else}
-				<p role="status" class="rounded-lg border border-zinc-800 bg-panel p-4 text-sm">
+				<p role="status" class="surface p-4 text-sm">
 					{m.routes_recorded_no_section()}
 				</p>
 			{/if}
 			{#if hasElevation}
-				<section class="rounded-xl border border-zinc-800 bg-panel p-4">
+				<section class="surface p-4">
 					<h2 class="mb-2 text-sm font-semibold">{m.waas_elevation_profile()}</h2>
 					<ElevationProfile track={profile} />
 				</section>

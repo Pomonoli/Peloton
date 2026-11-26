@@ -50,7 +50,7 @@
 	const fmt = (s: string) => formatDate(s, { seconds: true, numericDate: true });
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+<section class="surface p-5">
 	<h2 class="text-sm font-medium uppercase tracking-wide text-zinc-400">Worker pools</h2>
 	<p class="mt-1 text-xs text-zinc-500">
 		Every worker name seen for a provider, bound to the package it reported first. Connections are

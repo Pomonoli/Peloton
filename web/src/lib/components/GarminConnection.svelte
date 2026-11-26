@@ -115,7 +115,7 @@
 	}
 </script>
 
-<section id="garmin-connect" class="space-y-3 rounded-lg border border-zinc-800 bg-panel p-5">
+<section id="garmin-connect" class="space-y-3 surface p-5">
 	<div class="flex flex-wrap items-center justify-between gap-2">
 		<h2 class="text-base font-medium">{m.garmin_title()}</h2>
 		{#if status?.connected}

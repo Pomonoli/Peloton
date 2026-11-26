@@ -18,7 +18,7 @@
 	<label for={id} class="text-xs font-semibold text-quiet">{m.segment_sort_stack()}</label>
 	<select
 		{id}
-		class="min-h-11 w-full rounded-lg border border-zinc-800 bg-panel px-2 text-base"
+		class="min-h-11 w-full surface px-2 text-base"
 		value=""
 		onchange={(event) => {
 			onchange(promoteSort(order, event.currentTarget.value as Key));

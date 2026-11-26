@@ -79,7 +79,7 @@
 	}
 </script>
 
-<section class="rounded-lg border border-zinc-800 bg-panel p-5">
+<section class="surface p-5">
 	<div class="mb-1 flex items-center justify-between">
 		<h2 class="text-sm font-medium text-zinc-300">Passkeys</h2>
 		{#if supported}

@@ -479,7 +479,7 @@
 </script>
 
 {#if shown.length > 0}
-	<section class={connectionId ? '' : 'rounded-lg border border-zinc-800 bg-panel p-4'}>
+	<section class={connectionId ? '' : 'surface p-4'}>
 		{#if !connectionId}
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">Connected accounts</h2>
 		{/if}
