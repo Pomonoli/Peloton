@@ -25,8 +25,9 @@ type catalogResult struct {
 		DistanceM      float64 `json:"distance_m"`
 		BestSpeed      float64 `json:"best_speed_kmh"`
 		Riders         []struct {
-			Username string
-			Rides    int
+			Username    string
+			DisplayName string `json:"display_name"`
+			Rides       int
 		}
 	}
 }
@@ -130,6 +131,10 @@ func TestAPI_RecordedRoutesLifecycle(t *testing.T) {
 	drain()
 	if got := read(sam, "").Routes[0]; got.ID != route.ID || got.Rides != 6 || got.Riders[0].Username != "mira" || got.Riders[0].Rides != 3 {
 		t.Fatalf("incorrect featured rider after overtaking: %+v", got)
+	}
+	mira.rpc("/cairn.v1.AuthService/UpdateProfile", map[string]any{"displayName": "Mira Rider"}, http.StatusOK)
+	if got := read(sam, "?rider=mira").Routes[0]; got.ID != route.ID || got.Riders[0].DisplayName != "Mira Rider" || got.Riders[0].Rides != 3 {
+		t.Fatalf("recorded route after rider rename: %+v", got)
 	}
 
 	path := "/api/routes/" + route.ID

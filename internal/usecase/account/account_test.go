@@ -91,10 +91,26 @@ func (f *fakeUsers) UpdatePassword(_ context.Context, _ domain.UserID, encoded s
 	f.password = encoded
 	return nil
 }
-func (f *fakeUsers) UpdateProfile(_ context.Context, _ domain.UserID, p port.ProfileUpdate) error {
+func (f *fakeUsers) UpdateProfile(_ context.Context, id domain.UserID, p port.ProfileUpdate) error {
+	if id != f.user.ID {
+		return domain.ErrNotFound
+	}
 	f.profile = &p
-	f.user.DisplayName, f.user.AvatarURL = p.DisplayName, p.AvatarURL
-	f.user.Locale, f.user.Timezone, f.user.Units = p.Locale, p.Timezone, domain.UserUnits(p.Units)
+	if p.DisplayName != nil {
+		f.user.DisplayName = *p.DisplayName
+	}
+	if p.AvatarURL != nil {
+		f.user.AvatarURL = *p.AvatarURL
+	}
+	if p.Locale != nil {
+		f.user.Locale = *p.Locale
+	}
+	if p.Timezone != nil {
+		f.user.Timezone = *p.Timezone
+	}
+	if p.Units != nil {
+		f.user.Units = domain.UserUnits(*p.Units)
+	}
 	return nil
 }
 

@@ -259,6 +259,7 @@ type rankedRecord struct {
 	Result       *struct {
 		Rank          int
 		Username      string
+		DisplayName   string  `json:"display_name"`
 		AchievedValue float64 `json:"achieved_value"`
 		ActivityID    string  `json:"activity_id"`
 	}

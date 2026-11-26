@@ -43,6 +43,10 @@ type comparedRecordResponse struct {
 }
 
 type headToHeadResponse struct {
+	First, Opponent struct {
+		ID, Username string
+		DisplayName  string `json:"display_name"`
+	}
 	Segments     []comparedSegmentResponse
 	Records      []comparedRecordResponse
 	SegmentScore struct{ Wins, Losses, Ties, Comparable int } `json:"segment_score"`
@@ -281,6 +285,35 @@ func TestAPI_HeadToHead(t *testing.T) {
 
 	alice.do(http.MethodGet, endpoint+bob.name, nil, http.StatusOK)
 	bob.do(http.MethodGet, endpoint+alice.name, nil, http.StatusOK)
+
+	const profileRPC = "/cairn.v1.AuthService/UpdateProfile"
+	const renamed = "Compare-alice" // The existing name of another rider is allowed.
+	patch := map[string]any{"fieldMask": []string{"display_name"}, "displayName": "  " + renamed + "  "}
+	env.anon().rpc(profileRPC, patch, http.StatusUnauthorized)
+	bob.rpc(profileRPC, map[string]any{"displayName": " \t "}, http.StatusBadRequest)
+	bob.rpc(profileRPC, patch, http.StatusOK)
+	page = readHeadToHead(t, alice, bob)
+	if page.First.DisplayName != renamed || page.Opponent.DisplayName != renamed ||
+		page.Opponent.ID != bob.userID.String() || page.Opponent.Username != bob.name ||
+		len(page.Segments) != 3 || page.Segments[0].Opponent.ActivityID != bID.String() {
+		t.Fatalf("renamed rider changed comparison identity or history: %+v", page)
+	}
+	if board := segmentBoard(t, alice, canal.ID); len(board) != 2 || board[1].Name != renamed || board[1].UserID != bob.userID.String() || board[1].Elapsed != 120 {
+		t.Fatalf("segment leaderboard after rename: %+v", board)
+	}
+	rows := readRecordBoard(t, alice, "/api/records/leaderboards/ride/power/duration/300")
+	if !slices.ContainsFunc(rows, func(row rankedRecord) bool {
+		return row.Result != nil && row.Result.DisplayName == renamed && row.Result.Username == bob.name && row.Result.ActivityID == bID.String()
+	}) {
+		t.Fatalf("record leaderboard after rename: %+v", rows)
+	}
+	for _, key := range []string{bob.name, bob.userID.String()} {
+		body := alice.do(http.MethodGet, "/api/members/"+key, nil, http.StatusOK)
+		var member map[string]string
+		if err := json.Unmarshal(body, &member); err != nil || member["display_name"] != renamed || member["id"] != bob.userID.String() {
+			t.Fatalf("member lookup after rename: %v %s", err, body)
+		}
+	}
 }
 
 func TestAPI_HeadToHeadHistoricalDurationRecords(t *testing.T) {

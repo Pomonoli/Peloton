@@ -46,7 +46,18 @@ func (f *fakeUsers) UpdateEmail(_ context.Context, id domain.UserID, email strin
 }
 func (f *fakeUsers) UpdateProfile(_ context.Context, id domain.UserID, p port.ProfileUpdate) error {
 	u := f.rows[id]
-	u.DisplayName, u.Locale, u.Timezone, u.Units = p.DisplayName, p.Locale, p.Timezone, domain.UserUnits(p.Units)
+	if p.DisplayName != nil {
+		u.DisplayName = *p.DisplayName
+	}
+	if p.Locale != nil {
+		u.Locale = *p.Locale
+	}
+	if p.Timezone != nil {
+		u.Timezone = *p.Timezone
+	}
+	if p.Units != nil {
+		u.Units = domain.UserUnits(*p.Units)
+	}
 	return nil
 }
 func (f *fakeUsers) UpdatePassword(_ context.Context, id domain.UserID, enc string) error {

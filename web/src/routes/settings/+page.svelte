@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { m } from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
 	import PrivacyZonesSettings from '#lib/components/PrivacyZonesSettings.svelte';
@@ -17,6 +18,36 @@
 	import { DateFormat, UnitSystem } from '#lib/proto/cairn/v1/auth_pb.js';
 
 	let { data } = $props();
+
+	let displayName = $state(untrack(() => data.user.displayName));
+	let savingDisplayName = $state(false);
+	let displayNameFeedback = $state<'required' | 'saved' | 'error' | null>(null);
+
+	async function saveDisplayName(event: SubmitEvent) {
+		event.preventDefault();
+		if (savingDisplayName) return;
+		const name = displayName.trim();
+		if (!name) {
+			displayNameFeedback = 'required';
+			return;
+		}
+
+		displayNameFeedback = null;
+		savingDisplayName = true;
+		try {
+			const { user } = await connectClients(fetch, page.url.origin).auth.updateProfile({
+				fieldMask: ['display_name'],
+				displayName: name
+			});
+			displayName = user?.displayName ?? name;
+			await invalidateAll();
+			displayNameFeedback = 'saved';
+		} catch {
+			displayNameFeedback = 'error';
+		} finally {
+			savingDisplayName = false;
+		}
+	}
 
 	// Seeded from the shared store (which the layout filled from the user).
 	let dateFormat = $state(prefs.dateFormat);
@@ -86,9 +117,51 @@
 		<div class="space-y-3 md:space-y-4">
 			<section class="surface p-3 sm:p-5">
 				<h2 class="section-title mb-3">{m.settings_account_section()}</h2>
+				<form
+					class="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-3"
+					novalidate
+					onsubmit={saveDisplayName}
+				>
+					<label for="display-name" class="text-zinc-500 sm:pt-2">
+						{m.settings_field_display_name()}
+					</label>
+					<div class="space-y-2">
+						<input
+							id="display-name"
+							name="display-name"
+							type="text"
+							autocomplete="nickname"
+							class="field w-full"
+							bind:value={displayName}
+							oninput={() => (displayNameFeedback = null)}
+							aria-invalid={displayNameFeedback === 'required'}
+							aria-describedby="display-name-feedback"
+							required
+							readonly={savingDisplayName}
+						/>
+						<button type="submit" class="action action-primary" disabled={savingDisplayName}>
+							{savingDisplayName
+								? m.settings_saving_display_name()
+								: m.settings_save_display_name()}
+						</button>
+						<div
+							id="display-name-feedback"
+							role="status"
+							class="text-xs"
+							class:text-emerald-400={displayNameFeedback === 'saved'}
+							class:text-red-400={displayNameFeedback !== 'saved'}
+						>
+							{#if displayNameFeedback === 'required'}
+								{m.settings_display_name_required()}
+							{:else if displayNameFeedback === 'saved'}
+								{m.settings_display_name_saved()}
+							{:else if displayNameFeedback === 'error'}
+								{m.settings_display_name_save_failed()}
+							{/if}
+						</div>
+					</div>
+				</form>
 				<dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-[160px_1fr]">
-					<dt class="text-zinc-500">{m.settings_field_display_name()}</dt>
-					<dd class="text-zinc-200">{data.user.displayName}</dd>
 					<dt class="text-zinc-500">{m.settings_field_username()}</dt>
 					<dd class="text-zinc-200">{data.user.username}</dd>
 					<dt class="text-zinc-500">{m.settings_field_email()}</dt>

@@ -23,7 +23,7 @@ func TestAPI_FriendsDirectory(t *testing.T) {
 	admin := env.user("directory-admin", domain.UserRoleAdmin)
 	ctx := t.Context()
 	if err := env.app.Users.UpdateProfile(ctx, bob.userID, port.ProfileUpdate{
-		DisplayName: "Bob Rider", AvatarURL: "https://example.test/bob.png", Locale: "en", Timezone: "UTC", Units: "metric",
+		DisplayName: new("Bob Rider"), AvatarURL: new("https://example.test/bob.png"),
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -279,10 +279,12 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id domain.UserID, p port.P
 	db := dbtx(ctx, r.pool)
 	tag, err := db.Exec(ctx,
 		`UPDATE users
-		    SET display_name = $2, avatar_url = $3, locale = $4, timezone = $5, units = $6,
+		    SET display_name = COALESCE($2, display_name),
+		        avatar_url = CASE WHEN $3::text IS NULL THEN avatar_url ELSE NULLIF($3, '') END,
+		        locale = COALESCE($4, locale), timezone = COALESCE($5, timezone), units = COALESCE($6, units),
 		        updated_at = now()
 		  WHERE id = $1 AND status != 'deleted'`,
-		id.UUID(), p.DisplayName, nullIfEmpty(p.AvatarURL), p.Locale, p.Timezone, p.Units,
+		id.UUID(), p.DisplayName, p.AvatarURL, p.Locale, p.Timezone, p.Units,
 	)
 	if err != nil {
 		return fmt.Errorf("update profile: %w", err)

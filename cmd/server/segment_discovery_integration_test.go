@@ -312,7 +312,7 @@ func TestAPI_SegmentCatalogSorting(t *testing.T) {
 		env.user("mira", domain.UserRoleUser),
 	}
 	if err := env.app.Users.UpdateProfile(ctx, riders[2].userID, port.ProfileUpdate{
-		DisplayName: " ", Locale: "en", Timezone: "UTC", Units: "metric",
+		DisplayName: new(" "),
 	}); err != nil {
 		t.Fatal(err)
 	}

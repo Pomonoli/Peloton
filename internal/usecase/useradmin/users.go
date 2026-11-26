@@ -217,7 +217,7 @@ func (u *Users) Update(ctx context.Context, actor audit.Actor, id domain.UserID,
 		}
 		diff = append(diff, change...)
 	}
-	upd, err := applyUserPatch(user, p)
+	upd, err := applyUserPatch(p)
 	if err != nil {
 		return domain.User{}, invalid(err)
 	}
@@ -249,39 +249,44 @@ func (u *Users) changeEmail(ctx context.Context, user domain.User, raw string) (
 	return []domain.FieldChange{{Field: "email", Before: user.Email, After: email}}, nil
 }
 
-// applyUserPatch lays the profile fields of the patch over the current row.
-func applyUserPatch(user domain.User, p UserPatch) (port.ProfileUpdate, error) {
-	upd := port.ProfileUpdate{DisplayName: user.DisplayName, AvatarURL: user.AvatarURL, Locale: user.Locale, Timezone: user.Timezone, Units: string(user.Units)}
+// applyUserPatch normalizes and validates the supplied profile fields.
+func applyUserPatch(p UserPatch) (port.ProfileUpdate, error) {
+	var upd port.ProfileUpdate
 	if p.DisplayName != nil {
-		if upd.DisplayName = strings.TrimSpace(*p.DisplayName); upd.DisplayName == "" {
+		name := strings.TrimSpace(*p.DisplayName)
+		if name == "" {
 			return upd, domain.ErrDisplayNameRequired
 		}
+		upd.DisplayName = &name
 	}
 	if p.Locale != nil {
-		upd.Locale = strings.TrimSpace(*p.Locale)
-		if err := domain.ValidateLocale(upd.Locale); err != nil {
+		locale := strings.TrimSpace(*p.Locale)
+		if err := domain.ValidateLocale(locale); err != nil {
 			return upd, err
 		}
+		upd.Locale = &locale
 	}
 	if p.Timezone != nil {
-		upd.Timezone = strings.TrimSpace(*p.Timezone)
-		if err := domain.ValidateTimezone(upd.Timezone); err != nil {
+		timezone := strings.TrimSpace(*p.Timezone)
+		if err := domain.ValidateTimezone(timezone); err != nil {
 			return upd, err
 		}
+		upd.Timezone = &timezone
 	}
 	if p.Units != nil {
-		if upd.Units = *p.Units; !domain.UserUnits(upd.Units).Valid() {
+		if !domain.UserUnits(*p.Units).Valid() {
 			return upd, errors.New("units must be metric or imperial")
 		}
+		upd.Units = p.Units
 	}
 	return upd, nil
 }
 
 func profileDiff(before domain.User, after port.ProfileUpdate) []domain.FieldChange {
 	var out []domain.FieldChange
-	add := func(f, a, b string) {
-		if a != b {
-			out = append(out, domain.FieldChange{Field: f, Before: a, After: b})
+	add := func(f, a string, b *string) {
+		if b != nil && a != *b {
+			out = append(out, domain.FieldChange{Field: f, Before: a, After: *b})
 		}
 	}
 	add("display_name", before.DisplayName, after.DisplayName)

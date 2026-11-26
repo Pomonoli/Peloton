@@ -53,7 +53,12 @@ func (f *fakeUserRepo) GetUser(context.Context, domain.UserID) (domain.User, err
 	return f.user, nil
 }
 func (f *fakeUserRepo) UpdateProfile(_ context.Context, _ domain.UserID, p port.ProfileUpdate) error {
-	f.user.DisplayName, f.user.Timezone = p.DisplayName, p.Timezone
+	if p.DisplayName != nil {
+		f.user.DisplayName = *p.DisplayName
+	}
+	if p.Timezone != nil {
+		f.user.Timezone = *p.Timezone
+	}
 	return nil
 }
 

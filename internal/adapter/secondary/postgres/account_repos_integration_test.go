@@ -81,7 +81,8 @@ func TestAccountRepos(t *testing.T) {
 
 	t.Run("profile", func(t *testing.T) {
 		err := users.UpdateProfile(ctx, uid, port.ProfileUpdate{
-			DisplayName: "Renamed", AvatarURL: "", Locale: "de-DE", Timezone: "Europe/Berlin", Units: "imperial",
+			DisplayName: new("Renamed"), AvatarURL: new("https://example.test/rider.png"), Locale: new("de-DE"),
+			Timezone: new("Europe/Berlin"), Units: new("imperial"),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -90,10 +91,27 @@ func TestAccountRepos(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if u.DisplayName != "Renamed" || u.AvatarURL != "" || u.Locale != "de-DE" || u.Timezone != "Europe/Berlin" || u.Units != domain.UserUnitsImperial {
+		if u.DisplayName != "Renamed" || u.AvatarURL != "https://example.test/rider.png" || u.Locale != "de-DE" || u.Timezone != "Europe/Berlin" || u.Units != domain.UserUnitsImperial {
 			t.Fatalf("profile %+v", u)
 		}
-		if err := users.UpdateProfile(ctx, domain.UserID(uuid.New()), port.ProfileUpdate{DisplayName: "x", Units: "metric"}); !errors.Is(err, domain.ErrNotFound) {
+		if err := users.UpdateProfile(ctx, uid, port.ProfileUpdate{DisplayName: new("New name")}); err != nil {
+			t.Fatal(err)
+		}
+		after, err := users.GetUser(ctx, uid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.DisplayName != "New name" || after.AvatarURL != u.AvatarURL || after.Locale != u.Locale || after.Timezone != u.Timezone || after.Units != u.Units {
+			t.Fatalf("name-only update changed other profile fields: %+v", after)
+		}
+		if err := users.UpdateProfile(ctx, uid, port.ProfileUpdate{AvatarURL: new("")}); err != nil {
+			t.Fatal(err)
+		}
+		after, err = users.GetUser(ctx, uid)
+		if err != nil || after.AvatarURL != "" {
+			t.Fatalf("clear avatar: %v %+v", err, after)
+		}
+		if err := users.UpdateProfile(ctx, domain.UserID(uuid.New()), port.ProfileUpdate{DisplayName: new("x")}); !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("unknown user: %v", err)
 		}
 	})

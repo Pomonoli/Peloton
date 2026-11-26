@@ -28,41 +28,35 @@ type Profiles struct {
 	Users port.UserProfileStore
 }
 
-// Update validates the patch over the current row, writes it and returns the new row.
+// Update validates the patch, writes it and returns the new row.
 func (p *Profiles) Update(ctx context.Context, userID domain.UserID, patch ProfilePatch) (domain.User, error) {
-	u, err := p.Users.GetUser(ctx, userID)
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return domain.User{}, port.NewActionError(port.ActionErrorNotFound, "user not found")
-		}
-		return domain.User{}, internalErr("load user", err)
-	}
-	upd, err := applyPatch(u, patch)
+	upd, err := applyPatch(patch)
 	if err != nil {
 		return domain.User{}, invalid(err)
 	}
 	if err := p.Users.UpdateProfile(ctx, userID, upd); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.User{}, port.NewActionError(port.ActionErrorNotFound, "user not found")
+		}
 		return domain.User{}, internalErr("update profile", err)
 	}
-	u, err = p.Users.GetUser(ctx, userID)
+	u, err := p.Users.GetUser(ctx, userID)
 	if err != nil {
 		return domain.User{}, internalErr("reload user", err)
 	}
 	return u, nil
 }
 
-// applyPatch lays the patch over the current row and validates each changed field.
-func applyPatch(u domain.User, patch ProfilePatch) (port.ProfileUpdate, error) {
-	upd := port.ProfileUpdate{
-		DisplayName: u.DisplayName, AvatarURL: u.AvatarURL,
-		Locale: u.Locale, Timezone: u.Timezone, Units: string(u.Units),
-	}
-	set := func(dst *string, src *string, check func(string) error) error {
+// applyPatch normalizes and validates each supplied field.
+func applyPatch(patch ProfilePatch) (port.ProfileUpdate, error) {
+	var upd port.ProfileUpdate
+	set := func(dst **string, src *string, check func(string) error) error {
 		if src == nil {
 			return nil
 		}
-		*dst = strings.TrimSpace(*src)
-		return check(*dst)
+		v := strings.TrimSpace(*src)
+		*dst = &v
+		return check(v)
 	}
 	steps := []error{
 		set(&upd.DisplayName, patch.DisplayName, func(v string) error {

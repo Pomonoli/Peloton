@@ -37,14 +37,13 @@ type UserSettingsRepo interface {
 	SetInstanceMergeDefaults(ctx context.Context, policies map[domain.ActivityType]domain.MergePolicy) error
 }
 
-// ProfileUpdate carries the columns UpdateProfile writes; every field is
-// written as given (the use case fills unchanged ones from the current row).
+// ProfileUpdate carries the columns UpdateProfile writes. Nil fields are left unchanged.
 type ProfileUpdate struct {
-	DisplayName string
-	AvatarURL   string
-	Locale      string
-	Timezone    string
-	Units       string
+	DisplayName *string
+	AvatarURL   *string
+	Locale      *string
+	Timezone    *string
+	Units       *string
 }
 
 // UserReader looks up and lists users.

@@ -147,6 +147,8 @@ try {
 		let analysisQuery;
 		let selfHistory = 'typical';
 		let manualActivity;
+		let displayName = 'Ada';
+		const profileUpdates = [];
 		page.on('pageerror', (error) => errors.push(error.message));
 		let catalogSort = [];
 		let weatherRequests = 0;
@@ -211,12 +213,21 @@ try {
 				manualActivity = route.request().postDataJSON();
 				return route.fulfill({ json: { activity_id: recent.id } });
 			}
+			if (path === '/cairn.v1.AuthService/UpdateProfile') {
+				const patch = route.request().postDataJSON();
+				profileUpdates.push(patch);
+				if (profileUpdates.length === 1) {
+					return route.fulfill({ status: 500, json: { code: 'internal' } });
+				}
+				displayName = patch.displayName;
+				return route.fulfill({ json: { user: { id: 'ada', username: 'ada', displayName } } });
+			}
 			const fixtures = {
 				'/cairn.v1.AuthService/GetCurrentUser': {
 					user: {
 						id: 'ada',
 						username: 'ada',
-						displayName: 'Ada',
+						displayName,
 						emailVerified: true,
 						timeFormat: 'TIME_FORMAT_12H'
 					},
@@ -674,6 +685,41 @@ try {
 			if (path === '/settings') {
 				await main.getByText('Jun 2, 2026 16:30', { exact: true }).waitFor();
 				assert.equal(await main.getByLabel('Time format', { exact: true }).count(), 0);
+				const name = main.getByRole('textbox', { name: 'Display name' });
+				assert.equal(await name.inputValue(), 'Ada');
+				if (width === 360 || width === 1440) {
+					const save = main.getByRole('button', { name: 'Save display name' });
+					for (const blank of ['', '   ']) {
+						await name.fill(blank);
+						await save.click();
+						await main.getByRole('status').getByText('Enter a display name.').waitFor();
+						assert.equal(await name.getAttribute('aria-invalid'), 'true');
+					}
+					assert.deepEqual(profileUpdates, []);
+					await name.fill(' Mira ');
+					await name.press('Enter');
+					await main
+						.getByRole('status')
+						.getByText('Could not save your display name. Try again.')
+						.waitFor();
+					assert.equal(await name.inputValue(), ' Mira ');
+					await save.click();
+					await main.getByRole('status').getByText('Display name saved.').waitFor();
+					assert.equal(await name.inputValue(), 'Mira');
+					assert.deepEqual(
+						profileUpdates,
+						Array(2).fill({ fieldMask: ['display_name'], displayName: 'Mira' })
+					);
+					if (mobile) await page.getByRole('button', { name: 'Profile menu' }).click();
+					await page.getByText('Mira', { exact: true }).filter({ visible: true }).waitFor();
+					await noPageOverflow(path);
+					await page.reload();
+					assert.equal(await name.inputValue(), 'Mira');
+					await open('/');
+					await main
+						.getByRole('heading', { name: /Good (morning|afternoon|evening), Mira/ })
+						.waitFor();
+				}
 			}
 			if (path === '/settings' && width === 390) {
 				await main.getByText('Dark', { exact: true }).click();
