@@ -60,7 +60,7 @@
 	);
 	const shortcuts = $derived([
 		...(!data.member
-			? [{ href: '/activities/new', label: m.overview_add_activity(), icon: 'upload' as const }]
+			? [{ href: '/routes/waasland', label: m.nav_route_planner(), icon: 'planner' as const }]
 			: []),
 		{ href: '/stats', label: m.nav_stats(), icon: 'stats' },
 		{ href: '/segments', label: m.nav_segments(), icon: 'segments' },
@@ -122,7 +122,7 @@
 					{#each shortcuts as link (link.href)}
 						<a
 							href={memberURL(link.href, data.member)}
-							class="action flex-col text-center {link.href === '/activities/new'
+							class="action flex-col text-center {link.href === '/routes/waasland'
 								? 'action-primary'
 								: ''}"
 						>

@@ -350,7 +350,17 @@ try {
 		await open('/');
 		await main.getByRole('heading', { name: /Good (morning|afternoon|evening), Ada/ }).waitFor();
 		await main.getByRole('term').filter({ hasText: 'Activities' }).first().waitFor();
-		await main.getByRole('link', { name: 'Add activity' }).waitFor();
+		const shortcuts = main.getByRole('navigation', { name: 'Quick links' });
+		const plannerShortcut = shortcuts.getByRole('link', { name: 'Route Planner', exact: true });
+		assert.equal(await plannerShortcut.getAttribute('href'), '/routes/waasland');
+		assert.equal(
+			await plannerShortcut.evaluate((link) => link.classList.contains('action-primary')),
+			true
+		);
+		assert.deepEqual(
+			await shortcuts.getByRole('link').evaluateAll((links) => links.map((link) => link.pathname)),
+			['/routes/waasland', '/stats', '/segments', '/analysis']
+		);
 		await noPageOverflow('/');
 		await main.getByText('36.00 km/h', { exact: true }).waitFor();
 		assert.equal(
@@ -379,8 +389,16 @@ try {
 			'Weekly cycling distance',
 			'Recent activities'
 		]);
+		await plannerShortcut.click();
+		await page.waitForURL(origin + '/routes/waasland');
+		await main.getByRole('heading', { name: 'Waasland route planner', exact: true }).waitFor();
+		await noPageOverflow('/routes/waasland');
 		if (mobile) {
 			const tabbar = page.getByRole('navigation', { name: 'Main navigation' });
+			assert.equal(
+				await tabbar.getByRole('link', { name: 'Explore' }).getAttribute('aria-current'),
+				'page'
+			);
 			assert.deepEqual(
 				(await tabbar.getByRole('link').allTextContents()).map((label) => label.trim()),
 				['Home', 'Activities', 'Explore', 'Insights', 'Social']
@@ -674,8 +692,7 @@ try {
 		for (const [path, heading] of [
 			['/gear', 'Gear'],
 			['/connections', 'Connections'],
-			['/settings', 'Settings'],
-			['/routes/waasland', 'Waasland route planner']
+			['/settings', 'Settings']
 		]) {
 			await open(path);
 			await main.getByRole('heading', { name: heading, exact: true }).waitFor();
