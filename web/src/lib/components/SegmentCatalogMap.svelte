@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
-		Map as MapLibreMap,
+		type Map as MapLibreMap,
 		NavigationControl,
 		type FilterSpecification,
 		type GeoJSONSource
 	} from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
-	import { basemapStyle } from '#lib/basemap.js';
+	import { basemapStyle, createMap } from '#lib/basemap.js';
 	import { formatDuration, formatMetricDistance, formatTimeAndSpeed } from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -78,15 +78,14 @@
 		style = basemapStyle($appearance.mode);
 		placed = !!(camera || center);
 		try {
-			map = new MapLibreMap({
+			map = createMap({
 				container,
 				style,
 				center: camera?.center ?? center ?? [0, 25],
 				zoom: camera?.zoom ?? (center ? 11 : 2),
 				trackResize: false,
 				dragRotate: false,
-				touchPitch: false,
-				attributionControl: { compact: true }
+				touchPitch: false
 			});
 		} catch {
 			unavailable = true;

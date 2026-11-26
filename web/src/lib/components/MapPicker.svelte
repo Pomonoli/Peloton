@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { Map as MapLibreMap, Marker, NavigationControl, type LngLatLike } from 'maplibre-gl';
+	import { type Map as MapLibreMap, Marker, NavigationControl, type LngLatLike } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { basemapStyle } from '#lib/basemap.js';
+	import { basemapStyle, createMap } from '#lib/basemap.js';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 
 	// A small click-to-pick map: clicking drops a marker and reports the
@@ -31,12 +31,11 @@
 	onMount(() => {
 		const hasInitial = typeof lat === 'number' && typeof lng === 'number';
 		currentStyle = basemapStyle($appearance.mode);
-		map = new MapLibreMap({
+		map = createMap({
 			container,
 			style: currentStyle,
 			center: hasInitial ? [lng as number, lat as number] : [0, 25],
-			zoom: hasInitial ? 13 : 1,
-			attributionControl: { compact: true }
+			zoom: hasInitial ? 13 : 1
 		});
 		map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
 		if (hasInitial) place([lng as number, lat as number]);

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
-		Map as MapLibreMap,
+		type Map as MapLibreMap,
 		LngLatBounds,
 		Marker,
 		NavigationControl,
@@ -9,7 +9,7 @@
 		type ExpressionSpecification
 	} from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { basemapStyle } from '#lib/basemap.js';
+	import { basemapStyle, createMap } from '#lib/basemap.js';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { formatDistance, formatDuration } from '#lib/format.js';
@@ -100,12 +100,11 @@
 
 		try {
 			currentStyle = basemapStyle($appearance.mode);
-			map = new MapLibreMap({
+			map = createMap({
 				container,
 				style: currentStyle,
 				center: first,
-				zoom: 12,
-				attributionControl: { compact: true }
+				zoom: 12
 			});
 		} catch {
 			fallback();

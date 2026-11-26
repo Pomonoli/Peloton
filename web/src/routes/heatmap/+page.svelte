@@ -17,14 +17,14 @@
 		type HeatmapMetric
 	} from '#lib/performance-heatmap.js';
 	import {
-		Map as MapLibreMap,
+		type Map as MapLibreMap,
 		LngLatBounds,
 		type GeoJSONSource,
 		type MapLayerMouseEvent
 	} from 'maplibre-gl';
 	import type { FeatureCollection } from 'geojson';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { basemapStyle, basemapVariants, type BasemapVariant } from '#lib/basemap.js';
+	import { basemapStyle, createMap, basemapVariants, type BasemapVariant } from '#lib/basemap.js';
 	import { appearance } from '#lib/appearance.js';
 	import ActivityFilterBar from '#lib/components/ActivityFilterBar.svelte';
 	import { ActivityFilter, type ActivityFacets } from '#lib/activity-filter.svelte.js';
@@ -351,12 +351,11 @@
 	onMount(() => {
 		if (!container) return;
 		currentStyle = basemapStyle(basemap);
-		map = new MapLibreMap({
+		map = createMap({
 			container,
 			style: currentStyle,
 			center: [10, 50],
-			zoom: 4,
-			attributionControl: { compact: true }
+			zoom: 4
 		});
 		map.on('style.load', addTracks);
 		// Layer-bound listeners resolve the layer per event, so they survive

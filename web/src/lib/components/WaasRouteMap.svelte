@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import {
-		Map as MapLibreMap,
+		type Map as MapLibreMap,
 		LngLatBounds,
 		Marker,
 		type GeoJSONSource,
 		type StyleSpecification
 	} from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { basemapStyle } from '#lib/basemap.js';
+	import { basemapStyle, createMap } from '#lib/basemap.js';
 	import { appearance, appearanceColor, type ColorMode } from '#lib/appearance.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { dataUrl } from '#lib/waas/service.js';
@@ -266,12 +266,11 @@
 		document.addEventListener('fullscreenchange', fullscreenChanged);
 		try {
 			currentMode = $appearance.mode;
-			map = new MapLibreMap({
+			map = createMap({
 				container,
 				style: basemapStyle(currentMode),
 				center: first ? [first[0]!, first[1]!] : [4.139184, 51.164565],
 				zoom: 10.5,
-				attributionControl: { compact: true },
 				scrollZoom: !compact,
 				dragRotate: false,
 				pitchWithRotate: false,

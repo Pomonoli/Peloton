@@ -10,6 +10,22 @@ import { chromium } from 'playwright-core';
 
 const originalGPX =
 	'<gpx version="1.1"><trk><trkseg><trkpt lat="51" lon="4"/></trkseg></trk></gpx>';
+const basemap = {
+	version: 8,
+	sources: {
+		openmaptiles: {
+			type: 'geojson',
+			data: { type: 'FeatureCollection', features: [] },
+			attribution:
+				'<a href="https://openfreemap.org">OpenFreeMap</a> <a href="https://www.openmaptiles.org/">&copy; OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+		}
+	},
+	layers: [{ id: 'basemap', type: 'fill', source: 'openmaptiles' }]
+};
+const tile = Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',
+	'base64'
+);
 const server = createServer((req, res) => {
 	if (req.url !== '/api/routes/waasland/gpx') {
 		res.writeHead(404).end();
@@ -177,7 +193,10 @@ try {
 		await page.route('**/*', async (request) => {
 			const url = new URL(request.request().url());
 			if (url.hostname === 'tiles.openfreemap.org') {
-				return request.fulfill({ json: { version: 8, sources: {}, layers: [] } });
+				return request.fulfill({ json: basemap });
+			}
+			if (url.hostname === 'tile.openstreetmap.org') {
+				return request.fulfill({ body: tile, contentType: 'image/png' });
 			}
 			if (url.hostname === 'api.open-meteo.com') {
 				return request.fulfill({
@@ -232,6 +251,7 @@ try {
 		const main = page.getByRole('main');
 		await main.getByRole('heading', { name: 'Routes', exact: true }).waitFor();
 		await main.getByText('2 routes found').waitFor();
+		await main.getByText('© OpenStreetMap', { exact: true }).first().waitFor();
 		if (mobile) {
 			const subnav = page.getByRole('navigation', { name: 'Explore', exact: true });
 			assert.deepEqual(await subnav.getByRole('link').allTextContents(), [
@@ -278,6 +298,8 @@ try {
 		await panel.getByRole('link', { name: 'Open in Route Planner' }).click();
 		await page.waitForURL(origin + '/routes/waasland/recorded/waasland');
 		await main.getByRole('heading', { name: 'Waasland Loop' }).waitFor();
+		assert.equal(await main.getByRole('link', { name: 'Back to Routes' }).count(), 0);
+		await main.getByRole('link', { name: 'New route' }).waitFor();
 		await main.getByRole('button', { name: 'Reverse direction' }).click();
 		assert.equal(
 			await main.getByRole('button', { name: 'Reverse direction' }).getAttribute('aria-pressed'),
@@ -291,13 +313,25 @@ try {
 			exportedText.indexOf('lat="51.03"') < exportedText.indexOf('lat="51.01"'),
 			'GPX must contain the reversed GPS sequence'
 		);
-		await main.getByRole('link', { name: 'Back to Routes' }).click();
+		await page.getByRole('navigation').getByRole('link', { name: 'Routes', exact: true }).click();
 		await main.getByRole('searchbox', { name: 'Search routes' }).fill('canal');
 		await main.getByText('1 route found').waitFor();
 		await main.getByRole('button', { name: /Canal Ride/ }).waitFor();
 		assert.equal(await main.getByRole('button', { name: /Waasland Loop/ }).count(), 0);
 		await page.goto(origin + '/routes/waasland/recorded/canal');
 		await main.getByRole('heading', { name: 'Canal Ride' }).waitFor();
+		const attribution = main.locator('.maplibregl-ctrl-attrib');
+		const toggle = attribution.locator('summary');
+		const osm = attribution.getByRole('link', { name: 'OpenStreetMap' });
+		await osm.waitFor();
+		await attribution.getByRole('link', { name: /OpenMapTiles/ }).waitFor();
+		assert.equal(await attribution.getByRole('link', { name: 'OpenFreeMap' }).count(), 0);
+		await osm.waitFor({ state: 'hidden', timeout: 8000 });
+		if (mobile) await toggle.tap();
+		else await toggle.press('Enter');
+		await osm.waitFor();
+		await toggle.click();
+		await osm.waitFor({ state: 'hidden' });
 		const fit = main.getByRole('button', { name: 'Fit route' });
 		await page.waitForFunction(
 			() =>
@@ -373,6 +407,8 @@ try {
 		const exit = main.getByRole('button', { name: 'Exit fullscreen' });
 		await exit.waitFor();
 		assert.ok((await canvas.boundingBox()).height > 800);
+		await toggle.click();
+		await osm.waitFor();
 		await exit.click();
 		await main.getByRole('button', { name: 'Enter fullscreen' }).waitFor();
 
@@ -443,6 +479,7 @@ try {
 		if (width !== 320) {
 			await page.goto(origin + '/routes/waasland');
 			await main.getByRole('heading', { name: 'Waasland route planner' }).waitFor();
+			assert.equal(await main.getByRole('link', { name: 'Back to Routes' }).count(), 0);
 			const gpX = main.getByRole('button', { name: 'Download GPX' });
 			await gpX.waitFor();
 			const first = await metrics(main);

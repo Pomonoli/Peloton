@@ -811,7 +811,6 @@
 	"routes_recorded_in_planner": "Recorded route",
 	"routes_recorded_reverse": "Reverse direction",
 	"routes_recorded_start": "Start along the loop",
-	"routes_back_to_catalog": "Back to Routes",
 	"routes_recorded_download": "Export edited GPX",
 	"routes_recorded_reset": "Reset edits",
 	"routes_rider_loading_failed": "Couldn’t load riders. Try again.",

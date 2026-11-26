@@ -118,28 +118,22 @@
 
 <div class:planner-has-actions={track.length > 0}>
 	<header class="mb-3 sm:mb-4">
-		<div class="mb-2 flex flex-wrap items-center justify-between gap-x-3">
-			<a
-				href="/explore/routes"
-				class="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-accent-300 hover:underline"
-			>
-				<Icon name="back" size={15} />{m.routes_back_to_catalog()}
-			</a>
-			<a
-				href={newPlan}
-				class="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-accent-300 hover:underline"
-			>
-				<Icon name="plus" size={15} />{m.planner_new()}
-			</a>
-		</div>
-		<div class="flex flex-wrap items-end justify-between gap-3">
+		<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
 			<div class="min-w-0">
 				<h1 class="page-title">{route?.name ?? m.waas_title()}</h1>
 				{#if route}<p class="mt-1 text-xs text-zinc-400">
 						{m.routes_recorded_in_planner()} · {routeKind(route.type)}
 					</p>{/if}
 			</div>
-			{#if track.length}{@render exportAction('max-md:hidden')}{/if}
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+				<a
+					href={newPlan}
+					class="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-accent-300 hover:underline"
+				>
+					<Icon name="plus" size={15} />{m.planner_new()}
+				</a>
+				{#if track.length}{@render exportAction('max-md:hidden')}{/if}
+			</div>
 		</div>
 	</header>
 	{#if failed}

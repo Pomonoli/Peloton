@@ -204,8 +204,20 @@
 	color: var(--text-primary);
 }
 
+.maplibregl-map .maplibregl-ctrl-attrib-inner {
+	font-size: 11px;
+	line-height: 1.4;
+}
+
 .maplibregl-map .maplibregl-ctrl-attrib a {
 	color: var(--text-muted);
+}
+
+/* OpenFreeMap makes its service credit optional. Keep the linked data credits. */
+.maplibregl-map
+	.maplibregl-ctrl-attrib
+	a:is([href='https://openfreemap.org'], [href='https://openfreemap.org/']) {
+	display: none;
 }
 
 :root[data-theme='dark'] :is(.maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button) {
@@ -214,6 +226,11 @@
 
 .maplibregl-map .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button {
 	background-color: transparent;
+}
+
+.maplibregl-map .maplibregl-ctrl-attrib-button:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
 }
 
 .uplot .u-cursor-x,

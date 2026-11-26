@@ -241,12 +241,6 @@
 
 <div class="planner-has-actions">
 	<header class="mb-3 sm:mb-4">
-		<a
-			href="/explore/routes"
-			class="mb-2 inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-accent-300 hover:underline"
-		>
-			<Icon name="back" size={15} />{m.routes_back_to_catalog()}
-		</a>
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<h1 class="page-title">{m.waas_title()}</h1>
 			<div class="hidden flex-wrap gap-2 md:flex">
