@@ -84,12 +84,29 @@ func TestAPI_PelotonRiderViews(t *testing.T) {
 		ada.do(http.MethodGet, path, nil, http.StatusForbidden)
 		mira.do(http.MethodGet, path, nil, http.StatusOK)
 	}
-	var analysis map[string]any
+	var analysis struct {
+		Coverage struct {
+			DurationEstimate int `json:"duration_estimate"`
+			Missing          int
+		}
+		StressDays []struct {
+			Date   string
+			TSS    *float64
+			Scored int
+			Total  int
+		} `json:"stress_days"`
+	}
 	if err := json.Unmarshal(ada.do(http.MethodGet, "/api/analysis?member=mira", nil, http.StatusOK), &analysis); err != nil {
 		t.Fatal(err)
 	}
-	if coverage, ok := analysis["coverage"].(map[string]any); !ok || coverage["missing"].(float64)+coverage["duration_estimate"].(float64) != 4 {
-		t.Fatalf("bad training data coverage: %v", analysis)
+	if analysis.Coverage.Missing+analysis.Coverage.DurationEstimate != 4 || len(analysis.StressDays) != 3 {
+		t.Fatalf("bad training data coverage: %+v", analysis)
+	}
+	old, sunday, mondayStress := analysis.StressDays[0], analysis.StressDays[1], analysis.StressDays[2]
+	if old.Total != 1 || old.Scored != 0 || old.TSS != nil ||
+		sunday.Date != monday.AddDate(0, 0, -1).Format(time.DateOnly) || sunday.Total != 1 ||
+		mondayStress.Date != monday.Format(time.DateOnly) || mondayStress.Total != 2 {
+		t.Fatalf("bad training stress days: %+v", analysis.StressDays)
 	}
 }
 

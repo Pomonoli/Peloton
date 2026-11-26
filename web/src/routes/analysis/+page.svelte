@@ -1,50 +1,73 @@
 <script lang="ts">
-	import StreamChart from '#lib/components/StreamChart.svelte';
-	import { formatDateOnly, intlLocale } from '#lib/format.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import { memberURL } from '#lib/member.js';
-
-	type Analysis = {
-		dates: string[];
-		ctl: number[];
-		atl: number[];
-		tsb: number[];
-		tss: (number | null)[];
-		tss_observed?: (number | null)[];
-		coverage?: {
-			imported: number;
-			sensor_estimate: number;
-			duration_estimate: number;
-			missing: number;
-		};
-		current: { ctl: number; atl: number; tsb: number };
-	};
+	import { m } from '#lib/paraglide/messages.js';
+	import AnalysisChart from './AnalysisChart.svelte';
+	import FormScale from './FormScale.svelte';
+	import {
+		METRICS,
+		MIN_RECENT_SCORES,
+		aggregateStress,
+		changeFrom,
+		describeTraining,
+		metricNumber,
+		type Analysis,
+		type Grouping
+	} from './analysis.js';
 
 	let { data } = $props();
-
+	const id = $props.id();
 	let days = $state(180);
-	let a = $state<Analysis | null>(null);
+	let group = $state<Grouping>('weekly');
+	let hiddenMetrics = $state<string[]>([]);
+	let analysis = $state<Analysis | null>(null);
 	let loading = $state(true);
-	const infoId = $props.id();
-	const stress = $derived(a?.tss_observed ?? a?.tss.map((value) => value || null) ?? []);
-	const offsets = $derived(a?.dates.map((date) => Date.parse(date) / 1000) ?? []);
-	const tssNumber = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 }));
-	let stressDay = $state<number | null>(null);
-	const stressIndex = $derived(stressDay === null ? -1 : offsets.indexOf(stressDay));
+	const ranges = [
+		{ value: 90, label: '3M' },
+		{ value: 180, label: '6M' },
+		{ value: 365, label: '1Y' },
+		{ value: 3650, label: m.analysis_range_all() }
+	];
+	const groupings = [
+		{ value: 'daily', label: m.analysis_daily },
+		{ value: 'weekly', label: m.analysis_weekly },
+		{ value: 'monthly', label: m.analysis_monthly }
+	] as const;
+
+	const status = $derived(analysis && describeTraining(analysis));
+	const hasLoad = $derived(!!analysis?.dates.length);
+	const periods = $derived(analysis?.stress_days.length ? aggregateStress(analysis, group) : []);
+	const coverage = $derived(
+		analysis && [
+			{ label: m.analysis_stress_imported(), count: analysis.coverage.imported },
+			{ label: m.analysis_stress_sensor(), count: analysis.coverage.sensor_estimate },
+			{ label: m.analysis_stress_duration(), count: analysis.coverage.duration_estimate },
+			{ label: m.analysis_stress_missing(), count: analysis.coverage.missing }
+		]
+	);
+	const total = $derived(coverage?.reduce((sum, { count }) => sum + count, 0) ?? 0);
+	const coverageNote = $derived.by(() => {
+		if (!analysis) return '';
+		if (analysis.coverage.missing > 0) {
+			const scored = total - analysis.coverage.missing;
+			return scored
+				? m.analysis_coverage_warning({ scored, total })
+				: m.analysis_coverage_no_scores();
+		}
+		if (analysis.recent_scored > 0 && analysis.recent_scored < MIN_RECENT_SCORES)
+			return m.analysis_recent_few();
+		return '';
+	});
 
 	$effect(() => {
 		const url = memberURL(`/api/analysis?days=${days}`, data.member);
-		if (!data.user) return;
 		const request = new AbortController();
 		loading = true;
-		a = null;
-		stressDay = null;
-		hover = null;
+		analysis = null;
 		void fetch(url, { signal: request.signal })
 			.then(async (response) => {
 				if (!response.ok) throw new Error();
 				const result: Analysis = await response.json();
-				if (!request.signal.aborted) a = result;
+				if (!request.signal.aborted) analysis = result;
 			})
 			.catch(() => {})
 			.finally(() => {
@@ -52,320 +75,599 @@
 			});
 		return () => request.abort();
 	});
-
-	// ---- inline SVG chart geometry --------------------------------------
-	let chartWidth = $state(880);
-	const W = $derived(Math.max(240, chartWidth));
-	const H = $derived(W < 500 ? 200 : 280);
-	const PAD = { t: 16, r: 16, b: 28, l: 40 };
-	const plotW = $derived(W - PAD.l - PAD.r);
-	const plotH = $derived(H - PAD.t - PAD.b);
-
-	type Series = { key: 'ctl' | 'atl' | 'tsb'; label: string; description: string; color: string };
-	const series: Series[] = [
-		{
-			key: 'ctl',
-			label: 'Fitness (CTL)',
-			description: m.analysis_fitness_description(),
-			color: 'var(--plot-speed)'
-		},
-		{
-			key: 'atl',
-			label: 'Fatigue (ATL)',
-			description: m.analysis_fatigue_description(),
-			color: 'var(--plot-fatigue)'
-		},
-		{
-			key: 'tsb',
-			label: 'Form (TSB)',
-			description: m.analysis_form_description(),
-			color: 'var(--plot-form)'
-		}
-	];
-
-	const bounds = $derived.by(() => {
-		if (!a || a.dates.length === 0) return { min: 0, max: 1 };
-		let min = Infinity;
-		let max = -Infinity;
-		for (const s of series) {
-			for (const v of a[s.key]) {
-				if (v < min) min = v;
-				if (v > max) max = v;
-			}
-		}
-		if (!isFinite(min)) return { min: 0, max: 1 };
-		// pad a touch so lines aren't glued to edges
-		const span = max - min || 1;
-		return { min: min - span * 0.08, max: max + span * 0.08 };
-	});
-
-	function x(i: number, n: number): number {
-		if (n <= 1) return PAD.l;
-		return PAD.l + (i / (n - 1)) * plotW;
-	}
-	function y(v: number): number {
-		const { min, max } = bounds;
-		return PAD.t + plotH - ((v - min) / (max - min || 1)) * plotH;
-	}
-	function path(vals: number[]): string {
-		const n = vals.length;
-		return vals
-			.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i, n).toFixed(1)},${y(v).toFixed(1)}`)
-			.join(' ');
-	}
-
-	// y=0 gridline (form crosses zero — meaningful for TSB)
-	const zeroY = $derived(bounds.min <= 0 && bounds.max >= 0 ? y(0) : null);
-
-	function fmt(v: number): string {
-		return v >= 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
-	}
-
-	// hover crosshair
-	let hover = $state<number | null>(null);
-	function onMove(e: MouseEvent, n: number) {
-		const svg = e.currentTarget as SVGSVGElement;
-		const rect = svg.getBoundingClientRect();
-		const px = ((e.clientX - rect.left) / rect.width) * W;
-		const i = Math.round(((px - PAD.l) / plotW) * (n - 1));
-		hover = Math.max(0, Math.min(n - 1, i));
-	}
-
-	const ranges = [
-		{ label: '3M', d: 90 },
-		{ label: '6M', d: 180 },
-		{ label: '1Y', d: 365 },
-		{ label: 'All', d: 3650 }
-	];
 </script>
 
-<div class="space-y-4 max-md:space-y-3">
-	<header>
-		<h1 class="text-3xl font-semibold tracking-tight max-md:text-2xl">Analysis</h1>
-	</header>
+{#snippet infoIcon()}
+	<svg
+		width="17"
+		height="17"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="1.7"
+		aria-hidden="true"
+	>
+		<circle cx="12" cy="12" r="9" />
+		<path stroke-linecap="round" d="M12 11v5m0-8h.01" />
+	</svg>
+{/snippet}
 
-	{#if !data.user}
-		<a
-			href="/login"
-			class="inline-block rounded border border-accent-500 bg-accent-500/20 px-4 py-2 text-sm text-accent-300 hover:bg-accent-500/30"
-		>
-			Sign in
-		</a>
-	{:else}
-		<!-- range picker -->
-		<div
-			role="group"
-			aria-label="Training load period"
-			class="grid max-w-sm grid-cols-4 gap-0.5 rounded-xl bg-zinc-800/65 p-0.5"
-		>
-			{#each ranges as r (r.d)}
+<div class="analysis-page">
+	<header>
+		<h1>{m.nav_analysis()}</h1>
+		<div class="segmented ranges" role="group" aria-label={m.analysis_period()}>
+			{#each ranges as range (range.value)}
 				<button
 					type="button"
-					aria-pressed={days === r.d}
-					onclick={() => (days = r.d)}
-					class="min-h-10 rounded-[10px] px-2 text-xs font-semibold transition-colors"
-					class:bg-panel={days === r.d}
-					class:text-accent-300={days === r.d}
-					class:text-zinc-400={days !== r.d}
-					class:hover:text-zinc-100={days !== r.d}
+					aria-pressed={days === range.value}
+					onclick={() => (days = range.value)}
 				>
-					{r.label}
+					{range.label}
 				</button>
 			{/each}
 		</div>
+	</header>
 
-		<!-- current snapshot -->
-		{#if a}
-			<div
-				class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800"
-			>
-				{#each series as s (s.key)}
-					<div class="min-w-0 bg-zinc-900 p-2 sm:p-4">
-						<div class="flex items-center gap-1 text-xs font-semibold text-quiet sm:gap-2">
-							<span class="inline-block size-2 shrink-0 rounded-full" style:background={s.color}
-							></span>
-							{s.label}
-							<button
-								type="button"
-								popovertarget={infoId + s.key}
-								onfocus={(event) => {
-									if (event.currentTarget.matches(':focus-visible')) {
-										document.getElementById(infoId + s.key)?.showPopover();
-									}
-								}}
-								aria-label={m.analysis_metric_info({ metric: s.label })}
-								aria-describedby={infoId + s.key}
-								class="grid size-7 shrink-0 place-items-center rounded-full hover:text-accent-300 focus-visible:outline-2 focus-visible:outline-accent-500"
-							>
-								<span
-									aria-hidden="true"
-									class="grid size-4 place-items-center rounded-full border text-[10px]">i</span
-								>
-							</button>
-							<p
-								id={infoId + s.key}
-								popover="auto"
-								class="fixed inset-x-0 top-auto bottom-[max(5rem,env(safe-area-inset-bottom))] mx-auto w-max max-w-[calc(100vw-2rem)] rounded-lg border border-zinc-700 bg-panel px-3 py-2 text-sm text-quiet shadow-lg"
-							>
-								{s.description}
-							</p>
+	{#if loading}
+		<p class="card loading" role="status">{m.analysis_loading()}</p>
+	{:else if analysis && status && coverage}
+		<section class="card status" data-tone={status.tone} aria-label={m.analysis_status()}>
+			<div class="status-body">
+				<div class="status-summary">
+					<div class="status-icon">
+						<svg
+							width="31"
+							height="31"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.6"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							{#if status.tone === 'fresh'}
+								<path
+									d="M5 19c2.5-3.9 5.8-6.7 9-8.6M6.2 17C1.8 10.2 9 5 20 5c0 8.5-4.7 16-13.8 12Z"
+								/>
+							{:else if status.tone === 'load'}
+								<path d="M2.5 12h4l2.8-6.5 4 13 2.9-6.5h5.3" />
+							{:else}
+								<path d="M12 4v15m-5.5 0h11M4 8h16M6 8l-3 6h6L6 8Zm12 0-3 6h6l-3-6Z" />
+							{/if}
+						</svg>
+					</div>
+					<div>
+						<h2>{status.title}</h2>
+						<p>{status.detail}</p>
+					</div>
+				</div>
+				{#if status.insight}
+					<div class="insight">
+						<svg
+							width="20"
+							height="20"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.6"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<path d="M9 18h6m-5 3h4M8.1 14.4a6 6 0 1 1 7.8 0L15 16H9l-.9-1.6Z" />
+						</svg>
+						<div>
+							<h3>{m.analysis_insight()}</h3>
+							<p>{status.insight}</p>
 						</div>
-						<div class="mt-1 text-lg font-bold tabular-nums sm:text-2xl text-zinc-100">
-							{a.dates.length
-								? s.key === 'tsb'
-									? fmt(a.current[s.key])
-									: a.current[s.key].toFixed(1)
-								: '—'}
+					</div>
+				{/if}
+			</div>
+			{#if coverageNote}
+				<p class="coverage-note">{@render infoIcon()}{coverageNote}</p>
+			{/if}
+		</section>
+
+		<div class="training-grid">
+			<section class="card metrics" aria-labelledby={id + '-metrics'}>
+				<h2 id={id + '-metrics'}>{m.analysis_metrics()}</h2>
+				<div class="metric-list">
+					{#each METRICS as { key, label, color, info } (key)}
+						<div class="metric" style:--metric-color={color}>
+							<div class="metric-reading">
+								<div class="metric-name">
+									<h3>{label()}</h3>
+									<button
+										type="button"
+										popovertarget={id + key}
+										aria-label={m.analysis_metric_info({ metric: label() })}
+										aria-describedby={id + key}
+									>
+										{@render infoIcon()}
+									</button>
+									<p id={id + key} class="metric-help" popover="auto">{info()}</p>
+								</div>
+								<p class="metric-value">
+									{hasLoad ? metricNumber(analysis.current[key], key === 'tsb') : '—'}
+								</p>
+								{#if hasLoad}
+									<div class="deltas">
+										{#each [{ days: 7, label: m.analysis_days_7() }, { days: 30, label: m.analysis_days_30() }] as period (period.days)}
+											{@const change = changeFrom(analysis, key, period.days)}
+											{#if change !== null}
+												<span
+													class="delta"
+													aria-label={m.analysis_change({
+														value: metricNumber(change, true),
+														period: period.label
+													})}
+												>
+													<strong>{metricNumber(change, true)}</strong>
+													<span>{period.label}</span>
+												</span>
+											{/if}
+										{/each}
+									</div>
+								{/if}
+							</div>
+							{#if hasLoad}
+								<div class="metric-explanation">
+									<span class="chip">{status.metrics[key].label}</span>
+									<p>{status.metrics[key].detail}</p>
+								</div>
+							{/if}
 						</div>
+					{/each}
+				</div>
+			</section>
+
+			<section class="card trends" aria-labelledby={id + '-trends'}>
+				<h2 id={id + '-trends'}>{m.analysis_trends()}</h2>
+				<p class="description">{m.analysis_trends_description()}</p>
+				<AnalysisChart {analysis} bind:hidden={hiddenMetrics} />
+			</section>
+		</div>
+
+		<section class="card" aria-labelledby={id + '-form'}>
+			<div class="form-heading">
+				<div>
+					<h2 id={id + '-form'}>{m.analysis_form()}</h2>
+					<p class="description">{m.analysis_form_intro()}</p>
+				</div>
+				{#if hasLoad}
+					<p class="form-interpretation">
+						<strong class="chip" style:--metric-color="var(--plot-form)"
+							>{status.metrics.tsb.label}</strong
+						>
+						{status.formDetail}
+					</p>
+				{/if}
+			</div>
+			<FormScale value={hasLoad ? analysis.current.tsb : null} />
+		</section>
+
+		<section class="card stress" aria-labelledby={id + '-stress'}>
+			<div class="stress-heading">
+				<div>
+					<h2 id={id + '-stress'}>{m.analysis_tss()}</h2>
+					<p class="description">{m.analysis_tss_description()}</p>
+				</div>
+				<div class="segmented grouping" role="group" aria-label={m.analysis_tss_grouping()}>
+					{#each groupings as item (item.value)}
+						<button
+							type="button"
+							aria-pressed={group === item.value}
+							onclick={() => (group = item.value)}
+						>
+							{item.label()}
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<dl class="coverage">
+				{#each coverage as item (item.label)}
+					<div>
+						<dt>{item.label}</dt>
+						<dd>{item.count}</dd>
 					</div>
 				{/each}
-			</div>
-		{/if}
+			</dl>
 
-		<!-- chart -->
-		<div class="min-w-0 rounded-xl border border-zinc-800 bg-panel p-2 sm:p-4">
-			{#if loading}
-				<div
-					class="flex min-h-32 items-center justify-center text-center sm:min-h-56 text-sm text-zinc-500"
-				>
-					Loading…
-				</div>
-			{:else if !a}
-				<p role="alert" class="text-sm text-red-300">{m.analysis_failed()}</p>
-			{:else if a.dates.length === 0}
-				<div
-					class="flex min-h-32 items-center justify-center text-center sm:min-h-56 text-sm text-zinc-500"
-				>
-					No training-load data yet. Import some activities first.
-				</div>
+			{#if periods.length}
+				{#key group}
+					<AnalysisChart {analysis} {periods} />
+				{/key}
 			{:else}
-				{@const n = a.dates.length}
-				<div bind:clientWidth={chartWidth} class="min-w-0">
-					<svg
-						viewBox={`0 0 ${W} ${H}`}
-						class="w-full"
-						role="img"
-						aria-label="Training load trend"
-						onpointermove={(e) => onMove(e, n)}
-						onpointerdown={(e) => onMove(e, n)}
-						onpointerleave={(e) => {
-							if (e.pointerType === 'mouse') hover = null;
-						}}
-					>
-						<!-- y axis gridlines -->
-						{#each [0, 0.25, 0.5, 0.75, 1] as t (t)}
-							{@const gy = PAD.t + plotH * t}
-							{@const val = bounds.max - (bounds.max - bounds.min) * t}
-							<line
-								x1={PAD.l}
-								y1={gy}
-								x2={W - PAD.r}
-								y2={gy}
-								stroke="var(--plot-grid)"
-								stroke-width="1"
-							/>
-							<text x={PAD.l - 6} y={gy + 3} text-anchor="end" class="fill-quiet text-[10px]">
-								{val.toFixed(0)}
-							</text>
-						{/each}
-
-						<!-- zero line for TSB -->
-						{#if zeroY !== null}
-							<line
-								x1={PAD.l}
-								y1={zeroY}
-								x2={W - PAD.r}
-								y2={zeroY}
-								stroke="var(--plot-grid)"
-								stroke-width="1"
-								stroke-dasharray="3 3"
-							/>
-						{/if}
-
-						<!-- series -->
-						{#each series as s (s.key)}
-							<path d={path(a[s.key])} fill="none" stroke={s.color} stroke-width="1.8" />
-						{/each}
-
-						<!-- hover crosshair -->
-						{#if hover !== null}
-							{@const hx = x(hover, n)}
-							<line
-								x1={hx}
-								y1={PAD.t}
-								x2={hx}
-								y2={PAD.t + plotH}
-								stroke="var(--plot-cursor)"
-								stroke-width="1"
-							/>
-							{#each series as s (s.key)}
-								{@const v = a[s.key][hover]}
-								{#if v !== undefined}
-									<circle cx={hx} cy={y(v)} r="3" fill={s.color} />
-								{/if}
-							{/each}
-						{/if}
-					</svg>
-				</div>
-
-				<!-- legend / hover readout -->
-				<div class="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
-					<div class="flex flex-wrap gap-4">
-						{#each series as s (s.key)}
-							{@const v = hover === null ? undefined : a[s.key][hover]}
-							<span class="flex items-center gap-1.5 text-zinc-400">
-								<span class="inline-block h-2 w-2 rounded-full" style:background={s.color}></span>
-								{s.label}
-								{#if v !== undefined}
-									<span class="tabular-nums text-zinc-200">
-										{s.key === 'tsb' ? fmt(v) : v.toFixed(1)}
-									</span>
-								{/if}
-							</span>
-						{/each}
-					</div>
-					{#if hover !== null}
-						<span class="tabular-nums text-zinc-500">{a.dates[hover]}</span>
-					{/if}
-				</div>
+				<p class="empty-stress">{m.analysis_tss_empty_range()}</p>
 			{/if}
-		</div>
-		{#if a}
-			<section class="min-w-0 space-y-2 rounded-xl border border-zinc-800 bg-panel p-3 sm:p-4">
-				<h2 class="text-sm font-medium">{m.analysis_tss()}</h2>
-				{#if a?.coverage}
-					<dl class="flex flex-wrap gap-x-5 gap-y-1 text-xs">
-						{#each [{ label: m.analysis_stress_imported(), count: a.coverage.imported }, { label: m.analysis_stress_sensor(), count: a.coverage.sensor_estimate }, { label: m.analysis_stress_duration(), count: a.coverage.duration_estimate }, { label: m.analysis_stress_missing(), count: a.coverage.missing }] as item (item.label)}
-							<div class="flex gap-1">
-								<dt class="text-quiet">{item.label}</dt>
-								<dd class="font-semibold tabular-nums">{item.count}</dd>
-							</div>
-						{/each}
-					</dl>
-				{:else if a?.dates.length}
-					<p class="text-xs text-quiet">{m.analysis_training_estimated()}</p>
-				{/if}
-				{#if stress.some((value) => value != null)}
-					<StreamChart
-						{offsets}
-						series={[{ label: 'TSS', values: stress, color: 'var(--plot-power)' }]}
-						height={170}
-						calendar
-						legend={false}
-						yAxis={{ label: 'TSS', format: (value) => tssNumber.format(value) }}
-						onHover={(date) => (stressDay = date)}
-					/>
-					{#if stressDay !== null && stress[stressIndex] != null}
-						<p class="text-xs text-quiet">
-							{formatDateOnly(new Date(stressDay * 1000).toISOString())} · {tssNumber.format(
-								stress[stressIndex]!
-							)} TSS
-						</p>
-					{/if}
-				{:else}
-					<p class="text-sm text-quiet">{m.analysis_tss_empty()}</p>
-				{/if}
-			</section>
-		{/if}
+		</section>
+	{:else}
+		<p class="card" role="alert">{m.analysis_failed()}</p>
 	{/if}
 </div>
+
+<style>
+	.analysis-page {
+		--card-border: color-mix(in srgb, var(--surface-muted) 76%, var(--line-strong));
+		--zone-very-fatigued: light-dark(#df8799, #be526f);
+		--zone-accumulated: light-dark(#edb480, #b47746);
+		--zone-balanced: light-dark(#f1d885, #b19b50);
+		--zone-fresh: light-dark(#bbd989, #8bb65b);
+		--zone-very-fresh: light-dark(#83c49a, #489d75);
+		container-type: inline-size;
+		display: grid;
+		gap: 0.9rem;
+	}
+	header {
+		display: grid;
+		gap: 0.75rem;
+	}
+	h1 {
+		font-size: clamp(1.75rem, 4vw, 2.1rem);
+		letter-spacing: -0.045em;
+		font-weight: 750;
+		line-height: 1.12;
+	}
+	h2 {
+		font-size: 1.1rem;
+		font-weight: 730;
+		letter-spacing: -0.025em;
+		line-height: 1.25;
+	}
+	.card {
+		min-width: 0;
+		border: 1px solid var(--card-border);
+		border-radius: 0.85rem;
+		background: var(--surface-card);
+		box-shadow: var(--panel-shadow);
+		padding: clamp(0.8rem, 2vw, 1.2rem);
+	}
+	.segmented {
+		display: grid;
+		grid-auto-columns: 1fr;
+		grid-auto-flow: column;
+		gap: 0.15rem;
+		border: 1px solid var(--card-border);
+		border-radius: 0.65rem;
+		background: color-mix(in srgb, var(--surface-muted) 67%, var(--surface-page));
+		padding: 0.17rem;
+	}
+	.ranges {
+		width: min(100%, 24rem);
+	}
+	.segmented button {
+		min-height: 2.25rem;
+		border-radius: 0.48rem;
+		padding: 0.1rem 0.75rem;
+		color: var(--text-secondary);
+		font-size: 0.8rem;
+		font-weight: 600;
+	}
+	.segmented button:hover {
+		color: var(--accent-text);
+	}
+	.segmented button[aria-pressed='true'] {
+		box-shadow: 0 1px 2px light-dark(#172d5229, #090d1880);
+		background: var(--surface-card);
+		color: var(--accent-text-strong);
+	}
+	.status {
+		--tone: var(--accent-text);
+		--tone-wash: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-card));
+		border-color: color-mix(in srgb, var(--tone) 26%, var(--card-border));
+		background: linear-gradient(
+			117deg,
+			var(--surface-card) 16%,
+			color-mix(in srgb, var(--tone-wash) 60%, var(--surface-card))
+		);
+	}
+	.status[data-tone='fresh'] {
+		--tone: var(--plot-form);
+		--tone-wash: color-mix(in srgb, var(--plot-form) 13%, var(--surface-card));
+	}
+	.status[data-tone='load'] {
+		--tone: var(--warning-strong);
+		--tone-wash: color-mix(in srgb, var(--warning-strong) 13%, var(--surface-card));
+	}
+	.status h2 {
+		font-size: clamp(1.22rem, 2.6vw, 1.65rem);
+		letter-spacing: -0.035em;
+	}
+	.status-body,
+	.status-summary,
+	.insight,
+	.coverage-note {
+		display: flex;
+	}
+	.status-body {
+		gap: 1.1rem;
+	}
+	.status-summary {
+		flex: 1;
+		align-items: center;
+		gap: clamp(0.65rem, 2vw, 1.1rem);
+	}
+	.status-summary p {
+		margin-top: 0.35rem;
+		color: var(--text-primary);
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+	.status-icon {
+		display: grid;
+		width: clamp(2.8rem, 6vw, 4rem);
+		aspect-ratio: 1;
+		flex: 0 0 auto;
+		place-items: center;
+		border-radius: 0.9rem;
+		background: var(--tone-wash);
+		color: var(--tone);
+	}
+	.insight {
+		width: min(30%, 17rem);
+		align-self: center;
+		gap: 0.5rem;
+		border-left: 1px solid var(--card-border);
+		padding-left: 1rem;
+		font-size: 0.82rem;
+	}
+	.insight svg {
+		flex: 0 0 auto;
+		color: var(--warning-strong);
+	}
+	.insight h3 {
+		margin-bottom: 0.15rem;
+		font-size: 0.85rem;
+		font-weight: 700;
+	}
+	.insight p {
+		color: var(--text-secondary);
+	}
+	.coverage-note {
+		align-items: flex-start;
+		gap: 0.45rem;
+		margin-top: 0.8rem;
+		border: 1px solid var(--card-border);
+		border-radius: 0.5rem;
+		background: color-mix(in srgb, var(--surface-muted) 28%, var(--surface-card));
+		padding: 0.42rem 0.65rem;
+		color: var(--text-secondary);
+		font-size: 0.8rem;
+	}
+	.coverage-note svg {
+		flex: 0 0 auto;
+		margin-top: 0.09rem;
+	}
+	.training-grid {
+		display: grid;
+		gap: 0.9rem;
+	}
+	.metric-list {
+		margin-top: 0.55rem;
+	}
+	.metric {
+		position: relative;
+		display: grid;
+		grid-template-columns: minmax(7.5rem, 0.95fr) minmax(0, 1.05fr);
+		gap: 0.65rem;
+		border-top: 1px solid var(--plot-grid);
+		padding: 0.55rem 0 0.55rem 0.7rem;
+	}
+	.metric:last-child {
+		padding-bottom: 0;
+	}
+	.metric::before {
+		position: absolute;
+		inset: 0.7rem auto 0.7rem 0;
+		width: 0.22rem;
+		border-radius: 0.4rem;
+		background: var(--metric-color);
+		content: '';
+	}
+	.metric:last-child::before {
+		bottom: 0;
+	}
+	.metric-name {
+		display: flex;
+		align-items: center;
+	}
+	.metric-name h3 {
+		color: var(--text-secondary);
+		font-size: 0.79rem;
+		font-weight: 660;
+	}
+	.metric-name button {
+		display: grid;
+		width: 1.6rem;
+		min-height: 1.7rem;
+		place-items: center;
+		border-radius: 0.3rem;
+		color: var(--text-quiet);
+	}
+	.metric-name button:hover {
+		color: var(--accent-text);
+	}
+	.metric-help {
+		position: fixed;
+		inset: auto 1rem max(5rem, env(safe-area-inset-bottom));
+		width: max-content;
+		max-width: min(17rem, calc(100vw - 2rem));
+		margin-inline: auto;
+		border: 1px solid var(--line-strong);
+		border-radius: 0.5rem;
+		background: var(--surface-panel);
+		padding: 0.7rem;
+		box-shadow: 0 3px 15px rgb(0 0 0 / 13%);
+		color: var(--text-primary);
+		font-size: 0.82rem;
+	}
+	@supports (position-area: block-end span-inline-end) {
+		.metric-help {
+			inset: auto;
+			margin: 0.25rem 0;
+			position-area: block-end span-inline-end;
+			position-try-fallbacks:
+				flip-inline,
+				flip-block,
+				flip-block flip-inline;
+		}
+	}
+	.metric-value {
+		font-size: 1.75rem;
+		font-weight: 750;
+		letter-spacing: -0.05em;
+		line-height: 1;
+		font-variant-numeric: tabular-nums;
+	}
+	.deltas {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.1rem 0.6rem;
+		margin-top: 0.35rem;
+	}
+	.delta {
+		display: flex;
+		align-items: baseline;
+		gap: 0.2rem;
+		color: var(--text-quiet);
+		font-size: 0.68rem;
+		white-space: nowrap;
+	}
+	.delta strong {
+		color: var(--text-secondary);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.metric-explanation {
+		align-self: center;
+		color: var(--text-secondary);
+		font-size: 0.76rem;
+		line-height: 1.35;
+	}
+	.metric-explanation p {
+		margin-top: 0.3rem;
+	}
+	.chip {
+		display: inline-block;
+		width: fit-content;
+		border-radius: 0.4rem;
+		background: color-mix(in srgb, var(--metric-color) 13%, var(--surface-card));
+		padding: 0.18rem 0.45rem;
+		color: color-mix(in srgb, var(--metric-color) 83%, var(--text-strong));
+		font-size: 0.72rem;
+		font-weight: 750;
+		line-height: 1.2;
+	}
+	.form-heading,
+	.stress-heading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.6rem 1rem;
+	}
+	.description {
+		margin-top: 0.2rem;
+		color: var(--text-muted);
+		font-size: 0.84rem;
+		line-height: 1.4;
+	}
+	.form-interpretation {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.45rem;
+		color: var(--text-secondary);
+		font-size: 0.83rem;
+	}
+	.form-interpretation .chip {
+		flex: 0 0 auto;
+	}
+	.coverage {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		margin: 0.75rem 0 0.35rem;
+		border: 1px solid var(--card-border);
+		border-radius: 0.55rem;
+		background: color-mix(in srgb, var(--surface-muted) 20%, var(--surface-card));
+	}
+	.coverage > div {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.25rem 0.45rem;
+		padding: 0.45rem 0.65rem;
+	}
+	.coverage > div + div {
+		border-left: 1px solid var(--card-border);
+	}
+	.coverage dt {
+		color: var(--text-secondary);
+		font-size: 0.75rem;
+	}
+	.coverage dd {
+		font-size: 0.9rem;
+		font-weight: 750;
+		font-variant-numeric: tabular-nums;
+	}
+	.loading,
+	.empty-stress {
+		display: grid;
+		min-height: 10rem;
+		place-items: center;
+		color: var(--text-quiet);
+		font-size: 0.9rem;
+	}
+	@container (min-width: 750px) {
+		.training-grid {
+			grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+		}
+	}
+	@container (610px <= width < 750px) {
+		.metric-list {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+		.metric {
+			grid-template-columns: minmax(0, 1fr);
+			align-content: start;
+			gap: 0.35rem;
+			padding-inline: 0.8rem 0.5rem;
+		}
+		.metric + .metric {
+			border-left: 1px solid var(--plot-grid);
+		}
+		.metric::before {
+			display: none;
+		}
+	}
+	@container (max-width: 620px) {
+		.status-body {
+			flex-direction: column;
+			gap: 0.7rem;
+		}
+		.status-summary {
+			align-items: flex-start;
+		}
+		.insight {
+			align-self: stretch;
+			width: auto;
+			border-left: 0;
+			border-top: 1px solid var(--card-border);
+			padding: 0.6rem 0 0;
+		}
+		.grouping {
+			width: 100%;
+		}
+		.coverage {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.coverage > div:nth-child(3) {
+			border-left: 0;
+		}
+		.coverage > div:nth-child(n + 3) {
+			border-top: 1px solid var(--card-border);
+		}
+	}
+</style>

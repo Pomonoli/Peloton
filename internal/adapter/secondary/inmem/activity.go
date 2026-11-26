@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -608,20 +609,46 @@ func (r *ActivityRepo) ActivitySportTotals(ctx context.Context, userID domain.Us
 	return totals, nil
 }
 
-func (r *ActivityRepo) TrainingStressCoverage(ctx context.Context, userID domain.UserID, start, end time.Time) (port.TrainingStressCoverage, error) {
-	var out port.TrainingStressCoverage
-	for _, a := range r.live(ctx, userID) {
-		if a.StartTime.Before(start) || !a.StartTime.Before(end) {
-			continue
-		}
-		switch {
-		case a.Summary.TSS == nil:
-			out.Missing++
-		case a.Summary.AvgPowerW != nil || a.Summary.NormalizedPowerW != nil || a.Summary.AvgHeartRateBpm != nil:
-			out.SensorEstimate++
-		default:
-			out.DurationEstimate++
+func (r *ActivityRepo) TrainingStressDays(ctx context.Context, userID domain.UserID, end time.Time) ([]port.TrainingStressDay, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	imported := make(map[domain.ActivityID][]float64)
+	for _, src := range r.Sources {
+		if src.Status != domain.SourceStatusDetached && domain.ValidTrainingStress(src.Parsed.Summary.TSS) &&
+			(src.Provider != "strava" || r.Activities[src.ActivityID].ProviderRestricted) {
+			imported[src.ActivityID] = append(imported[src.ActivityID], *src.Parsed.Summary.TSS)
 		}
 	}
+	sensor := func(value *int) bool { return value != nil && *value > 0 }
+	days := make(map[string]port.TrainingStressDay)
+	for _, a := range r.Activities {
+		if a.UserID != userID || a.IsDeleted() || !a.StartTime.Before(end) ||
+			(port.IsCommunityActivityRead(ctx) && (a.HiddenByAdmin || a.ProviderRestricted)) {
+			continue
+		}
+		date := a.StartTime.UTC().Format(time.DateOnly)
+		day := days[date]
+		day.Date = date
+		valid := domain.ValidTrainingStress(a.Summary.TSS)
+		if valid {
+			day.TSS += *a.Summary.TSS
+		}
+		switch {
+		case !valid:
+			day.Missing++
+		case slices.Contains(imported[a.ID], *a.Summary.TSS):
+			day.Imported++
+		case sensor(a.Summary.AvgPowerW) || sensor(a.Summary.NormalizedPowerW) || sensor(a.Summary.AvgHeartRateBpm):
+			day.SensorEstimate++
+		default:
+			day.DurationEstimate++
+		}
+		days[date] = day
+	}
+	out := make([]port.TrainingStressDay, 0, len(days))
+	for _, day := range days {
+		out = append(out, day)
+	}
+	slices.SortFunc(out, func(a, b port.TrainingStressDay) int { return strings.Compare(a.Date, b.Date) })
 	return out, nil
 }

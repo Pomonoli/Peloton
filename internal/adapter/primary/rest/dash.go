@@ -146,28 +146,41 @@ func dashStatsRecordJSON(a *domain.Activity) map[string]any {
 	}
 }
 
-// analysis → { dates, ctl, atl, tsb, tss, current:{ctl,atl,tsb} }
 func (h *DashboardHandlers) analysis(w http.ResponseWriter, r *http.Request) {
 	ctx, userID, ok := h.Auth.requireMember(w, r)
 	if !ok {
 		return
 	}
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
-	series, err := h.Stats.TrainingLoad(ctx, userID, days)
+	result, err := h.Stats.Analysis(ctx, userID, days)
 	if err != nil {
 		writeActionError(w, err, "analysis failed")
 		return
 	}
-	out := dashAnalysisJSON(series)
-	coverage, err := h.Stats.TrainingStressCoverage(ctx, userID, days)
-	if err != nil {
-		h.Log.Warn("load training stress coverage", "error", err)
-	} else {
-		out["coverage"] = map[string]int{
-			"imported": coverage.Imported, "sensor_estimate": coverage.SensorEstimate,
-			"duration_estimate": coverage.DurationEstimate, "missing": coverage.Missing,
-		}
+	out := dashAnalysisJSON(result.Load)
+	out["start"], out["end"] = result.Start, result.End
+	out["recent_scored"], out["recent_total"] = result.RecentScored, result.RecentTotal
+	coverage := result.Coverage
+	out["coverage"] = map[string]int{
+		"imported": coverage.Imported, "sensor_estimate": coverage.SensorEstimate,
+		"duration_estimate": coverage.DurationEstimate, "missing": coverage.Missing,
 	}
+	type stressDay struct {
+		Date   string   `json:"date"`
+		TSS    *float64 `json:"tss"`
+		Scored int      `json:"scored"`
+		Total  int      `json:"total"`
+	}
+	stress := make([]stressDay, 0, len(result.Stress))
+	for _, day := range result.Stress {
+		scored := day.Scored()
+		item := stressDay{Date: day.Date, Scored: scored, Total: scored + day.Missing}
+		if scored > 0 {
+			item.TSS = &day.TSS
+		}
+		stress = append(stress, item)
+	}
+	out["stress_days"] = stress
 	writeJSON(w, http.StatusOK, out)
 }
 

@@ -82,6 +82,55 @@ const asCatalog = (row) => ({
 	start: null
 });
 
+const analysisEnd = '2026-11-26';
+const analysisDay = (index) =>
+	new Date(Date.parse(analysisEnd) - index * 86_400_000).toISOString().slice(0, 10);
+function trainingFixture(days, rider) {
+	const start = analysisDay(days === 3650 ? 450 : days - 1);
+	const extreme = rider === 'mira';
+	if (rider === 'empty' || rider === 'unscored') {
+		const missing = rider === 'unscored' ? 1 : 0;
+		return {
+			start,
+			end: analysisEnd,
+			dates: [],
+			ctl: [],
+			atl: [],
+			tsb: [],
+			current: { ctl: 0, atl: 0, tsb: 0 },
+			stress_days: missing ? [{ date: analysisEnd, tss: null, scored: 0, total: 1 }] : [],
+			coverage: { imported: 0, sensor_estimate: 0, duration_estimate: 0, missing },
+			recent_total: missing,
+			recent_scored: 0
+		};
+	}
+	const current = extreme
+		? { ctl: 34, atl: 159, tsb: -125 }
+		: rider === 'very-fresh'
+			? { ctl: 130, atl: 5, tsb: 125 }
+			: { ctl: 7.9, atl: 0.3, tsb: 7.6 };
+	const dates = Array.from({ length: 31 }, (_, i) => analysisDay(30 - i));
+	const stress_days = [
+		{ date: '2026-11-22', tss: 60, scored: 1, total: 2 },
+		{ date: '2026-11-23', tss: 10, scored: 1, total: 1 },
+		{ date: '2026-11-25', tss: null, scored: 0, total: 1 },
+		{ date: '2026-11-26', tss: 0, scored: 1, total: 1 }
+	];
+	return {
+		start,
+		end: analysisEnd,
+		dates,
+		ctl: [...Array(30).fill(extreme ? 25 : 14), current.ctl],
+		atl: [...Array(30).fill(extreme ? 20 : 1), current.atl],
+		tsb: [...Array(30).fill(extreme ? 5 : 13), current.tsb],
+		current,
+		stress_days,
+		coverage: { imported: 0, sensor_estimate: 2, duration_estimate: 1, missing: 2 },
+		recent_total: 5,
+		recent_scored: 3
+	};
+}
+
 try {
 	for (const width of [360, 390, 430, 1440]) {
 		const mobile = width < 768;
@@ -94,6 +143,8 @@ try {
 		page.setDefaultTimeout(6000);
 		const errors = [];
 		let activityQuery;
+		let analysisQuery;
+		let selfHistory = 'typical';
 		page.on('pageerror', (error) => errors.push(error.message));
 		let catalogSort = [];
 		let weatherRequests = 0;
@@ -144,6 +195,15 @@ try {
 			if (path === '/api/segments/catalog') {
 				catalogSort = url.searchParams.getAll('sort');
 				return route.fulfill({ json: { segments: rides.map(asCatalog), has_more: false } });
+			}
+			if (path === '/api/analysis') {
+				analysisQuery = url.searchParams;
+				return route.fulfill({
+					json: trainingFixture(
+						Number(analysisQuery.get('days')),
+						analysisQuery.get('member') ?? selfHistory
+					)
+				});
 			}
 			const fixtures = {
 				'/cairn.v1.AuthService/GetCurrentUser': {
@@ -225,15 +285,6 @@ try {
 					sport_totals: [
 						{ value: 'ride', count: 1, distance_m: 45000, moving_s: 4500, speed_kmh: 36 }
 					]
-				},
-				'/api/analysis': {
-					dates: ['2026-11-22'],
-					ctl: [1],
-					atl: [3],
-					tsb: [-2],
-					tss: [12],
-					current: { ctl: 1, atl: 3, tsb: -2 },
-					coverage: { imported: 0, sensor_estimate: 0, duration_estimate: 1, missing: 0 }
 				},
 				'/api/records': {
 					records: [
@@ -458,11 +509,120 @@ try {
 		await noPageOverflow('/stats');
 		await open('/analysis?member=mira');
 		await page.getByRole('button', { name: 'About Fitness (CTL)' }).click();
-		await page.getByText('Your long-term training load', { exact: false }).waitFor();
+		await page.getByText('42-day time constant', { exact: false }).waitFor();
 		await page.keyboard.press('Escape');
 		await page.getByRole('heading', { name: 'Training Stress Score (TSS)' }).waitFor();
 		await page.getByText('Duration-only estimates', { exact: true }).waitFor();
+		await page.getByRole('img', { name: 'Current form -125.0, Very fatigued' }).waitFor();
+		await page.getByRole('heading', { name: 'High recent training load' }).waitFor();
+		assert.equal(analysisQuery.get('member'), 'mira');
+		const metrics = main.getByRole('region', { name: 'Key Training Metrics' });
+		const trends = main.getByRole('region', { name: 'Training Load Trends' });
+		const metricsBox = await metrics.boundingBox();
+		const trendsBox = await trends.boundingBox();
+		if (mobile) assert.ok(trendsBox.y > metricsBox.y + metricsBox.height);
+		else
+			assert.ok(
+				trendsBox.x > metricsBox.x + metricsBox.width && trendsBox.width > metricsBox.width
+			);
+		const stress = main.getByRole('slider', { name: 'Training Stress Score (TSS)' });
+		assert.equal(
+			await main.getByRole('button', { name: 'Weekly' }).getAttribute('aria-pressed'),
+			'true'
+		);
+		await stress.press('End');
+		assert.match(
+			await stress.getAttribute('aria-valuetext'),
+			/Nov 23, 2026.*Nov 26, 2026.*Total recorded TSS 10.*Activities 3.*with a score 2.*without a score 1/
+		);
+		await main.getByRole('button', { name: 'Daily' }).click();
+		await stress.press('End');
+		assert.match(
+			await stress.getAttribute('aria-valuetext'),
+			/Total recorded TSS 0, Activities 1, Activities with a score 1/
+		);
+		await stress.press('ArrowLeft');
+		assert.match(
+			await stress.getAttribute('aria-valuetext'),
+			/Total recorded TSS Unavailable, Activities 1/
+		);
+		await stress.press('ArrowLeft');
+		assert.match(await stress.getAttribute('aria-valuetext'), /Total recorded TSS 0, Activities 0/);
+		await main.getByRole('button', { name: 'Monthly' }).click();
+		await stress.press('End');
+		assert.match(
+			await stress.getAttribute('aria-valuetext'),
+			/Total recorded TSS 70, Activities 5, Activities with a score 3/
+		);
+		const toggleFitness = trends.getByRole('button', { name: 'Fitness (CTL)' });
+		await toggleFitness.click();
+		await trends.getByRole('button', { name: 'Fatigue (ATL)' }).click();
+		assert.equal(await toggleFitness.getAttribute('aria-pressed'), 'false');
+		const load = trends.getByRole('slider');
+		if (mobile) await load.tap();
+		else await load.hover();
+		assert.match(
+			await load.getAttribute('aria-valuetext'),
+			/Fitness \(CTL\).*Fatigue \(ATL\).*Form \(TSB\)/
+		);
+		for (const [range, days] of [
+			['3M', '90'],
+			['1Y', '365'],
+			['All', '3650'],
+			['6M', '180']
+		]) {
+			await main.getByRole('button', { name: range, exact: true }).click();
+			await page.getByRole('img', { name: 'Current form -125.0, Very fatigued' }).waitFor();
+			assert.equal(analysisQuery.get('days'), days);
+			assert.equal(await toggleFitness.getAttribute('aria-pressed'), 'false');
+			assert.equal(
+				await main.getByRole('button', { name: 'Monthly' }).getAttribute('aria-pressed'),
+				'true'
+			);
+			for (const chart of [load, stress]) {
+				const tickBoxes = await chart.locator('.date-tick').evaluateAll((ticks) =>
+					ticks.map((tick) => {
+						const { left, right } = tick.getBoundingClientRect();
+						return { label: tick.textContent, left, right };
+					})
+				);
+				assert.ok(
+					tickBoxes.every((tick, i) => i === 0 || tick.left > tickBoxes[i - 1].right),
+					`Overlapping labels at ${width}px in ${range}: ${JSON.stringify(tickBoxes)}`
+				);
+			}
+			await noPageOverflow('/analysis ' + range);
+		}
+		await open('/analysis');
+		await page.getByRole('heading', { name: 'Fresh, but training load is low' }).waitFor();
+		assert.equal(analysisQuery.has('member'), false);
 		await noPageOverflow('/analysis');
+		if (!mobile) {
+			await page.emulateMedia({ colorScheme: 'dark' });
+			await page.locator('html[data-theme="dark"]').waitFor();
+			selfHistory = 'very-fresh';
+			await page.reload();
+			const marker = main.getByRole('img', { name: 'Current form +125.0, Very fresh' });
+			await marker.waitFor();
+			assert.equal(
+				await marker.locator('.pin').evaluate((pin) => getComputedStyle(pin).left),
+				await marker.evaluate((item) => getComputedStyle(item).width)
+			);
+			await noPageOverflow('/analysis extreme positive form');
+			selfHistory = 'empty';
+			await page.reload();
+			await main.getByRole('heading', { name: 'Insufficient training data' }).waitFor();
+			await main.getByText('No activities in this period.', { exact: true }).waitFor();
+			assert.equal(await main.getByRole('slider').count(), 0);
+			selfHistory = 'unscored';
+			await page.reload();
+			await main.getByRole('heading', { name: 'Insufficient training data' }).waitFor();
+			await stress.press('End');
+			assert.match(
+				await stress.getAttribute('aria-valuetext'),
+				/Total recorded TSS Unavailable, Activities 1/
+			);
+		}
 		await open('/records?member=mira');
 		await page.getByText('Viewing Mira', { exact: true }).filter({ visible: true }).waitFor();
 		await page.getByText('54 km/h', { exact: true }).waitFor();

@@ -41,6 +41,16 @@ type TrainingStressCoverage struct {
 	Imported, SensorEstimate, DurationEstimate, Missing int
 }
 
+func (c TrainingStressCoverage) Scored() int {
+	return c.Imported + c.SensorEstimate + c.DurationEstimate
+}
+
+type TrainingStressDay struct {
+	Date string // YYYY-MM-DD, UTC
+	TSS  float64
+	TrainingStressCoverage
+}
+
 type CyclingWeek struct {
 	Start     time.Time
 	DistanceM float64
@@ -167,7 +177,8 @@ type ActivityReader interface {
 	// falls in [start, end) — the dashboard's this/last week.
 	ActivityTotalsForRange(ctx context.Context, userID domain.UserID, start, end time.Time) (ActivityTotalsResult, error)
 
-	TrainingStressCoverage(ctx context.Context, userID domain.UserID, start, end time.Time) (TrainingStressCoverage, error)
+	// TrainingStressDays returns UTC days with activities before end, in ascending order.
+	TrainingStressDays(ctx context.Context, userID domain.UserID, end time.Time) ([]TrainingStressDay, error)
 	CyclingWeeks(ctx context.Context, userID domain.UserID, start, end time.Time) ([]CyclingWeek, error)
 	ActivitySportTotals(ctx context.Context, userID domain.UserID) ([]ActivitySportTotals, error)
 

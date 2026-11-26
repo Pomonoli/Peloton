@@ -115,11 +115,6 @@ func (s *Stats) trainingLoadBounds(days int) (time.Time, time.Time) {
 	return end.AddDate(0, 0, -days), end
 }
 
-func (s *Stats) TrainingStressCoverage(ctx context.Context, userID domain.UserID, days int) (port.TrainingStressCoverage, error) {
-	start, end := s.trainingLoadBounds(days)
-	return s.activities.TrainingStressCoverage(ctx, userID, start, end)
-}
-
 // BestEffortHistory is one bucket's progression.
 type BestEffortHistory struct {
 	Items []domain.BestEffortHistoryItem

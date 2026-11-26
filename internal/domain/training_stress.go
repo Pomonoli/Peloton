@@ -1,6 +1,14 @@
 package domain
 
-import "time"
+import (
+	"math"
+	"time"
+)
+
+// ValidTrainingStress reports whether an activity has a usable score, including recorded zero.
+func ValidTrainingStress(score *float64) bool {
+	return score != nil && *score >= 0 && !math.IsInf(*score, 1)
+}
 
 // Training-stress estimation.
 //

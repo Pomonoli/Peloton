@@ -1693,12 +1693,11 @@ func (r *ActivityRepo) ActivitySportTotals(ctx context.Context, userID domain.Us
 	}, "scan sport totals", "iterate sport totals")
 }
 
-func (r *ActivityRepo) TrainingStressCoverage(ctx context.Context, userID domain.UserID, start, end time.Time) (port.TrainingStressCoverage, error) {
-	var out port.TrainingStressCoverage
-	err := dbtx(ctx, r.pool).QueryRow(ctx, `
+func (r *ActivityRepo) TrainingStressDays(ctx context.Context, userID domain.UserID, end time.Time) ([]port.TrainingStressDay, error) {
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `
 		WITH stress AS (
-			SELECT CASE
-				WHEN a.tss IS NULL THEN 'missing'
+			SELECT (a.start_time AT TIME ZONE 'UTC')::date AS day, a.tss, CASE
+				WHEN a.tss IS NULL OR a.tss < 0 OR a.tss >= 'Infinity'::double precision THEN 'missing'
 				WHEN EXISTS (
 					SELECT 1 FROM activity_sources src WHERE src.activity_id = a.id AND `+canonicalPerformanceSourceSQL+`
 					  AND src.parsed #> '{summary,tss}' = to_jsonb(a.tss)
@@ -1707,10 +1706,18 @@ func (r *ActivityRepo) TrainingStressCoverage(ctx context.Context, userID domain
 				ELSE 'duration'
 			END AS coverage
 			FROM activities a
-			WHERE a.user_id = $1 AND a.deleted_at IS NULL AND a.start_time >= $2 AND a.start_time < $3`+communityReadSQL(ctx, "a.")+`
+			WHERE a.user_id = $1 AND a.deleted_at IS NULL AND a.start_time < $2`+communityReadSQL(ctx, "a.")+`
 		)
-		SELECT count(*) FILTER (WHERE coverage = 'imported'), count(*) FILTER (WHERE coverage = 'sensor'),
+		SELECT to_char(day, 'YYYY-MM-DD'), COALESCE(sum(tss) FILTER (WHERE coverage <> 'missing'), 0),
+		       count(*) FILTER (WHERE coverage = 'imported'), count(*) FILTER (WHERE coverage = 'sensor'),
 		       count(*) FILTER (WHERE coverage = 'duration'), count(*) FILTER (WHERE coverage = 'missing')
-		FROM stress`, userID.UUID(), start, end).Scan(&out.Imported, &out.SensorEstimate, &out.DurationEstimate, &out.Missing)
-	return out, err
+		FROM stress GROUP BY day ORDER BY day`, userID.UUID(), end)
+	if err != nil {
+		return nil, err
+	}
+	return pgCollectRows(rows, func(row rowScanner) (port.TrainingStressDay, error) {
+		var day port.TrainingStressDay
+		err := row.Scan(&day.Date, &day.TSS, &day.Imported, &day.SensorEstimate, &day.DurationEstimate, &day.Missing)
+		return day, err
+	}, "scan training stress day", "iterate training stress days")
 }

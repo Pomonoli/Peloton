@@ -16,7 +16,8 @@
 //     pass is therefore most accurate when the window starts far enough
 //     before any data of interest (≥6 weeks).
 //   - TSS comes from the merged Activity's Summary.TSS field. Activities
-//     without a TSS contribute 0 to that day's bucket.
+//     without a valid TSS add no recorded load to that day's bucket. The
+//     dashboard reports missing coverage alongside the resulting estimates.
 package trainingload
 
 import (
@@ -91,12 +92,12 @@ type Result struct {
 	EndDay         time.Time
 }
 
-// trainingLoadTSSByDay buckets TSS by UTC day. Activities without TSS contribute 0.
+// trainingLoadTSSByDay buckets recorded scores by UTC day.
 func trainingLoadTSSByDay(activities []domain.Activity) (map[time.Time]float64, int) {
 	tssByDay := make(map[time.Time]float64, 128)
 	activitiesUsed := 0
 	for _, a := range activities {
-		if a.Summary.TSS == nil {
+		if !domain.ValidTrainingStress(a.Summary.TSS) {
 			continue
 		}
 		day := truncateUTCDay(a.StartTime)
@@ -169,14 +170,42 @@ func CommunitySeries(ctx context.Context, reader port.ActivityReader, userID dom
 	if used == 0 {
 		return nil, nil
 	}
+	return roundedSeries(warmup, startDay, endDay, tss), nil
+}
+
+// RecordedSeries applies the persisted training-load recurrence to the full
+// history of recorded scores, returning only UTC days in [start, end).
+func RecordedSeries(stress []port.TrainingStressDay, start, end time.Time) []domain.TrainingLoadDay {
+	tss := make(map[time.Time]float64, len(stress))
+	var first time.Time
+	for _, day := range stress {
+		if day.Scored() == 0 {
+			continue
+		}
+		date, err := time.Parse(time.DateOnly, day.Date)
+		if err != nil {
+			continue
+		}
+		if first.IsZero() {
+			first = date
+		}
+		tss[date] = day.TSS
+	}
+	if first.IsZero() {
+		return nil
+	}
+	return roundedSeries(first, start, truncateUTCDay(end.Add(-time.Nanosecond)), tss)
+}
+
+func roundedSeries(first, start, end time.Time, tss map[time.Time]float64) []domain.TrainingLoadDay {
 	var days []domain.TrainingLoadDay
-	for day, load := range dailyLoad(warmup, endDay, tss) {
-		if !day.Before(startDay) {
-			days = append(days, domain.TrainingLoadDay{Date: day.Format("2006-01-02"), CTL: domain.Round1(load.CTL),
+	for day, load := range dailyLoad(first, end, tss) {
+		if !day.Before(start) {
+			days = append(days, domain.TrainingLoadDay{Date: day.Format(time.DateOnly), CTL: domain.Round1(load.CTL),
 				ATL: domain.Round1(load.ATL), TSB: domain.Round1(load.TSB), TSS: domain.Round1(load.TSS), HasTSS: load.HasTSS})
 		}
 	}
-	return days, nil
+	return days
 }
 
 // Execute runs the compute. Activities are loaded fresh each call; the
