@@ -111,10 +111,3 @@
 		<span>{failed ? m.weather_unavailable() : m.weather_loading()}</span>
 	{/if}
 </div>
-{#if weather}
-	<a
-		href="https://open-meteo.com/en/licence"
-		class="mr-2 text-[11px] leading-tight text-quiet underline underline-offset-2 sm:mr-3"
-		>Open-Meteo</a
-	>
-{/if}
