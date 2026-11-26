@@ -224,6 +224,11 @@ try {
 			}
 			if (url.origin !== origin) return request.abort();
 			const { pathname, searchParams } = url;
+			// Simulate stale public runtime assets after an application upgrade.
+			// Planning, recorded-route heights and GPX must use the fingerprinted build.
+			if (pathname.startsWith('/waas-engine/')) {
+				return request.fulfill({ status: 410, body: 'Stale unversioned planner runtime' });
+			}
 			if (pathname === '/cairn.v1.AuthService/GetCurrentUser') {
 				return request.fulfill({
 					json: { user: { id: 'a', username: 'ada', displayName: 'Ada', emailVerified: true } }
@@ -485,6 +490,8 @@ try {
 			await checkMapLegend(main);
 			const first = await metrics(main);
 			assert.ok(first[0] >= 69.5 && first[0] <= 70.5);
+			assert.ok(first.every(Number.isFinite), 'Every route summary metric must be available');
+			assert.ok(first[1] > 0 && first[2] > 0 && first[3] > 0);
 			const target = main.getByRole('spinbutton', { name: 'Distance (km)', exact: true });
 			await target.fill('75');
 			await target.blur();

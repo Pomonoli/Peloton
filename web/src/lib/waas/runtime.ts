@@ -7,14 +7,14 @@ interface Runtime {
 
 let loading: Promise<Runtime> | undefined;
 
-// The original planner is maintained as local ESM assets, with a typed boundary
-// around its catalog format. Only the planning page loads this runtime.
+// Literal imports let Vite bundle and fingerprint the entire engine dependency
+// graph with the UI. Fixed public URLs can retain an older engine after an
+// upgrade, leaving new summary fields undefined. Loading remains lazy.
 export function runtime(): Promise<Runtime> {
 	if (!loading) {
-		const base = '/waas-engine/';
 		loading = Promise.all([
-			import(/* @vite-ignore */ `${base}engine.js`),
-			import(/* @vite-ignore */ `${base}ride-options.js`)
+			import('../../../static/waas-engine/engine.js'),
+			import('../../../static/waas-engine/ride-options.js')
 		]).then(([engine, options]) => {
 			if (
 				typeof engine.createPlanner !== 'function' ||
