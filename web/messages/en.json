@@ -623,7 +623,7 @@
 	"settings_source_code": "Source code",
 	"weather_loading": "Loading weather…",
 	"weather_unavailable": "Weather unavailable",
-	"weather_fallback": "Sint-Niklaas (default)",
+	"weather_fallback": "Sint-Niklaas",
 	"weather_wind": "Wind blowing toward {direction} at {speed} km/h",
 	"weather_wind_speed": "{speed} km/h",
 	"weather_north": "north",

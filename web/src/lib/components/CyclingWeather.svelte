@@ -104,11 +104,17 @@
 				{m.weather_wind_speed({ speed })}
 			</span>
 		</div>
-		<div class="mt-1 text-[11px] leading-tight">
-			{#if weather.fallback}<div>{m.weather_fallback()}</div>{/if}
-			<a href="https://open-meteo.com/" class="underline underline-offset-2">Open-Meteo</a>
-		</div>
+		{#if weather.fallback}
+			<span class="mt-1 text-[11px] leading-tight">{m.weather_fallback()}</span>
+		{/if}
 	{:else}
 		<span>{failed ? m.weather_unavailable() : m.weather_loading()}</span>
 	{/if}
 </div>
+{#if weather}
+	<a
+		href="https://open-meteo.com/en/licence"
+		class="mr-2 text-[11px] leading-tight text-quiet underline underline-offset-2 sm:mr-3"
+		>Open-Meteo</a
+	>
+{/if}

@@ -106,7 +106,9 @@
 					{name}
 				</h1>
 			</div>
-			<CyclingWeather />
+			<div class="flex flex-col items-end gap-1">
+				<CyclingWeather />
+			</div>
 		</header>
 
 		{#if ov?.totals}

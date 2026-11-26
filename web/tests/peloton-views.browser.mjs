@@ -361,20 +361,20 @@ try {
 		assert.equal(await page.getByRole('contentinfo').count(), 0);
 		if (width === 430) {
 			await main.getByText('Weather unavailable').waitFor();
+			assert.equal(await main.getByRole('link', { name: 'Open-Meteo' }).count(), 0);
 		} else {
 			await main.getByRole('img', { name: 'Partly cloudy' }).waitFor();
 			const wind = main.getByRole('img', { name: 'Wind blowing toward northeast at 14 km/h' });
 			assert.equal((await wind.textContent()).trim(), '14 km/h');
 			assert.equal(await wind.locator('svg').evaluate((node) => node.style.rotate), '45deg');
-			assert.equal(
-				await main.getByRole('link', { name: 'Open-Meteo' }).getAttribute('href'),
-				'https://open-meteo.com/'
-			);
+			const source = main.getByRole('link', { name: 'Open-Meteo' });
+			assert.equal(await source.getAttribute('href'), 'https://open-meteo.com/en/licence');
+			assert(await source.evaluate((link) => !link.closest('[role="status"]')));
 		}
 		assert.equal(weatherRequests, 1);
 		assert.equal(weatherLocation, width === 390 ? '50.85' : '51.165');
 		assert.equal(
-			await main.getByText('Sint-Niklaas (default)').count(),
+			await main.getByText('Sint-Niklaas', { exact: true }).count(),
 			width === 390 || width === 430 ? 0 : 1
 		);
 		assert.deepEqual(await main.locator('h2').allTextContents(), [
