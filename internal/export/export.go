@@ -8,6 +8,7 @@
 package export
 
 import (
+	"encoding/xml"
 	"fmt"
 	"strconv"
 	"strings"
@@ -17,17 +18,11 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/domain"
 )
 
-// xmlEscape escapes the five XML predefined entities for element text /
-// attribute values.
-var xmlEscaper = strings.NewReplacer(
-	"&", "&amp;",
-	"<", "&lt;",
-	">", "&gt;",
-	`"`, "&quot;",
-	"'", "&apos;",
-)
-
-func esc(s string) string { return xmlEscaper.Replace(s) }
+func esc(s string) string {
+	var text strings.Builder
+	_ = xml.EscapeText(&text, []byte(s))
+	return text.String()
+}
 
 func f(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 
@@ -49,29 +44,46 @@ func activityName(a domain.Activity) string {
 // <power> element for power. Samples without a lat/lon are skipped (GPX track
 // points require a position).
 func GPX(a domain.Activity, s domain.Stream) []byte {
+	return writeGPX(activityName(a), string(a.Type), a.StartTime, [][]domain.StreamSample{s.Samples})
+}
+
+// RecordedRouteGPX shares the activity GPX writer and keeps recording gaps
+// as separate segments. A route exports positions and elevation only.
+func RecordedRouteGPX(name string, track domain.RecordedTrack) []byte {
+	lines := make([][]domain.StreamSample, len(track))
+	for i, line := range track {
+		lines[i] = make([]domain.StreamSample, len(line))
+		for j, p := range line {
+			lines[i][j] = domain.StreamSample{Latitude: &p.Lat, Longitude: &p.Lon, AltitudeM: p.ElevationM}
+		}
+	}
+	return writeGPX(name, "cycling", time.Time{}, lines)
+}
+
+func writeGPX(name, kind string, start time.Time, segments [][]domain.StreamSample) []byte {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<gpx version="1.1" creator="` + esc(branding.Name()) + `" ` +
 		`xmlns="http://www.topografix.com/GPX/1/1" ` +
 		`xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">` + "\n")
-
-	b.WriteString("  <metadata><name>" + esc(activityName(a)) + "</name>")
-	if !a.StartTime.IsZero() {
-		b.WriteString("<time>" + ts(a.StartTime) + "</time>")
+	b.WriteString("  <metadata><name>" + esc(name) + "</name>")
+	if !start.IsZero() {
+		b.WriteString("<time>" + ts(start) + "</time>")
 	}
 	b.WriteString("</metadata>\n")
 
-	b.WriteString("  <trk>\n    <name>" + esc(activityName(a)) + "</name>\n")
-	if t := string(a.Type); t != "" {
-		b.WriteString("    <type>" + esc(t) + "</type>\n")
+	b.WriteString("  <trk>\n    <name>" + esc(name) + "</name>\n")
+	if kind != "" {
+		b.WriteString("    <type>" + esc(kind) + "</type>\n")
 	}
-	b.WriteString("    <trkseg>\n")
-
-	for i := range s.Samples {
-		gpxWriteTrkpt(&b, &s.Samples[i])
+	for _, segment := range segments {
+		b.WriteString("    <trkseg>\n")
+		for i := range segment {
+			gpxWriteTrkpt(&b, &segment[i])
+		}
+		b.WriteString("    </trkseg>\n")
 	}
-
-	b.WriteString("    </trkseg>\n  </trk>\n</gpx>\n")
+	b.WriteString("  </trk>\n</gpx>\n")
 	return []byte(b.String())
 }
 

@@ -13,9 +13,19 @@
 	import { dataUrl } from '#lib/waas/service.js';
 	import type { Ride } from '#lib/waas/types.js';
 	import RoutePreview from './RoutePreview.svelte';
+	import { mapLines, previewPoints, type RecordedTrack } from '#lib/recorded-routes.js';
 
-	let { ride, bounds }: { ride: Ride | null; bounds: [[number, number], [number, number]] | null } =
-		$props();
+	let {
+		ride = null,
+		bounds = null,
+		recorded = null,
+		compact = false
+	}: {
+		ride?: Ride | null;
+		bounds?: [[number, number], [number, number]] | null;
+		recorded?: RecordedTrack | null;
+		compact?: boolean;
+	} = $props();
 	let container: HTMLDivElement;
 	let map: MapLibreMap | undefined;
 	let ready = $state(false);
@@ -23,7 +33,13 @@
 	let cycling = $state(false);
 	let elevation = $state(false);
 	let currentStyle: ReturnType<typeof basemapStyle>;
-	const coordinates = $derived(ride?.points.map((p) => [p[1], p[0]] as [number, number]) ?? []);
+	const lines = $derived(
+		recorded
+			? mapLines(recorded)
+			: [ride?.points.map((p) => [p[1], p[0]] as [number, number]) ?? []]
+	);
+	const coordinates = $derived(lines.flat());
+	const fallbackTrack = $derived(recorded ? previewPoints(recorded) : []);
 
 	function fit() {
 		if (!map || !coordinates.length) return;
@@ -37,11 +53,19 @@
 		const line = {
 			type: 'Feature' as const,
 			properties: {},
-			geometry: { type: 'LineString' as const, coordinates }
+			geometry: {
+				type: 'MultiLineString' as const,
+				coordinates: lines.filter((line) => line.length > 1)
+			}
 		};
 		(map.getSource('waas-route') as GeoJSONSource).setData(line);
+		const start = recorded?.[0]?.[0];
 		const markers = [
-			...(ride?.points[0] ? [{ point: ride.points[0], label: 'S' }] : []),
+			...(start
+				? [{ point: [start.lat, start.lon], label: 'S' }]
+				: ride?.points[0]
+					? [{ point: ride.points[0], label: 'S' }]
+					: []),
 			...(ride?.visits ?? []).map((place, i) => ({ point: place.point, label: String(i + 1) }))
 		];
 		(map.getSource('waas-places') as GeoJSONSource).setData({
@@ -88,9 +112,10 @@
 			map = new MapLibreMap({
 				container,
 				style: currentStyle,
-				center: [4.139184, 51.164565],
+				center: coordinates[0] ?? [4.139184, 51.164565],
 				zoom: 10.5,
-				attributionControl: { compact: true }
+				attributionControl: { compact: true },
+				scrollZoom: !compact
 			});
 			map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
 			timer = window.setTimeout(() => {
@@ -98,7 +123,6 @@
 			}, 10000);
 			map.on('style.load', () => {
 				if (!map) return;
-				window.clearTimeout(timer);
 				map.addSource('waas-cycling', {
 					type: 'raster',
 					tiles: ['https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png'],
@@ -168,6 +192,7 @@
 					layout: { 'text-field': ['get', 'label'], 'text-size': 12, 'text-allow-overlap': true },
 					paint: { 'text-color': '#ffffff' }
 				});
+				window.clearTimeout(timer);
 				ready = true;
 				unavailable = false;
 				draw();
@@ -184,6 +209,7 @@
 
 	$effect(() => {
 		void ride;
+		void recorded;
 		void bounds;
 		void cycling;
 		void elevation;
@@ -202,39 +228,47 @@
 <div class="relative overflow-hidden rounded-lg border border-zinc-800 bg-panel">
 	<div
 		bind:this={container}
-		class="h-[440px] w-full max-md:h-[42dvh] max-md:min-h-60"
+		class={compact ? 'h-56 w-full sm:h-64' : 'h-[440px] w-full max-md:h-[42dvh] max-md:min-h-60'}
 		aria-label={m.waas_map_label()}
 	></div>
-	{#if unavailable && coordinates.length}
-		<RoutePreview {coordinates} track={[]} point={null} metric={null} disconnected={false} />
+	{#if !ready && coordinates.length}
+		<RoutePreview
+			{coordinates}
+			track={fallbackTrack}
+			point={null}
+			metric={null}
+			disconnected={!!recorded}
+		/>
 	{/if}
 	<div
 		class="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1 rounded-lg border border-zinc-800 bg-panel p-1 shadow-sm"
 	>
-		<button
-			type="button"
-			class="rounded px-2 py-1.5 text-sm text-zinc-300"
-			onclick={() => {
-				cycling = false;
-				elevation = false;
-			}}>{m.waas_roads()}</button
-		>
-		<button
-			type="button"
-			aria-pressed={cycling}
-			class="rounded px-2 py-1.5 text-sm {cycling
-				? 'bg-accent-500/20 text-accent-300'
-				: 'text-zinc-300'}"
-			onclick={() => (cycling = !cycling)}>{m.waas_cycle_layer()}</button
-		>
-		<button
-			type="button"
-			aria-pressed={elevation}
-			class="rounded px-2 py-1.5 text-sm {elevation
-				? 'bg-accent-500/20 text-accent-300'
-				: 'text-zinc-300'}"
-			onclick={() => (elevation = !elevation)}>{m.waas_height_layer()}</button
-		>
+		{#if !compact}
+			<button
+				type="button"
+				class="rounded px-2 py-1.5 text-sm text-zinc-300"
+				onclick={() => {
+					cycling = false;
+					elevation = false;
+				}}>{m.waas_roads()}</button
+			>
+			<button
+				type="button"
+				aria-pressed={cycling}
+				class="rounded px-2 py-1.5 text-sm {cycling
+					? 'bg-accent-500/20 text-accent-300'
+					: 'text-zinc-300'}"
+				onclick={() => (cycling = !cycling)}>{m.waas_cycle_layer()}</button
+			>
+			<button
+				type="button"
+				aria-pressed={elevation}
+				class="rounded px-2 py-1.5 text-sm {elevation
+					? 'bg-accent-500/20 text-accent-300'
+					: 'text-zinc-300'}"
+				onclick={() => (elevation = !elevation)}>{m.waas_height_layer()}</button
+			>
+		{/if}
 		<button type="button" class="rounded px-2 py-1.5 text-sm text-zinc-300" onclick={fit}
 			>{m.waas_fit_route()}</button
 		>

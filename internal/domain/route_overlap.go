@@ -49,7 +49,7 @@ func routeCellAt(at routeVector) routeCell {
 }
 
 func NewRouteCoverage(samples []StreamSample, activityType ActivityType) RouteCoverage {
-	out := RouteCoverage{grid: make(map[routeCell][]routePart)}
+	out := newRouteCoverage()
 	var cycling CyclingStream
 	if activityType == ActivityTypeRide {
 		cycling = ValidateCyclingStream(samples)
@@ -70,18 +70,26 @@ func NewRouteCoverage(samples []StreamSample, activityType ActivityType) RouteCo
 		if length < 1 || length/dt > CyclingMaxSpeedMps {
 			continue
 		}
-		n := int(math.Ceil(length / routeSampleM))
-		direction := vector.scale(1 / length)
-		for j := range n {
-			offset := vector.scale((float64(j) + .5) / float64(n))
-			at := routeVector{start.x + offset.x, start.y + offset.y, start.z + offset.z}
-			cell := routeCellAt(at)
-			out.grid[cell] = append(out.grid[cell], routePart{at, direction, length / float64(n)})
-		}
-		out.length += length
-		out.size += n
+		out.add(start, vector, length)
 	}
 	return out
+}
+
+func newRouteCoverage() RouteCoverage {
+	return RouteCoverage{grid: make(map[routeCell][]routePart)}
+}
+
+func (r *RouteCoverage) add(start, vector routeVector, length float64) {
+	n := int(math.Ceil(length / routeSampleM))
+	direction := vector.scale(1 / length)
+	for j := range n {
+		offset := vector.scale((float64(j) + .5) / float64(n))
+		at := routeVector{start.x + offset.x, start.y + offset.y, start.z + offset.z}
+		cell := routeCellAt(at)
+		r.grid[cell] = append(r.grid[cell], routePart{at, direction, length / float64(n)})
+	}
+	r.length += length
+	r.size += n
 }
 
 // Size is the number of indexed route intervals.
@@ -94,18 +102,18 @@ func (r RouteCoverage) Overlap(other RouteCoverage) float64 {
 		min(r.length, other.length) < MinRouteOverlap*max(r.length, other.length) {
 		return 0
 	}
-	forward := r.coveredBy(other)
+	forward := r.coveredBy(other, 1)
 	if forward < MinRouteOverlap {
 		return forward
 	}
-	return min(forward, other.coveredBy(r))
+	return min(forward, other.coveredBy(r, 1))
 }
 
-func (r RouteCoverage) coveredBy(other RouteCoverage) float64 {
+func (r RouteCoverage) coveredBy(other RouteCoverage, direction float64) float64 {
 	var covered float64
 	for cell, parts := range r.grid {
 		for _, part := range parts {
-			if other.covers(cell, part) {
+			if other.covers(cell, part, direction) {
 				covered += part.length
 			}
 		}
@@ -113,16 +121,27 @@ func (r RouteCoverage) coveredBy(other RouteCoverage) float64 {
 	return min(1, covered/r.length)
 }
 
-func (r RouteCoverage) covers(cell routeCell, part routePart) bool {
-	for x := cell.x - 1; x <= cell.x+1; x++ {
-		for y := cell.y - 1; y <= cell.y+1; y++ {
-			for z := cell.z - 1; z <= cell.z+1; z++ {
-				for _, candidate := range r.grid[routeCell{x, y, z}] {
-					delta := candidate.at.sub(part.at)
-					if delta.dot(delta) <= routeToleranceM*routeToleranceM && candidate.direction.dot(part.direction) >= .5 {
-						return true
-					}
-				}
+var routeNeighborOffsets = func() [27]routeCell {
+	var offsets [27]routeCell
+	i := 0
+	for x := -1; x <= 1; x++ {
+		for y := -1; y <= 1; y++ {
+			for z := -1; z <= 1; z++ {
+				offsets[i] = routeCell{x, y, z}
+				i++
+			}
+		}
+	}
+	return offsets
+}()
+
+func (r RouteCoverage) covers(cell routeCell, part routePart, direction float64) bool {
+	for _, offset := range routeNeighborOffsets {
+		key := routeCell{cell.x + offset.x, cell.y + offset.y, cell.z + offset.z}
+		for _, candidate := range r.grid[key] {
+			delta := candidate.at.sub(part.at)
+			if delta.dot(delta) <= routeToleranceM*routeToleranceM && candidate.direction.dot(part.direction)*direction >= .5 {
+				return true
 			}
 		}
 	}

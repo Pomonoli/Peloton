@@ -4,6 +4,8 @@ Peloton is an invite-only, self-hosted cycling platform for a small group of fri
 
 ## Features
 
+- **Recorded routes.** Explore routes automatically discovered from repeat rides. Browse rider leaderboards, open a recording in the Route Planner, or export GPX. [Recorded routes](docs/recorded-routes.md)
+
 - **Waasland route planner.** Public route planning for climbs, cobbles, gravel and uninterrupted riding, up to 200 km, with wind, named places, direction preferences and GPX export. [Planner documentation](docs/waasland-planner.md)
 
 - **Garmin Connect sync.** Connect a Garmin Personal API key in **Settings → Connections → Garmin Connect** to import available cycling history and check for new rides. Use **Sync Now** to start a check yourself. Garmin rides without a usable recording are imported as summaries. [Garmin Connect setup](docs/garmin-connect.md)

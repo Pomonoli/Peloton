@@ -52,6 +52,7 @@ import (
 	"github.com/opencairn-org/cairn-core/internal/usecase/pipeline"
 	"github.com/opencairn-org/cairn-core/internal/usecase/providerlink"
 	"github.com/opencairn-org/cairn-core/internal/usecase/quota"
+	"github.com/opencairn-org/cairn-core/internal/usecase/routes"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segment"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segmentrank"
 	"github.com/opencairn-org/cairn-core/internal/usecase/segmentview"
@@ -71,7 +72,9 @@ import (
 // one place makes the binary's surface obvious and testable — every
 // production wire-up goes through here.
 type App struct {
-	WaasCatalog *waasuc.Catalog
+	WaasCatalog    *waasuc.Catalog
+	RecordedRoutes *routes.Catalog
+	RouteProcessor *routes.Processor
 	// Adapters
 	QuotaMaxActivities int
 	Garmin             *garminsync.Connections
@@ -426,6 +429,9 @@ func wireAppCoreRepos(app *App, pool *pgxpool.Pool, cfg *config.Config) {
 	app.ActivityEvents = livefeed.New(func(e domain.ActivityEvent) domain.UserID { return e.UserID })
 	app.AdminEvents = connectadapter.NewAdminEventHub()
 	app.Visibility = postgres.NewVisibilityRepo(pool)
+	routeRepo := postgres.NewRecordedRouteRepo(pool)
+	app.RecordedRoutes = &routes.Catalog{Repo: routeRepo, Zones: app.Visibility}
+	app.RouteProcessor = &routes.Processor{Repo: routeRepo, Streams: app.Streams, Tx: app.Tx}
 	app.ShareLinks = postgres.NewShareLinkRepo(pool)
 	app.Reports = postgres.NewReportRepo(pool)
 	app.Moderation = postgres.NewModerationRepo(pool)

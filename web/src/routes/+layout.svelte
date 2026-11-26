@@ -49,6 +49,8 @@
 	const icons = {
 		overview: 'M3 11.5 12 4l9 7.5 M5 10v10h5v-6h4v6h5V10',
 		activities: 'M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01',
+		routes:
+			'M6 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M18 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M8 19h7a4 4 0 0 0 0-8H9a3 3 0 0 1 0-6h7',
 		planner: 'M4 4h6l4 16h6 M4 20h6l4-16h6 M4 4v16 M20 4v16',
 		heatmap:
 			'M12 22c4.4 0 7-2.9 7-6.5 0-3-1.7-5-3.5-7-.5 2-1.5 3-2.5 3.5.5-3-1-6.5-4-9 .3 3-1 4.5-2.5 6.5C5 11.5 5 13.7 5 15.5 5 19.1 7.6 22 12 22z',
@@ -92,14 +94,20 @@
 			items: [
 				{ href: '/', label: m.nav_overview(), icon: icons.overview },
 				{ href: '/activities', label: m.nav_activities(), icon: icons.activities },
-				{ href: '/routes/waasland', label: m.nav_waas_planner(), icon: icons.planner },
-				{ href: '/heatmap', label: 'Heatmap', icon: icons.heatmap },
 				{ href: '/analysis', label: m.nav_analysis(), icon: icons.analysis },
 				{ href: '/stats', label: m.nav_stats(), icon: icons.stats },
 				{ href: '/records', label: 'Records', icon: icons.records },
-				{ href: '/segments', label: m.nav_segments(), icon: icons.segments },
 				{ href: '/head-to-head', label: m.comparison_title(), icon: icons.friends },
 				{ href: '/riders', label: m.friends_title(), icon: icons.friends }
+			]
+		},
+		{
+			title: m.nav_explore(),
+			items: [
+				{ href: '/heatmap', label: m.member_heatmap(), icon: icons.heatmap },
+				{ href: '/segments', label: m.nav_segments(), icon: icons.segments },
+				{ href: '/explore/routes', label: m.routes_title(), icon: icons.routes },
+				{ href: '/routes/waasland', label: m.nav_route_planner(), icon: icons.planner }
 			]
 		},
 		{
@@ -129,7 +137,7 @@
 		{
 			label: m.nav_explore(),
 			icon: icons.compass,
-			pages: ['/heatmap', '/segments', '/routes/waasland']
+			pages: ['/heatmap', '/segments', '/explore/routes', '/routes/waasland']
 		},
 		{ label: m.nav_insights(), icon: icons.stats, pages: ['/stats', '/analysis', '/records'] },
 		{ label: m.nav_social(), icon: icons.friends, pages: ['/riders', '/head-to-head'] }
@@ -137,6 +145,7 @@
 	const subsectionLabels = $derived<Record<string, string>>({
 		'/heatmap': m.member_heatmap(),
 		'/segments': m.nav_segments(),
+		'/explore/routes': m.routes_title(),
 		'/routes/waasland': m.nav_route_planner(),
 		'/stats': m.nav_stats(),
 		'/analysis': m.nav_analysis(),
@@ -144,7 +153,10 @@
 		'/riders': m.friends_title(),
 		'/head-to-head': m.comparison_title()
 	});
-	const profileItems = $derived([...accountItems, ...(groups[2]?.items ?? [])]);
+	const profileItems = $derived([
+		...accountItems,
+		...(groups.find((group) => group.title === 'Admin')?.items ?? [])
+	]);
 
 	function isActive(href: string): boolean {
 		const current = page.url.pathname;
@@ -414,7 +426,7 @@
 			{#if destination && destination.pages[0] in subsectionLabels}
 				<nav
 					aria-label={destination.label}
-					class="mobile-subnav flex gap-1 border-b border-zinc-800 bg-zinc-900 px-3 md:hidden"
+					class="mobile-subnav flex gap-1 overflow-x-auto border-b border-zinc-800 bg-zinc-900 px-2 md:hidden"
 				>
 					{#each destination.pages as href (href)}
 						{@const current =
@@ -424,7 +436,7 @@
 						<a
 							href={subsectionURL(href)}
 							aria-current={current ? 'page' : undefined}
-							class="flex min-h-11 items-center justify-center border-b-2 border-transparent px-3 text-sm font-semibold text-quiet aria-[current=page]:border-accent-500 aria-[current=page]:text-accent-300"
+							class="flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap border-b-2 border-transparent px-2.5 text-sm font-semibold text-quiet aria-[current=page]:border-accent-500 aria-[current=page]:text-accent-300"
 						>
 							{subsectionLabels[href]}
 						</a>

@@ -7,6 +7,7 @@
 	import { formatClockTime, formatDistance, formatElevation, intlLocale } from '#lib/format.js';
 	import ElevationProfile from '#lib/components/ElevationProfile.svelte';
 	import WaasRouteMap from '#lib/components/WaasRouteMap.svelte';
+	import { downloadGPX } from '#lib/waas/download.js';
 	import { calculate, initialize } from '#lib/waas/service.js';
 	import { runtime } from '#lib/waas/runtime.js';
 	import { defaults, readOptions, optionsQuery } from '#lib/waas/settings.js';
@@ -147,17 +148,10 @@
 	async function download() {
 		if (!ride || changed || busy) return;
 		const { planner } = await initialize();
-		const blob = new Blob([planner.gpx(ride, options.start)], {
-			type: 'application/gpx+xml;charset=utf-8'
-		});
-		const url = URL.createObjectURL(blob),
-			anchor = document.createElement('a');
-		anchor.href = url;
-		anchor.download = `Waasland_${options.profile}_${(ride.meters / 1000).toFixed(1)}km_${Math.round(ride.gain)}m.gpx`;
-		document.body.append(anchor);
-		anchor.click();
-		anchor.remove();
-		window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+		downloadGPX(
+			planner.gpx(ride, options.start),
+			`Waasland_${options.profile}_${(ride.meters / 1000).toFixed(1)}km_${Math.round(ride.gain)}m.gpx`
+		);
 	}
 
 	async function share() {

@@ -25,3 +25,9 @@ func mountWaasPlanner(mux *http.ServeMux, app *App) {
 		(&rest.WaasCatalog{Catalog: app.WaasCatalog}).Mount(mux)
 	}
 }
+
+func mountRecordedRoutes(mux *http.ServeMux, app *App, logger *slog.Logger) {
+	if app.RecordedRoutes != nil {
+		(&rest.RecordedRouteHandlers{Auth: restAuth(app), Catalog: app.RecordedRoutes, Log: logger}).Mount(mux)
+	}
+}

@@ -46,7 +46,7 @@
 			if (p.y < yMin) yMin = p.y;
 			if (p.y > yMax) yMax = p.y;
 		}
-		if (xMax - xMin < 1e-6 || yMax - yMin < 1e-6) return null;
+		if (xMax - xMin < 1e-6) return null;
 		return { xMin, xMax, yMin, yMax };
 	});
 
@@ -58,7 +58,7 @@
 	// elevation = smaller SVG y).
 	function sy(y: number): number {
 		if (!bounds) return height;
-		const pad = (bounds.yMax - bounds.yMin) * 0.08;
+		const pad = Math.max(1, (bounds.yMax - bounds.yMin) * 0.08);
 		const lo = bounds.yMin - pad;
 		const hi = bounds.yMax + pad;
 		return height - ((y - lo) / (hi - lo)) * height;
@@ -85,7 +85,8 @@
 	<svg
 		viewBox="0 0 {W} {height}"
 		preserveAspectRatio="none"
-		class="block h-24 w-full"
+		class="block w-full"
+		style:height={height + 'px'}
 		role="img"
 		aria-label="Elevation profile"
 	>

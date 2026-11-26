@@ -298,6 +298,7 @@ func serveMountFeatures(mux *http.ServeMux, app *App, cfg *config.Config, logger
 	mountRestAccountJobs(mux, app, logger)
 	mountRestHealthMetrics(mux, app, logger)
 	mountWaasPlanner(mux, app)
+	mountRecordedRoutes(mux, app, logger)
 	mountRestSocial(mux, app, logger)
 }
 
@@ -597,6 +598,12 @@ func serveStartBackgroundLoops(ctx context.Context, app *App, cfg *config.Config
 	if app.TrainingStressBackfill != nil {
 		goSupervised(ctx, logger, "training stress backfill", func(ctx context.Context) {
 			app.TrainingStressBackfill.Run(ctx, logger)
+		})
+	}
+
+	if app.RouteProcessor != nil {
+		goSupervised(ctx, logger, "recorded routes", func(ctx context.Context) {
+			app.RouteProcessor.Run(ctx, logger)
 		})
 	}
 

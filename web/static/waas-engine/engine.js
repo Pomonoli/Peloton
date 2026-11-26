@@ -1,3 +1,4 @@
+import { writeGPX } from './gpx.js';
 import { WaasRouteMetrics } from './route-metrics.js';
 import { WaasRouteShape } from './route-shape.js';
 
@@ -743,11 +744,6 @@ export function createPlanner(spines) {
 	}
 
 	function gpx(route, start) {
-		const escapeXML = (value) =>
-			String(value).replace(
-				/[&<>"']/g,
-				(c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]
-			);
 		const round = route.chunks[0];
 		const title = `${round.title || rideNames[route.profile] || rideNames.climb} · ${hubs[start]} · ${(route.meters / 1000).toFixed(1)} km`;
 		const direction = route.direction
@@ -759,19 +755,8 @@ export function createPlanner(spines) {
 			point: climb.points.at(-1),
 			name: `${climb.name} · passage ${climb.passage} of ${climb.passages}`
 		}));
-		const waypoints = [...visits, ...passages]
-			.map(
-				(place) =>
-					`<wpt lat="${place.point[0].toFixed(6)}" lon="${place.point[1].toFixed(6)}"><name>${escapeXML(place.name)}</name></wpt>`
-			)
-			.join('\n');
-		const points = route.points
-			.map(
-				([lat, lon, ele]) =>
-					`<trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><ele>${ele.toFixed(1)}</ele></trkpt>`
-			)
-			.join('\n');
-		return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Peloton Waasland planner" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${escapeXML(title)}</name><desc>${escapeXML(description)}</desc></metadata>\n${waypoints}\n<trk><name>${escapeXML(title)}</name><type>cycling</type><trkseg>\n${points}\n</trkseg></trk></gpx>\n`;
+		const rounded = route.points.map(([lat, lon, elevation]) => [lat.toFixed(6), lon.toFixed(6), elevation]);
+		return writeGPX(title, description, [rounded], [...visits, ...passages]);
 	}
 
 	return {
