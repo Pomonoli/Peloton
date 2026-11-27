@@ -4,6 +4,8 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { intlLocale } from '#lib/format.js';
 	import type { MemberView } from '#lib/member.js';
+	import MapViewToggle from '#lib/components/MapViewToggle.svelte';
+	import type { MapCamera } from '#lib/segment-catalog.js';
 	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import RecordedRouteCard from '#lib/components/RecordedRouteCard.svelte';
 	import RecordedRouteDetail from '#lib/components/RecordedRouteDetail.svelte';
@@ -16,6 +18,8 @@
 	} from '#lib/recorded-routes.js';
 
 	const desktop = new MediaQuery('width >= 64rem');
+	let view = $state<'list' | 'map'>('list');
+	let camera = $state<MapCamera>();
 	let search = $state('');
 	let rider = $state('');
 	let distance = $state('');
@@ -110,6 +114,7 @@
 
 	$effect(() => {
 		void retry;
+		if (view !== 'list') return;
 		const query = filters;
 		pageRequest?.abort();
 		busy = true;
@@ -127,7 +132,7 @@
 
 	$effect(() => {
 		void detailRetry;
-		const id = selected;
+		const id = view === 'list' ? selected : '';
 		detail = undefined;
 		detailFailed = false;
 		detailBusy = !!id;
@@ -163,11 +168,14 @@
 
 <svelte:head><title>{m.routes_title()}</title></svelte:head>
 
-<div class="catalog-layout grid min-w-0 gap-4 xl:gap-5">
+<div class="grid min-w-0 gap-4 xl:gap-5" class:catalog-layout={view === 'list'}>
 	<section class="min-w-0">
-		<header class="mb-4">
-			<h1 class="page-title text-zinc-100">{m.routes_title()}</h1>
-			<p class="mt-1 text-sm text-quiet sm:text-[0.94rem]">{m.routes_intro()}</p>
+		<header class="mb-4 flex flex-wrap items-center justify-between gap-2">
+			<div>
+				<h1 class="page-title text-zinc-100">{m.routes_title()}</h1>
+				<p class="mt-1 text-sm text-quiet sm:text-[0.94rem]">{m.routes_intro()}</p>
+			</div>
+			<MapViewToggle label={m.routes_view_label()} {view} onchange={(value) => (view = value)} />
 		</header>
 		<div class="hidden space-y-2 md:block">
 			<div class="flex flex-wrap gap-2">
@@ -203,81 +211,102 @@
 			</button>
 		{/if}
 
-		<div class="mt-4" aria-busy={busy}>
-			{#if busy && !loaded}
-				<p role="status" class="surface p-4 text-sm text-quiet">
-					{m.routes_loading()}
-				</p>
-			{:else if failed}
-				<p role="alert" class="surface p-4 text-sm">
-					{m.routes_load_failed()}
-					<button class="ml-1 text-accent-300 underline" onclick={() => retry++}
-						>{m.routes_retry()}</button
-					>
-				</p>
-			{:else}
-				<p role="status" class="mb-2.5 text-sm text-quiet">
-					{total === 1 ? m.routes_count_one() : m.routes_count({ count })}
-				</p>
-				{#if !routes.length}
-					<div class="surface p-4 text-sm text-quiet">
-						{active ? m.routes_empty() : m.routes_empty_catalog()}
-						{#if active}
-							<button class="ml-1 text-accent-300 underline" onclick={reset}
-								>{m.mobile_filters_reset()}</button
-							>
-						{/if}
-					</div>
+		{#if view === 'map'}
+			<div class="mt-4">
+				{#await import('#lib/components/RecordedRoutesMap.svelte')}
+					<p role="status" class="text-sm text-quiet">{m.routes_loading()}</p>
+				{:then { default: RecordedRoutesMap }}
+					<RecordedRoutesMap
+						{filters}
+						{active}
+						{camera}
+						onCamera={(next) => (camera = next)}
+						onreset={reset}
+					/>
+				{:catch}
+					<p role="alert" class="text-sm">{m.routes_load_failed()}</p>
+				{/await}
+			</div>
+		{:else}
+			<div class="mt-4" aria-busy={busy}>
+				{#if busy && !loaded}
+					<p role="status" class="surface p-4 text-sm text-quiet">
+						{m.routes_loading()}
+					</p>
+				{:else if failed}
+					<p role="alert" class="surface p-4 text-sm">
+						{m.routes_load_failed()}
+						<button class="ml-1 text-accent-300 underline" onclick={() => retry++}
+							>{m.routes_retry()}</button
+						>
+					</p>
+				{:else}
+					<p role="status" class="mb-2.5 text-sm text-quiet">
+						{total === 1 ? m.routes_count_one() : m.routes_count({ count })}
+					</p>
+					{#if !routes.length}
+						<div class="surface p-4 text-sm text-quiet">
+							{active ? m.routes_empty() : m.routes_empty_catalog()}
+							{#if active}
+								<button class="ml-1 text-accent-300 underline" onclick={reset}
+									>{m.mobile_filters_reset()}</button
+								>
+							{/if}
+						</div>
+					{/if}
+					<ul class="space-y-2.5">
+						{#each routes as route (route.id)}
+							<li>
+								<RecordedRouteCard
+									{route}
+									selected={selected === route.id}
+									onselect={() => (selected = route.id)}
+								/>
+							</li>
+						{/each}
+					</ul>
+					{#if offset < total && routes.length > 0}
+						<button
+							class="mt-3 min-h-11 w-full surface px-3 text-sm font-semibold text-accent-300 hover:border-accent-500 disabled:opacity-50"
+							onclick={() => loadPage(filters, true)}
+							disabled={busy}>{busy ? m.routes_loading() : m.routes_more_routes()}</button
+						>
+					{/if}
 				{/if}
-				<ul class="space-y-2.5">
-					{#each routes as route (route.id)}
-						<li>
-							<RecordedRouteCard
-								{route}
-								selected={selected === route.id}
-								onselect={() => (selected = route.id)}
-							/>
-						</li>
-					{/each}
-				</ul>
-				{#if offset < total && routes.length > 0}
-					<button
-						class="mt-3 min-h-11 w-full surface px-3 text-sm font-semibold text-accent-300 hover:border-accent-500 disabled:opacity-50"
-						onclick={() => loadPage(filters, true)}
-						disabled={busy}>{busy ? m.routes_loading() : m.routes_more_routes()}</button
-					>
-				{/if}
-			{/if}
-		</div>
-	</section>
-
-	<aside class="min-w-0 space-y-3">
-		<div
-			class="rounded-xl border border-accent-500/15 bg-accent-500/8 px-3 py-2.5 text-xs leading-relaxed text-zinc-300"
-		>
-			<p class="flex gap-2">
-				<svg
-					class="mt-0.5 size-4 shrink-0 text-accent-300"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 10v6m0-9v1" /></svg
-				>
-				<span
-					><strong class="block text-zinc-100">{m.routes_how_title()}</strong>{m.routes_how()}</span
-				>
-			</p>
-		</div>
-		{#if desktop.current && selected}
-			<div class="surface p-3.5 xl:p-4" aria-busy={detailBusy}>
-				{@render details(true)}
 			</div>
 		{/if}
-	</aside>
+	</section>
+
+	{#if view === 'list'}
+		<aside class="min-w-0 space-y-3">
+			<div
+				class="rounded-xl border border-accent-500/15 bg-accent-500/8 px-3 py-2.5 text-xs leading-relaxed text-zinc-300"
+			>
+				<p class="flex gap-2">
+					<svg
+						class="mt-0.5 size-4 shrink-0 text-accent-300"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 10v6m0-9v1" /></svg
+					>
+					<span
+						><strong class="block text-zinc-100">{m.routes_how_title()}</strong
+						>{m.routes_how()}</span
+					>
+				</p>
+			</div>
+			{#if desktop.current && selected}
+				<div class="surface p-3.5 xl:p-4" aria-busy={detailBusy}>
+					{@render details(true)}
+				</div>
+			{/if}
+		</aside>
+	{/if}
 </div>
 
-{#if !desktop.current}
+{#if view === 'list' && !desktop.current}
 	<dialog
 		bind:this={dialog}
 		class="route-sheet border border-zinc-800 bg-panel text-zinc-100"

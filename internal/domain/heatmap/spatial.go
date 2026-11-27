@@ -54,6 +54,16 @@ type Key struct {
 
 var directions = [...]Point{{1, 0}, {math.Sqrt2 / 2, math.Sqrt2 / 2}, {0, 1}, {-math.Sqrt2 / 2, math.Sqrt2 / 2}}
 
+// Valid bounds externally supplied keys before they are used to locate a cell.
+func (k Key) Valid(level Level) bool {
+	if level < Overview || level > Detail || int(k.Axis) >= len(directions) {
+		return false
+	}
+	center := k.center(level)
+	margin := grid[level].along + grid[level].across
+	return math.Abs(center.X) <= WorldHalf+margin && math.Abs(center.Y) <= WorldHalf+margin
+}
+
 func (k Key) center(level Level) Point {
 	size, axis := grid[level], directions[k.Axis]
 	u, v := (float64(k.Along)+0.5)*size.along, (float64(k.Across)+0.5)*size.across

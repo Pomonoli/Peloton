@@ -19,6 +19,9 @@ func (c *Catalog) List(ctx context.Context, viewer domain.UserID, query port.Rec
 	}
 	zonesByRider := make(map[domain.UserID][]domain.PrivacyZone)
 	for i := range out.Routes {
+		if err := ctx.Err(); err != nil {
+			return port.RecordedRouteListing{}, err
+		}
 		route := &out.Routes[i]
 		zones, cached := zonesByRider[route.Owner]
 		if !cached {
@@ -29,6 +32,9 @@ func (c *Catalog) List(ctx context.Context, viewer domain.UserID, query port.Rec
 			zonesByRider[route.Owner] = zones
 		}
 		route.Track = route.Track.Mask(zones)
+		if query.Map {
+			route.Track = route.Track.MapGeometry().Mask(zones)
+		}
 	}
 	return out, nil
 }

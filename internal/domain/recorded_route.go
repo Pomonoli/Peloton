@@ -33,9 +33,17 @@ type RecordedRoutePoint struct {
 
 type RecordedTrack [][]RecordedRoutePoint
 
-// NewRecordedTrack retains validated recorded positions and separates GPS gaps.
-// The distance axis measures visible GPS legs, independently of device odometers.
-func NewRecordedTrack(samples []StreamSample) (track RecordedTrack, length float64) {
+func NewRecordedTrack(samples []StreamSample) (RecordedTrack, float64) {
+	track, length := CyclingGPSTrack(samples)
+	if length < 300 {
+		return nil, 0
+	}
+	return track, length
+}
+
+// CyclingGPSTrack retains validated GPS positions, separating gaps and
+// measuring distance independently of the device odometer.
+func CyclingGPSTrack(samples []StreamSample) (track RecordedTrack, length float64) {
 	validated := ValidateCyclingStream(samples)
 	var line []RecordedRoutePoint
 	for i := 1; i < len(samples); i++ {
@@ -62,9 +70,6 @@ func NewRecordedTrack(samples []StreamSample) (track RecordedTrack, length float
 	}
 	if len(line) > 1 {
 		track = append(track, line)
-	}
-	if length < 300 {
-		return nil, 0
 	}
 	return track, length
 }

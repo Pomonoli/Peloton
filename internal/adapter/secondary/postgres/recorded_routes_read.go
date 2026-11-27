@@ -87,11 +87,11 @@ const routeSummariesSQL = `
 				CASE WHEN $8 = 'elevation' THEN elevation_gain_m END DESC NULLS LAST,
 				CASE WHEN $8 = 'speed' THEN best_speed END DESC NULLS LAST,
 				total_rides DESC, id) AS position
-			FROM matching ORDER BY position LIMIT $10 OFFSET $11
+			FROM matching ORDER BY position LIMIT CASE WHEN $12 THEN NULL ELSE $10::bigint END OFFSET $11
 		)
 		SELECT (SELECT count(*) FROM matching), page.id, page.user_id, page.name, page.kind, page.distance_m,
 			page.elevation_gain_m, page.total_rides, page.rider_count, page.best_speed,
-			CASE WHEN $9::uuid IS NULL THEN t.preview ELSE t.track END, rider_cards.cards
+			CASE WHEN $9::uuid IS NULL AND NOT $12 THEN t.preview ELSE t.track END, rider_cards.cards
 		FROM (SELECT 1) base
 		LEFT JOIN page ON true
 		LEFT JOIN recorded_route_tracks t ON t.activity_id = page.activity_id
@@ -109,7 +109,7 @@ func (r *RecordedRouteRepo) summaries(ctx context.Context, viewer domain.UserID,
 	// Only the selected page loads geometry. Route statistics use indexed
 	// membership and current activity summaries, without reading raw GPS.
 	rows, err := dbtx(ctx, r.pool).Query(ctx, routeSummariesSQL, viewer.UUID(), q.Rider, q.Search, string(q.Kind), q.MinDistanceM, q.MaxDistanceM,
-		q.Unridden, q.Sort, nullableRecordedRoute(id), q.Limit, q.Offset)
+		q.Unridden, q.Sort, nullableRecordedRoute(id), q.Limit, q.Offset, q.Map)
 	if err != nil {
 		return port.RecordedRouteListing{}, fmt.Errorf("query recorded routes: %w", err)
 	}

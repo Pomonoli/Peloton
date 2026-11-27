@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ type RecordedRouteHandlers struct {
 
 func (h *RecordedRouteHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/routes", h.list)
+	mux.HandleFunc("GET /api/routes/map", h.routeMap)
 	mux.HandleFunc("GET /api/routes/{id}", h.detail)
 	mux.HandleFunc("GET /api/routes/{id}/activities", h.activities)
 	mux.HandleFunc("GET /api/routes/{id}/gpx", h.gpx)
@@ -41,29 +43,37 @@ func (h *RecordedRouteHandlers) caller(w http.ResponseWriter, r *http.Request) (
 	return domain.UserID{}, false
 }
 
+func recordedRouteFilters(q url.Values) (port.RecordedRouteQuery, string) {
+	kind := domain.RecordedRouteKind(q.Get("type"))
+	switch kind {
+	case "", domain.RecordedLoop, domain.RecordedOutAndBack, domain.RecordedPointToPoint:
+	default:
+		return port.RecordedRouteQuery{}, "Invalid route type"
+	}
+	minimum, maximum := recordedDistance(q.Get("min_km")), recordedDistance(q.Get("max_km"))
+	if minimum < 0 || maximum < 0 || (maximum > 0 && minimum >= maximum) {
+		return port.RecordedRouteQuery{}, "Invalid route distance"
+	}
+	return port.RecordedRouteQuery{
+		Rider: strings.TrimSpace(q.Get("rider")), Search: strings.TrimSpace(q.Get("q")), Sort: q.Get("sort"),
+		Kind: kind, MinDistanceM: minimum, MaxDistanceM: maximum, Unridden: q.Get("unridden") == "true",
+	}, ""
+}
+
 func (h *RecordedRouteHandlers) list(w http.ResponseWriter, r *http.Request) {
 	viewer, ok := h.caller(w, r)
 	if !ok {
 		return
 	}
 	q := r.URL.Query()
-	kind := domain.RecordedRouteKind(q.Get("type"))
-	switch kind {
-	case "", domain.RecordedLoop, domain.RecordedOutAndBack, domain.RecordedPointToPoint:
-	default:
-		http.Error(w, "Invalid route type", http.StatusBadRequest)
+	filter, invalid := recordedRouteFilters(q)
+	if invalid != "" {
+		http.Error(w, invalid, http.StatusBadRequest)
 		return
 	}
-	minimum, maximum := recordedDistance(q.Get("min_km")), recordedDistance(q.Get("max_km"))
-	if minimum < 0 || maximum < 0 || (maximum > 0 && minimum >= maximum) {
-		http.Error(w, "Invalid route distance", http.StatusBadRequest)
-		return
-	}
-	out, err := h.Catalog.List(r.Context(), viewer, port.RecordedRouteQuery{
-		Rider: strings.TrimSpace(q.Get("rider")), Search: strings.TrimSpace(q.Get("q")), Sort: q.Get("sort"),
-		Kind: kind, MinDistanceM: minimum, MaxDistanceM: maximum, Unridden: q.Get("unridden") == "true",
-		Offset: recordedPage(q.Get("offset"), 0, 1_000_000), Limit: recordedPage(q.Get("limit"), 12, 50),
-	})
+	filter.Offset = recordedPage(q.Get("offset"), 0, 1_000_000)
+	filter.Limit = recordedPage(q.Get("limit"), 12, 50)
+	out, err := h.Catalog.List(r.Context(), viewer, filter)
 	if err != nil {
 		h.failed(w, err)
 		return
@@ -73,6 +83,67 @@ func (h *RecordedRouteHandlers) list(w http.ResponseWriter, r *http.Request) {
 		items = append(items, recordedSummaryJSON(route))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"routes": items, "total": out.Total})
+}
+
+type recordedMapFeature struct {
+	Type       string                `json:"type"`
+	Geometry   recordedMapGeometry   `json:"geometry"`
+	Properties recordedMapProperties `json:"properties"`
+}
+
+type recordedMapGeometry struct {
+	Type        string       `json:"type"`
+	Coordinates [][2]float64 `json:"coordinates"`
+}
+
+type recordedMapProperties struct {
+	Routes  []int `json:"routes"`
+	Density int   `json:"density"`
+}
+
+func (h *RecordedRouteHandlers) routeMap(w http.ResponseWriter, r *http.Request) {
+	viewer, ok := h.caller(w, r)
+	if !ok {
+		return
+	}
+	filter, invalid := recordedRouteFilters(r.URL.Query())
+	if invalid != "" {
+		http.Error(w, invalid, http.StatusBadRequest)
+		return
+	}
+	filter.Map = true
+	out, err := h.Catalog.List(r.Context(), viewer, filter)
+	if err != nil {
+		h.failed(w, err)
+		return
+	}
+	tracks := make([]domain.RecordedTrack, 0, len(out.Routes))
+	routes := make([]map[string]any, 0, len(out.Routes))
+	for _, route := range out.Routes {
+		tracks = append(tracks, route.Track)
+		routes = append(routes, recordedSummaryJSON(route))
+	}
+	lines, err := domain.RecordedRouteMap(r.Context(), tracks)
+	if err != nil {
+		return
+	}
+	features := make([]recordedMapFeature, 0, len(lines))
+	for _, line := range lines {
+		coords := make([][2]float64, 0, len(line.Points))
+		origin := line.Points[0].Lon
+		for _, point := range line.Points {
+			coords = append(coords, [2]float64{origin + math.Remainder(point.Lon-origin, 360), point.Lat})
+		}
+		features = append(features, recordedMapFeature{
+			Type:       "Feature",
+			Geometry:   recordedMapGeometry{Type: "LineString", Coordinates: coords},
+			Properties: recordedMapProperties{Routes: line.Routes, Density: len(line.Routes)},
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"routes":  routes,
+		"geojson": map[string]any{"type": "FeatureCollection", "features": features},
+	})
 }
 
 func (h *RecordedRouteHandlers) get(w http.ResponseWriter, r *http.Request, offset, limit int) (port.RecordedRouteDetail, bool) {

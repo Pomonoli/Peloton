@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -71,6 +72,102 @@ func (r *PerformanceHeatmapRepo) HeatmapActivities(ctx context.Context, member d
 		}
 		return out, err
 	}, "scan heatmap activity", "iterate heatmap activities")
+}
+
+// HeatmapContributors uses the same cached bins, source signatures and
+// privacy masking as the rendered map. Only the indexed tile for the cell
+// is read, and each per-activity payload has at most one entry for the key.
+func (r *PerformanceHeatmapRepo) HeatmapContributors(ctx context.Context, member domain.UserID, filter port.ActivityListFilter, cell port.HeatmapCell) ([]port.HeatmapContribution, error) {
+	if port.IsCommunityActivityRead(ctx) {
+		zones, err := NewVisibilityRepo(r.pool).ListPrivacyZones(ctx, member)
+		if err != nil || cell.Key.IntersectsPrivacyZone(cell.Level, zones) {
+			return nil, err
+		}
+	}
+	tile := cell.Key.Tile(cell.Level)
+	conditions, args := activityFilterConds(member, filter, "")
+	tileArgs := fmt.Sprintf("t.level=$%d AND t.tile_x=$%d AND t.tile_y=$%d", len(args)+1, len(args)+2, len(args)+3)
+	args = append(args, int16(cell.Level), int16(tile.X), int16(tile.Y))
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `
+		WITH matching AS (
+			SELECT id FROM activities WHERE `+strings.Join(conditions, " AND ")+communityReadSQL(ctx, "")+`
+		), candidates AS MATERIALIZED (
+			SELECT a.id, `+heatmapSignatureSQL+` AS signature
+			`+heatmapSourcesSQL+`
+			JOIN matching f ON f.id=a.id
+			JOIN performance_heatmap_tiles t ON t.activity_id=a.id AND `+tileArgs+`
+			GROUP BY a.id,p.id
+		)
+		SELECT t.activity_id, t.bins
+		FROM candidates c
+		JOIN performance_heatmap_cache h ON h.activity_id=c.id AND h.signature=c.signature AND h.has_track
+		JOIN performance_heatmap_tiles t ON t.activity_id=c.id AND `+tileArgs, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query heatmap contributors: %w", err)
+	}
+	defer rows.Close()
+	var out []port.HeatmapContribution
+	for rows.Next() {
+		var id uuid.UUID
+		var raw []byte
+		if err := rows.Scan(&id, &raw); err != nil {
+			return nil, err
+		}
+		passages, err := heatmapTilePassages(raw, cell.Key)
+		if err != nil {
+			return nil, err
+		}
+		if passages > 0 {
+			out = append(out, port.HeatmapContribution{Activity: domain.ActivityID(id), Passages: passages})
+		}
+	}
+	return out, rows.Err()
+}
+
+func heatmapTilePassages(raw []byte, key heatmap.Key) (uint32, error) {
+	if len(raw)%heatmapBinSize != 0 {
+		return 0, fmt.Errorf("invalid heatmap tile length")
+	}
+	// The cache writes heatmap.Ordered bins, in axis/along/across order.
+	// Search the encoded keys (two int32s and one byte) without unpacking
+	// the aggregate statistics for the rest of the tile.
+	lo, hi := 0, len(raw)/heatmapBinSize
+	for lo < hi {
+		mid := lo + (hi-lo)/2
+		b := raw[mid*heatmapBinSize:]
+		order := cmp.Or(cmp.Compare(b[8], key.Axis),
+			cmp.Compare(int32(binary.LittleEndian.Uint32(b)), key.Along),
+			cmp.Compare(int32(binary.LittleEndian.Uint32(b[4:])), key.Across))
+		switch {
+		case order < 0:
+			lo = mid + 1
+		case order > 0:
+			hi = mid
+		default:
+			return binary.LittleEndian.Uint32(b[9:]), nil
+		}
+	}
+	return 0, nil
+}
+
+func (r *PerformanceHeatmapRepo) HeatmapResultActivities(ctx context.Context, viewer domain.UserID, ids []domain.ActivityID, sort string, limit, offset int) ([]domain.Activity, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	activityIDs := make([]uuid.UUID, 0, len(ids))
+	for _, id := range ids {
+		activityIDs = append(activityIDs, id.UUID())
+	}
+	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT `+activityColumns+`
+		FROM activities a WHERE a.id=ANY($2) AND `+communityActivitySQL+`
+		ORDER BY `+activitySortSQL(sort)+`, id DESC LIMIT $3 OFFSET $4`, viewer.UUID(), activityIDs, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query heatmap activities: %w", err)
+	}
+	defer rows.Close()
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Activity, error) {
+		return scanActivityRow(row)
+	})
 }
 
 func (r *PerformanceHeatmapRepo) HeatmapSamples(ctx context.Context, source domain.SourceID, gps bool) ([]domain.StreamSample, error) {

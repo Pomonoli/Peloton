@@ -50,6 +50,10 @@ export function recordedRoutePath(id: string) {
 	return '/api/routes/' + encodeURIComponent(id);
 }
 
+export function recordedRoutePlannerPath(id: string) {
+	return '/routes/waasland/recorded/' + encodeURIComponent(id);
+}
+
 export async function routeData<T>(url: string, signal: AbortSignal): Promise<T> {
 	const response = await fetch(url, { signal });
 	if (!response.ok) throw new Error(String(response.status));

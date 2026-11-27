@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MapViewToggle from '#lib/components/MapViewToggle.svelte';
 	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import SortControls from '#lib/components/SortControls.svelte';
 	import SortHeader from '#lib/components/SortHeader.svelte';
@@ -197,21 +198,7 @@
 				>
 			{/if}
 		</div>
-		<div class="surface inline-flex p-0.5" role="group" aria-label={m.segment_view_label()}>
-			{#each [{ id: 'list', label: m.segment_view_list() }, { id: 'map', label: m.segment_view_map() }] as option (option.id)}
-				<button
-					type="button"
-					aria-pressed={view === option.id}
-					onclick={() => setView(option.id as typeof view)}
-					class="min-h-10 rounded px-2.5 text-xs font-semibold sm:px-4 sm:text-sm {view ===
-					option.id
-						? 'bg-accent-500/15 text-accent-200'
-						: 'text-zinc-400 hover:text-zinc-200'}"
-				>
-					{option.label}
-				</button>
-			{/each}
-		</div>
+		<MapViewToggle label={m.segment_view_label()} {view} onchange={setView} />
 	</div>
 
 	{#if view === 'map'}

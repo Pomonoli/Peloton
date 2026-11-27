@@ -34,6 +34,31 @@ func (m *Members) Get(ctx context.Context, viewer domain.UserID, member string) 
 	return u, err
 }
 
+// List returns the member identities used by the community map.
+func (m *Members) List(ctx context.Context, viewer domain.UserID) ([]domain.CommunityMember, error) {
+	if viewer == (domain.UserID{}) {
+		return nil, ErrForbidden
+	}
+	if m == nil || m.Users == nil {
+		return nil, ErrUnavailable
+	}
+	var members []domain.CommunityMember
+	page := port.UserListPage{PageSize: 200}
+	for {
+		users, next, err := m.Users.ListUsers(ctx, page)
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range users {
+			members = append(members, domain.CommunityMember{UserID: u.ID, Username: u.Username, DisplayName: u.DisplayName})
+		}
+		if next == "" {
+			return members, nil
+		}
+		page.Cursor = next
+	}
+}
+
 // Read selects the subject and retains the distinction between self and community reads.
 func (m *Members) Read(ctx context.Context, viewer domain.UserID, member string) (context.Context, domain.UserID, error) {
 	if viewer == (domain.UserID{}) {

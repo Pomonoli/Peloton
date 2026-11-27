@@ -6,6 +6,7 @@
 	import {
 		previewPoints,
 		recordedRoutePath,
+		recordedRoutePlannerPath,
 		riderName,
 		routeData,
 		routeDistance,
@@ -105,7 +106,7 @@
 	{#if profile.length}
 		<div class="grid grid-cols-[1.35fr_1fr] gap-2 text-center text-sm">
 			<a
-				href={'/routes/waasland/recorded/' + encodeURIComponent(route.id)}
+				href={recordedRoutePlannerPath(route.id)}
 				class="grid min-h-11 place-items-center rounded-lg bg-accent-500 px-2 font-semibold text-on-accent hover:bg-accent-400"
 				>{m.routes_open_planner()}</a
 			>

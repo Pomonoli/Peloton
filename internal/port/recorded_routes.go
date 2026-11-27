@@ -64,7 +64,7 @@ type RecordedRouteQuery struct {
 	Rider, Search, Sort        string
 	Kind                       domain.RecordedRouteKind
 	MinDistanceM, MaxDistanceM float64
-	Unridden                   bool
+	Unridden, Map              bool
 	Offset, Limit              int
 }
 

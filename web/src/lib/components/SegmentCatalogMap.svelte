@@ -2,13 +2,13 @@
 	import { onMount } from 'svelte';
 	import {
 		type Map as MapLibreMap,
-		NavigationControl,
 		type FilterSpecification,
 		type GeoJSONSource
 	} from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { basemapStyle, createMap } from '#lib/basemap.js';
+	import { addMapNavigation } from '#lib/discovery-map.js';
 	import { formatDuration, formatMetricDistance, formatTimeAndSpeed } from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -92,8 +92,7 @@
 			return;
 		}
 
-		map.touchZoomRotate.disableRotation();
-		map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+		addMapNavigation(map);
 		let styleTimer = 0;
 		waitForStyle = () => {
 			clearTimeout(styleTimer);

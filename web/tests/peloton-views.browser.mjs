@@ -8,8 +8,14 @@ import { chromium } from 'playwright-core';
 const origin = 'http://peloton-views.test';
 const build = fileURLToPath(new URL('../build/', import.meta.url));
 const browser = await chromium.launch({
-	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+	args: ['--enable-unsafe-swiftshader']
 });
+const basemap = {
+	version: 8,
+	sources: {},
+	layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#343434' } }]
+};
 const totals = { count: 1, distance_m: 45000, moving_s: 4500, elevation_gain_m: 50 };
 const mira = {
 	id: 'mira',
@@ -79,7 +85,8 @@ const asCatalog = (row) => ({
 	local_kom_holder: row.local_kom_position === 1 ? 'Mira' : 'Sam',
 	member_count: 2,
 	my_attempts: 1,
-	start: null
+	start: [-120.2, 38.5],
+	polyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
 });
 
 const analysisEnd = '2026-11-26';
@@ -182,6 +189,7 @@ try {
 							}
 						});
 			}
+			if (url.hostname === 'tiles.openfreemap.org') return route.fulfill({ json: basemap });
 			if (url.origin !== origin) return route.abort();
 			const path = url.pathname;
 			if (path === '/api/activities/feed') {
@@ -547,6 +555,20 @@ try {
 		}
 		await noPageOverflow('/segments');
 		assert.deepEqual(catalogSort.slice(0, 2), ['local_kom_holder:asc', 'average_speed_kmh:desc']);
+		if (width === 390 || width === 1440) {
+			const segmentView = main.getByRole('group', { name: 'Segment view' });
+			await segmentView.getByRole('button', { name: 'Map', exact: true }).click();
+			await main.getByLabel('Map of discovered segments').locator('canvas').waitFor();
+			const nearby = main.getByLabel('Segment in this area');
+			await nearby.selectOption('canal');
+			const details = main.getByRole('link', { name: 'View segment details' });
+			await details.waitFor();
+			assert.equal(await details.getAttribute('href'), '/segment/canal');
+			await main.getByRole('button', { name: 'Clear segment selection' }).click();
+			await details.waitFor({ state: 'hidden' });
+			await segmentView.getByRole('button', { name: 'List', exact: true }).click();
+			await main.getByRole('link', { name: 'Canal Sprint' }).first().waitFor();
+		}
 		await open('/stats?member=mira');
 		await page.getByRole('heading', { name: 'By sport' }).waitFor();
 		await page.getByRole('cell', { name: '36.00 km/h' }).waitFor();

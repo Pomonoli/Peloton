@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -235,16 +236,48 @@ try {
 				});
 			}
 			if (pathname === '/api/riders') return request.fulfill({ json: { members: riders } });
-			if (pathname === '/api/routes') {
+			if (pathname === '/api/routes' || pathname === '/api/routes/map') {
+				const min = Number(searchParams.get('min_km') || 0) * 1000;
+				const max = Number(searchParams.get('max_km') || 0) * 1000;
 				const found =
 					searchParams.get('unridden') === 'true'
 						? []
 						: [loop, canal].filter(
 								(route) =>
+									route.distance_m >= min &&
+									(!max || route.distance_m < max) &&
 									(!searchParams.get('rider') ||
 										route.riders.some((rider) => rider.username === searchParams.get('rider'))) &&
 									route.name.toLowerCase().includes(searchParams.get('q').toLowerCase())
 							);
+				if (pathname.endsWith('/map')) {
+					return request.fulfill({
+						json: {
+							routes: found,
+							geojson: {
+								type: 'FeatureCollection',
+								features: found.length
+									? [
+											{
+												type: 'Feature',
+												geometry: {
+													type: 'LineString',
+													coordinates: [
+														[4.035, 51],
+														[4.035, 51.03]
+													]
+												},
+												properties: {
+													routes: found.map((_, index) => index),
+													density: found.length
+												}
+											}
+										]
+									: []
+							}
+						}
+					});
+				}
 				return request.fulfill({ json: { routes: found, total: found.length } });
 			}
 			if (pathname === '/api/routes/waasland') return request.fulfill({ json: loop });
@@ -335,6 +368,55 @@ try {
 		await main.getByText('1 route found').waitFor();
 		await main.getByRole('button', { name: /Canal Ride/ }).waitFor();
 		assert.equal(await main.getByRole('button', { name: /Waasland Loop/ }).count(), 0);
+		await main.getByRole('searchbox', { name: 'Search routes' }).fill('');
+		const view = main.getByRole('group', { name: 'Route view' });
+		await view.getByRole('button', { name: 'Map', exact: true }).click();
+		const catalogCanvas = main.getByLabel('Favorite routes map').locator('canvas');
+		async function discoverRoutes(count) {
+			const heading = main.getByRole('heading', {
+				name: count === 1 ? '1 favorite route' : `${count} favorite routes`
+			});
+			for (let attempt = 0; attempt < 10 && !(await heading.isVisible()); attempt++) {
+				await (mobile ? catalogCanvas.tap() : catalogCanvas.click());
+				await delay(150);
+			}
+			await heading.waitFor();
+			return heading;
+		}
+		await main.getByText('Select a road on the map', { exact: false }).waitFor();
+		const two = await discoverRoutes(2);
+		await main.getByRole('button', { name: 'Waasland Loop' }).click();
+		assert.equal(
+			await main.getByRole('button', { name: 'Waasland Loop' }).getAttribute('aria-pressed'),
+			'true'
+		);
+		await main.getByRole('button', { name: 'Route details', exact: true }).first().click();
+		await main.getByRole('heading', { name: 'Rider leaderboard' }).waitFor();
+		if (mobile) {
+			const mapBox = await catalogCanvas.boundingBox();
+			const resultsBox = await two.boundingBox();
+			assert.ok(mapBox.y + mapBox.height <= resultsBox.y, 'Results must follow the map on mobile');
+		}
+		assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+
+		await filter.selectOption('mira');
+		await main.getByText('Select a road on the map', { exact: false }).waitFor();
+		const one = await discoverRoutes(1);
+		assert.equal(await main.getByRole('button', { name: 'Canal Ride' }).count(), 0);
+		if (!mobile) {
+			await main.getByRole('combobox', { name: 'Distance', exact: true }).selectOption('40-80');
+			await main.getByText('No routes match these filters.').waitFor();
+			await main.getByRole('combobox', { name: 'Distance', exact: true }).selectOption('-40');
+			await main.getByText('Select a road on the map', { exact: false }).waitFor();
+			await discoverRoutes(1);
+		}
+		await main.getByRole('button', { name: 'Clear location' }).click();
+		await one.waitFor({ state: 'hidden' });
+		await discoverRoutes(1);
+		await main.getByRole('link', { name: 'Open in Route Planner' }).click();
+		await page.waitForURL(origin + '/routes/waasland/recorded/waasland');
+		await main.getByRole('heading', { name: 'Waasland Loop' }).waitFor();
+
 		await page.goto(origin + '/routes/waasland/recorded/canal');
 		await main.getByRole('heading', { name: 'Canal Ride' }).waitFor();
 		const fit = main.getByRole('button', { name: 'Fit route' });

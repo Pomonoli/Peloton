@@ -23,10 +23,22 @@ type HeatmapViewport struct {
 	Bounds *domain.CatalogSegmentBounds
 }
 
+type HeatmapCell struct {
+	Level heatmap.Level
+	Key   heatmap.Key
+}
+
+type HeatmapContribution struct {
+	Activity domain.ActivityID
+	Passages uint32
+}
+
 // PerformanceHeatmapRepo stores reusable activity-level bin contributions.
 type PerformanceHeatmapRepo interface {
 	HeatmapActivities(ctx context.Context, member domain.UserID, filter ActivityListFilter) ([]HeatmapActivity, error)
 	HeatmapSamples(ctx context.Context, source domain.SourceID, gps bool) ([]domain.StreamSample, error)
 	SaveHeatmapBins(ctx context.Context, activity HeatmapActivity, bins [3][]heatmap.Bin) error
+	HeatmapContributors(context.Context, domain.UserID, ActivityListFilter, HeatmapCell) ([]HeatmapContribution, error)
+	HeatmapResultActivities(ctx context.Context, viewer domain.UserID, ids []domain.ActivityID, sort string, limit, offset int) ([]domain.Activity, error)
 	VisitHeatmapBins(ctx context.Context, member domain.UserID, activities []HeatmapActivity, viewport HeatmapViewport, visit func(heatmap.Bin)) error
 }

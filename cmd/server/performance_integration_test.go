@@ -19,6 +19,7 @@ import (
 )
 
 type performanceProperties struct {
+	Cell      string
 	Density   int
 	Speed     float64
 	HeartRate *float64 `json:"heart_rate"`
@@ -230,6 +231,38 @@ func TestAPI_CumulativeHeatmap(t *testing.T) {
 	if revised.HeartRate == nil || *revised.HeartRate != 160 {
 		t.Fatal("replaced stream did not invalidate cached bins")
 	}
+	bob.upload("community.gpx", performanceGPX(early.AddDate(0, 0, 1), time.Second, 120, 0))
+	const scope = "riders=all&from=2011-01-01&to=2012-01-01"
+	community := readPerformanceMap(t, bob, "level=2&"+scope)
+	cell := findOverlap(community, 2).Cell
+	if cell == "" || community.Matched != 2 {
+		t.Fatalf("community map must expose an exact selection for both rides: matched=%d cell=%q", community.Matched, cell)
+	}
+	path := "/api/activities/heatmap/discover?" + scope + "&cell=" + cell
+	env.anon().do(http.MethodGet, path, nil, http.StatusUnauthorized)
+	var selected struct {
+		Passages, Matched int
+		Riders            []struct {
+			Passages, Activities int
+		}
+		Activities []struct{ ID string }
+	}
+	routeJSON(t, bob, path, &selected)
+	if selected.Passages != 2 || selected.Matched != 2 || len(selected.Riders) != 2 || len(selected.Activities) != 2 {
+		t.Fatalf("wrong discovery for the rendered heatmap cell: %+v", selected)
+	}
+	routeJSON(t, bob, path+"&rider="+alice.userID.String(), &selected)
+	id := str(first, "activity_id")
+	if selected.Passages != 2 || selected.Matched != 1 || len(selected.Activities) != 1 || selected.Activities[0].ID != id {
+		t.Fatalf("wrong discovery for the selected rider: %+v", selected)
+	}
+	var track struct{ Lines [][][2]float64 }
+	routeJSON(t, bob, "/api/activities/"+id+"/heatmap-track", &track)
+	if len(track.Lines) != 1 || len(track.Lines[0]) < 2 ||
+		track.Lines[0][len(track.Lines[0])-1][0]-track.Lines[0][0][0] < .04 {
+		t.Fatalf("expected a full track for the discovered ride: %+v", track.Lines)
+	}
+
 }
 
 func performanceGPX(start time.Time, period time.Duration, hr, power int) []byte {

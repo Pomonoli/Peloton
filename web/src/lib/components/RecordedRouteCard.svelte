@@ -14,11 +14,13 @@
 	let {
 		route,
 		selected,
-		onselect
+		onselect,
+		onhover
 	}: {
 		route: RecordedRoute;
 		selected: boolean;
 		onselect: () => void;
+		onhover?: (over: boolean) => void;
 	} = $props();
 
 	const featured = $derived(route.riders[0]);
@@ -39,6 +41,12 @@
 	aria-label={route.name}
 	aria-pressed={selected}
 	onclick={onselect}
+	onpointerenter={(event) => {
+		if (event.pointerType === 'mouse') onhover?.(true);
+	}}
+	onpointerleave={(event) => {
+		if (event.pointerType === 'mouse') onhover?.(false);
+	}}
 >
 	<div class="h-full min-h-[5.8rem] min-w-0 sm:min-h-24">
 		<RecordedRouteThumbnail track={route.track} />

@@ -38,6 +38,8 @@ func (h *DashboardHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/activities/heatmap", h.heatmap)
 	if h.PerformanceMaps != nil {
 		mux.HandleFunc("GET /api/activities/heatmap/performance", h.performanceHeatmap)
+		mux.HandleFunc("GET /api/activities/heatmap/discover", h.discoverHeatmap)
+		mux.HandleFunc("GET /api/activities/{id}/heatmap-track", h.heatmapTrack)
 	}
 }
 

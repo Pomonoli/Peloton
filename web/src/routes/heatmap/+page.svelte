@@ -1,6 +1,6 @@
 <script lang="ts">
 	import FilterSheet from '#lib/components/FilterSheet.svelte';
-	import { memberURL } from '#lib/member.js';
+	import { memberURL, type MemberView } from '#lib/member.js';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -20,13 +20,24 @@
 		type Map as MapLibreMap,
 		LngLatBounds,
 		type GeoJSONSource,
-		type MapLayerMouseEvent
+		type MapLayerMouseEvent,
+		type Point
 	} from 'maplibre-gl';
-	import type { FeatureCollection } from 'geojson';
+	import type { FeatureCollection, Position } from 'geojson';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { basemapStyle, createMap, basemapVariants, type BasemapVariant } from '#lib/basemap.js';
 	import { appearance } from '#lib/appearance.js';
 	import ActivityFilterBar from '#lib/components/ActivityFilterBar.svelte';
+	import HeatmapResults from '#lib/components/HeatmapResults.svelte';
+	import {
+		addDiscoveryOverlay,
+		addMapNavigation,
+		bindMapSelection,
+		emptyFeatures,
+		nearestMapLine,
+		showDiscoveryLocation,
+		showDiscoveryTrack
+	} from '#lib/discovery-map.js';
 	import { ActivityFilter, type ActivityFacets } from '#lib/activity-filter.svelte.js';
 
 	let { data: pageData } = $props();
@@ -39,10 +50,29 @@
 		facets: ActivityFacets;
 		geojson: FeatureCollection;
 	};
-	const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
 	const PREPARATION_TIMEOUT_MS = 30_000;
 
 	const filter = new ActivityFilter(page.url.searchParams);
+	const allRidersKey = '*';
+	let riders = $state.raw<MemberView[]>([]);
+	let rider = $derived(pageData.member?.username ?? '');
+	const allRiders = $derived(rider === allRidersKey);
+	const self = $derived(
+		pageData.user
+			? {
+					id: pageData.user.id,
+					username: pageData.user.username,
+					display_name: pageData.user.displayName
+				}
+			: null
+	);
+	const currentRider = $derived(
+		riders.find((member) => member.username === rider) ??
+			(pageData.member?.username === rider ? pageData.member : null)
+	);
+	const options = $derived(
+		riders.filter((member) => member.id !== self?.id && member.id !== pageData.member?.id)
+	);
 	let overview = $state.raw<{ url: string; result: Heatmap } | null>(null);
 	let data = $state.raw<Heatmap | null>(null);
 	let facets = $state.raw<ActivityFacets | null>(null);
@@ -51,7 +81,7 @@
 	let metric = $state<HeatmapMetric>('density');
 	let scaleMode = $state<'auto' | 'fixed'>('auto');
 	let individual = $state(false);
-	const original = $derived(metric === 'density' && individual);
+	const original = $derived(metric === 'density' && individual && !allRiders);
 	const scale = $derived(
 		scaleMode === 'fixed'
 			? fixedHeatmapScale(metric)
@@ -63,8 +93,49 @@
 	let viewport = $state('');
 	let pending = $state(0);
 	let hovered = $state<Record<string, unknown> | null>(null);
-	let pinned = $state<Record<string, unknown> | null>(null);
-	const inspected = $derived(pinned ?? hovered);
+	let pinned = $state<{ values: Record<string, unknown>; location: Position } | null>(null);
+	const inspected = $derived(pinned?.values ?? hovered);
+	let selectedActivity = $state('');
+	let selectedTrack = $state.raw<Position[][]>([]);
+	let trackStatus = $state<'idle' | 'loading' | 'missing' | 'failed'>('idle');
+	let trackRetry = $state(0);
+
+	function clearDiscovery() {
+		pinned = null;
+		hovered = null;
+		selectedActivity = '';
+	}
+
+	$effect(() => {
+		void trackRetry;
+		const id = selectedActivity;
+		selectedTrack = [];
+		trackStatus = id ? 'loading' : 'idle';
+		if (!id) return;
+		const ctrl = new AbortController();
+		void fetch('/api/activities/' + encodeURIComponent(id) + '/heatmap-track', {
+			signal: ctrl.signal
+		})
+			.then(async (response) => {
+				if (!response.ok) throw new Error(String(response.status));
+				const result: { lines: Position[][] } = await response.json();
+				if (!ctrl.signal.aborted) {
+					selectedTrack = result.lines;
+					trackStatus = result.lines.length ? 'idle' : 'missing';
+				}
+			})
+			.catch(() => {
+				if (!ctrl.signal.aborted) trackStatus = 'failed';
+			});
+		return () => ctrl.abort();
+	});
+
+	function applyDiscovery() {
+		showDiscoveryLocation(map, pinned?.location ?? null);
+		showDiscoveryTrack(map, selectedTrack);
+	}
+
+	$effect(applyDiscovery);
 
 	// View settings (basemap, track color) are per-browser conveniences kept in
 	// localStorage; blocked storage just means the defaults.
@@ -203,7 +274,7 @@
 
 	function applyData() {
 		if (!map || !mapLoaded) return;
-		const fc = data?.geojson ?? EMPTY;
+		const fc = data?.geojson ?? emptyFeatures;
 		(map.getSource('tracks') as GeoJSONSource | undefined)?.setData(fc);
 		// Frame the tracks on the first result only; later filter changes keep
 		// the viewport the user has set up.
@@ -221,7 +292,6 @@
 	function showData(result: Heatmap | null) {
 		data = result;
 		hovered = null;
-		pinned = null;
 		applyData();
 	}
 
@@ -288,7 +358,10 @@
 		void filter.immediateKey;
 		void debounced;
 		const endpoint = original ? '/api/activities/heatmap' : '/api/activities/heatmap/performance';
-		return memberURL(`${endpoint}?${untrack(() => filter.params())}`, pageData.member);
+		const params = untrack(() => filter.params());
+		if (allRiders) params.set('riders', 'all');
+		else if (rider) params.set('member', rider);
+		return `${endpoint}?${params}`;
 	});
 	// The overview covers the selected rider and filters at a single resolution.
 	// Viewport requests draw finer geometry using the same overview scale.
@@ -297,6 +370,7 @@
 		const ctrl = new AbortController();
 		overview = null;
 		untrack(() => {
+			clearDiscovery();
 			showData(null);
 			void load(url, ctrl.signal, (result) => {
 				overview = { url, result };
@@ -326,7 +400,7 @@
 	// everything the new style doesn't define.
 	function addTracks() {
 		if (!map) return;
-		map.addSource('tracks', { type: 'geojson', data: EMPTY });
+		map.addSource('tracks', { type: 'geojson', data: emptyFeatures });
 		// Two passes: a wide, faint glow that accumulates where tracks overlap,
 		// and a thin core so single passes still read as a line.
 		map.addLayer({
@@ -343,20 +417,50 @@
 			layout: { 'line-cap': 'round', 'line-join': 'round' },
 			paint: { 'line-color': heatmapColor(metric, scale), 'line-width': 3.5, 'line-opacity': 0.9 }
 		});
+		addDiscoveryOverlay(map, basemap === 'dark' ? 'dark' : 'light');
+		applyDiscovery();
 		mapLoaded = true;
 		applyPaint();
 		applyData();
 	}
 
+	function selectAt(point: Point) {
+		if (!map || !mapLoaded || !data || !map.isSourceLoaded('tracks')) return;
+		const hit = nearestMapLine(map, point, 'tracks-line');
+		if (!hit) return;
+		const values = hit.feature.properties;
+		if (original) {
+			if (typeof values.id === 'string') {
+				void goto(memberURL(`/activities/${values.id}`, currentRider));
+			}
+			return;
+		}
+		selectedActivity = '';
+		pinned = { values, location: hit.location.toArray() };
+	}
+
 	onMount(() => {
-		if (!container) return;
+		const ctrl = new AbortController();
+		void fetch('/api/riders', { signal: ctrl.signal })
+			.then(async (response) => {
+				if (!response.ok) return;
+				const data: { members: MemberView[] } = await response.json();
+				if (!ctrl.signal.aborted) riders = data.members;
+			})
+			.catch(() => {
+				// Personal and community maps work without the optional rider directory.
+			});
+		if (!container) return () => ctrl.abort();
 		currentStyle = basemapStyle(basemap);
 		map = createMap({
 			container,
 			style: currentStyle,
 			center: [10, 50],
-			zoom: 4
+			zoom: 4,
+			dragRotate: false,
+			touchPitch: false
 		});
+		addMapNavigation(map, 'bottom-right');
 		map.on('style.load', addTracks);
 		// Layer-bound listeners resolve the layer per event, so they survive
 		// style swaps.
@@ -380,11 +484,8 @@
 			if (map) map.getCanvas().style.cursor = '';
 			hovered = null;
 		});
-		map.on('click', 'tracks-line', (event) => {
-			const values = featureValues(event);
-			if (original && typeof values?.id === 'string') void goto(`/activities/${values.id}`);
-			else pinned = values;
-		});
+		bindMapSelection(map, selectAt);
+		return () => ctrl.abort();
 	});
 	$effect(() => {
 		const next = basemapStyle(basemap);
@@ -459,7 +560,7 @@
 					{/each}
 				</div>
 			{/if}
-			{#if metric === 'density'}
+			{#if metric === 'density' && !allRiders}
 				<label class="flex min-h-10 items-center gap-2 text-xs">
 					<input type="checkbox" bind:checked={individual} />
 					{m.heatmap_original_tracks()}
@@ -539,23 +640,50 @@
 						</p>
 					{/if}
 				</div>
-				<label class="flex items-center gap-2 text-sm">
-					{m.heatmap_layer()}
-					<select bind:value={metric} class="min-h-10 rounded border border-zinc-700 bg-panel px-2">
-						{#each heatmapMetrics as layer (layer)}
-							<option value={layer}>{heatmapMetricLabel(layer)}</option>
-						{/each}
-					</select>
-				</label>
+				<div class="flex flex-wrap gap-2">
+					<label class="flex items-center gap-2 text-sm">
+						{m.routes_rider()}
+						<select
+							bind:value={rider}
+							class="min-h-10 rounded border border-zinc-700 bg-panel px-2"
+						>
+							<option value=""
+								>{self?.display_name || self?.username || m.heatmap_my_rides()}</option
+							>
+							<option value={allRidersKey}>{m.routes_all_riders()}</option>
+							{#if pageData.member}
+								<option value={pageData.member.username}
+									>{pageData.member.display_name || pageData.member.username}</option
+								>
+							{/if}
+							{#each options as member (member.id)}
+								<option value={member.username}>{member.display_name || member.username}</option>
+							{/each}
+						</select>
+					</label>
+					<label class="flex items-center gap-2 text-sm">
+						{m.heatmap_layer()}
+						<select
+							bind:value={metric}
+							class="min-h-10 rounded border border-zinc-700 bg-panel px-2"
+						>
+							{#each heatmapMetrics as layer (layer)}
+								<option value={layer}>{heatmapMetricLabel(layer)}</option>
+							{/each}
+						</select>
+					</label>
+				</div>
 			</header>
 		{/snippet}
-		<ActivityFilterBar
-			{filter}
-			{facets}
-			controls={mapControls}
-			showSort={false}
-			member={pageData.member?.username}
-		/>
+		{#key rider}
+			<ActivityFilterBar
+				{filter}
+				{facets}
+				controls={mapControls}
+				showSort={false}
+				member={allRiders ? undefined : rider || undefined}
+			/>
+		{/key}
 	</FilterSheet>
 
 	{#if error}
@@ -655,6 +783,30 @@
 		{/if}
 	</div>
 	{#if original}<p class="text-xs text-zinc-500">{m.heatmap_open_activity()}</p>{/if}
+	{#if !original && pinned && typeof pinned.values.cell === 'string'}
+		{#if trackStatus === 'loading'}
+			<p role="status" class="text-sm text-quiet">{m.heatmap_track_loading()}</p>
+		{:else if trackStatus === 'missing'}
+			<p role="status" class="text-sm text-quiet">{m.detail_map_no_track()}</p>
+		{:else if trackStatus === 'failed'}
+			<p role="alert" class="text-sm">
+				{m.heatmap_track_failed()}
+				<button class="ml-1 min-h-10 text-accent-300 underline" onclick={() => trackRetry++}
+					>{m.routes_retry()}</button
+				>
+			</p>
+		{/if}
+		{#key pinned}
+			<HeatmapResults
+				query={overviewURL.split('?')[1] ?? ''}
+				cell={pinned.values.cell}
+				selected={selectedActivity}
+				fallbackRider={currentRider ?? self}
+				onselect={(id) => (selectedActivity = id)}
+				onclear={clearDiscovery}
+			/>
+		{/key}
+	{/if}
 </section>
 
 <style>

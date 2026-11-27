@@ -23,13 +23,15 @@ const basemap = {
 	layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#343434' } }]
 };
 const browser = await chromium.launch({
-	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+	args: ['--enable-unsafe-swiftshader']
 });
 
 try {
 	const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en' });
 	page.setDefaultTimeout(15_000);
 	const calls = [];
+	const discoveries = [];
 	const errors = [];
 	let cold = true;
 	let stall = false;
@@ -43,15 +45,16 @@ try {
 		if (url.origin !== origin) return route.abort();
 		if (path === endpoint || path === originalEndpoint) {
 			const member = url.searchParams.get('member');
+			const all = url.searchParams.get('riders') === 'all';
 			const viewport = url.searchParams.has('level');
 			const from = url.searchParams.get('from');
-			const count = member === 'mira' ? (from ? 24 : 25) : member === 'sam' ? 2 : 1;
+			const count = all ? 3 : member === 'mira' ? (from ? 24 : 25) : member === 'sam' ? 2 : 1;
 			const status = (cold && member === 'mira') || stall ? 202 : 200;
 			calls.push({ member, viewport, from, query: url.search, status });
 			if (status === 202) {
 				return route.fulfill({ status, json: { matched: count, with_track: 24, pending: 1 } });
 			}
-			const lon = member === 'mira' ? 8 : 4;
+			const lon = all || member === 'mira' ? 8 : 4;
 			return route.fulfill({
 				json: {
 					matched: count,
@@ -69,10 +72,58 @@ try {
 										[lon + 0.05, 47]
 									]
 								},
-								properties: { density: count, speed: 32 }
+								properties: { cell: '2:0:10:10', density: all ? 6 : count, speed: 32 }
 							}
 						]
 					}
+				}
+			});
+		}
+		if (path === '/api/activities/heatmap/discover') {
+			const q = url.searchParams;
+			discoveries.push(q);
+			const riders = [
+				{ ...members[1], passages: 5, activities: 2 },
+				{ ...members[2], passages: 1, activities: 1 }
+			];
+			const rows = [
+				['repeat', 'Repeated crossing', 'mira'],
+				['morning', 'Morning ride', 'mira'],
+				['evening', 'Evening ride', 'sam']
+			].filter(([, , rider]) => !q.get('rider') || rider === q.get('rider'));
+			return route.fulfill({
+				json: {
+					riders,
+					passages: 6,
+					matched: rows.length,
+					has_more: false,
+					activities: rows.map(([id, title, rider_id]) => ({
+						id,
+						title,
+						rider_id,
+						type: 'ride',
+						discipline: 'road',
+						start_time: '2020-04-01T12:00:00Z',
+						timezone: 'Europe/Brussels',
+						distance_m: 35000,
+						moving_duration_s: 4400,
+						elapsed_duration_s: 5000,
+						elevation_gain_m: 150,
+						avg_speed_mps: 7
+					}))
+				}
+			});
+		}
+		if (path === '/api/activities/repeat/heatmap-track') {
+			return route.fulfill({
+				json: {
+					lines: [
+						[
+							[8, 47],
+							[8.025, 47],
+							[8.04, 47.01]
+						]
+					]
 				}
 			});
 		}
@@ -170,7 +221,9 @@ try {
 	const fullscreen = page.getByRole('button', { name: 'Fullscreen', exact: true });
 	await fullscreen.click();
 	await page.getByRole('button', { name: 'Exit fullscreen' }).waitFor();
-	await page.getByText('Hover or tap a route to inspect its averages and passage count.').waitFor();
+	await page
+		.getByText('Hover over a line to inspect it, or select it to discover activities.')
+		.waitFor();
 	await page.getByRole('button', { name: 'Exit fullscreen' }).click();
 	await fullscreen.waitFor();
 	assert.equal(await layer.inputValue(), 'gradient');
@@ -191,6 +244,49 @@ try {
 		originalTracks.check()
 	]);
 	await originalTracks.uncheck();
+
+	await page.getByRole('button', { name: 'Light', exact: true }).click();
+	const riderFilter = page.getByRole('combobox', { name: 'Rider', exact: true });
+	await riderFilter.selectOption('*');
+	await tracks(3).waitFor();
+	await loading.waitFor({ state: 'hidden' });
+	await fit.click();
+	for (
+		let attempt = 0;
+		attempt < 10 && !(await page.getByText('3 unique activities').isVisible());
+		attempt++
+	) {
+		await page.locator('.maplibregl-canvas').click();
+		await delay(180);
+	}
+	await page.getByRole('heading', { name: 'Passages: 6' }).waitFor();
+	await page.getByText('3 unique activities').waitFor();
+	assert.equal(discoveries.at(-1).get('riders'), 'all');
+	assert.equal(discoveries.at(-1).get('cell'), '2:0:10:10');
+	assert.equal(discoveries.at(-1).get('from'), '2020-03-03');
+	assert.equal(
+		await page.getByRole('link', { name: 'Repeated crossing', exact: false }).count(),
+		1
+	);
+	const breakdown = page.getByRole('group', { name: 'Passages by rider' });
+	await breakdown.getByRole('button', { name: 'Mira 5' }).click();
+	await page.getByText('2 unique activities', { exact: true }).waitFor();
+	assert.equal(discoveries.at(-1).get('rider'), 'mira');
+	assert.equal(await page.getByRole('link', { name: /Evening ride/ }).count(), 0);
+	const selected = page.getByRole('button', { name: 'Highlight track for Repeated crossing' });
+	await Promise.all([
+		page.waitForResponse(
+			(response) => new URL(response.url()).pathname === '/api/activities/repeat/heatmap-track'
+		),
+		selected.click()
+	]);
+	assert.equal(await selected.getAttribute('aria-pressed'), 'true');
+	assert.equal(
+		await page.getByRole('link', { name: /Repeated crossing/ }).getAttribute('href'),
+		'/activities/repeat'
+	);
+	await page.getByRole('button', { name: 'Clear location' }).click();
+	await breakdown.waitFor({ state: 'hidden' });
 
 	await page.getByRole('link', { name: 'Riders', exact: true }).click();
 	await page.getByRole('link', { name: /Sam @sam/ }).click();
@@ -213,10 +309,31 @@ try {
 	await fit.waitFor();
 	await filterSheet.getByRole('button', { name: 'Done' }).click();
 	await filterSheet.waitFor({ state: 'hidden' });
+	await riderFilter.selectOption('*');
+	await tracks(3).waitFor();
+	await filterButton.click();
+	await page.getByRole('button', { name: 'Dark', exact: true }).click();
+	await fit.click();
+	await filterSheet.getByRole('button', { name: 'Done' }).click();
+	await filterSheet.waitFor({ state: 'hidden' });
+	const mobileMap = page.locator('.maplibregl-canvas');
+	const mobileCounts = page.getByRole('heading', { name: 'Passages: 6' });
+	for (let attempt = 0; attempt < 10 && !(await mobileCounts.isVisible()); attempt++) {
+		await mobileMap.click();
+		await delay(180);
+	}
+	await mobileCounts.waitFor();
+	const mapBox = await mobileMap.boundingBox();
+	const panelBox = await mobileCounts.boundingBox();
+	assert.ok(mapBox.y + mapBox.height <= panelBox.y, 'Activities must follow the map on mobile');
+	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+	await page.getByRole('button', { name: 'Clear location' }).click();
 	await fullscreen.click();
 	const exit = page.getByRole('button', { name: 'Exit fullscreen' });
 	await exit.waitFor();
-	await page.getByText('Hover or tap a route to inspect its averages and passage count.').waitFor();
+	await page
+		.getByText('Hover over a line to inspect it, or select it to discover activities.')
+		.waitFor();
 	assert.equal(
 		await exit.evaluate((button) =>
 			Math.round(button.parentElement.getBoundingClientRect().height)

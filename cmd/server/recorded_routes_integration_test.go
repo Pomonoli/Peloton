@@ -100,6 +100,26 @@ func TestAPI_RecordedRoutesLifecycle(t *testing.T) {
 			t.Fatalf("filter %s lost the route: %+v", query, out)
 		}
 	}
+	var routeMap struct {
+		catalogResult
+		GeoJSON struct {
+			Features []struct {
+				Properties struct {
+					Density int
+					Routes  []int
+				}
+			}
+		}
+	}
+	routeJSON(t, sam, "/api/routes/map?rider=mira&min_km=3&max_km=5", &routeMap)
+	if len(routeMap.Routes) != 1 || routeMap.Routes[0].ID != route.ID || len(routeMap.GeoJSON.Features) == 0 {
+		t.Fatalf("map view disagrees with the filtered catalog: %+v", routeMap)
+	}
+	for _, feature := range routeMap.GeoJSON.Features {
+		if feature.Properties.Density != 1 || len(feature.Properties.Routes) != 1 || feature.Properties.Routes[0] != 0 {
+			t.Fatalf("route density must count the favorite once: %+v", feature)
+		}
+	}
 	if out := read(mira, "?unridden=true"); out.Total != 0 {
 		t.Fatalf("ridden route appeared as unridden: %+v", out)
 	}
