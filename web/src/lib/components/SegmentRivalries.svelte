@@ -7,8 +7,7 @@
 		formatDateOnly,
 		formatDistanceEffort,
 		formatDuration,
-		formatSpeedKmh,
-		intlLocale
+		formatSpeedKmh
 	} from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -67,7 +66,6 @@
 		memberURL(`/api/segments/${id}/leaderboard?limit=${boardFetchSize}`, member)
 	);
 	const chart = $derived(alignEffortHistory(histories, distanceM));
-	const number = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 }));
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- stable color allocation is independent of effects
 	const colorsByRider = new Map<string, string>();
 	function riderColor(uid: string) {
