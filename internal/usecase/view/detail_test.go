@@ -129,3 +129,35 @@ func TestDetailsZonesSimilarMergedManage(t *testing.T) {
 		t.Fatal("unknown source must fail")
 	}
 }
+
+func TestSegmentElevationUsesEffortSourceAndPrivacyZones(t *testing.T) {
+	repo := inmem.NewActivityRepo()
+	aid := domain.ActivityID(uuid.New())
+	sid := domain.SourceID(uuid.New())
+	source := domain.ActivitySource{ID: sid, ActivityID: aid, Provider: "garmin", Status: domain.SourceStatusActive}
+	repo.Sources[sid] = source
+	now := time.Now()
+	var samples []domain.StreamSample
+	for i, lat := range []float64{51, 51, 51.01, 51, 51} {
+		samples = append(samples, domain.StreamSample{
+			Timestamp: now.Add(time.Duration(i) * time.Second), Latitude: f64p(lat), Longitude: f64p(4),
+			DistanceM: f64p(float64(100 + i*10)), AltitudeM: f64p(float64(i - 5)),
+		})
+	}
+	details := NewDetails(repo, &fakeStreams{samples: samples}, nil, nil, nil, nil)
+	effort := domain.SegmentEffort{ActivityID: aid, ActivitySourceID: sid, StartOffset: 1, EndOffset: 3}
+	member := Viewer{Zones: []domain.PrivacyZone{{Lat: 51.01, Lng: 4, RadiusM: 20}}}
+	points := details.SegmentElevation(context.Background(), effort, member)
+	if len(points) != 3 || *points[0].DistanceM != 0 || *points[0].ElevationM != -4 ||
+		points[1].ElevationM != nil || *points[2].DistanceM != 20 || points[2].TimeS != 2 {
+		t.Fatalf("unexpected profile: %+v", points)
+	}
+	source.Provider = "strava"
+	repo.Sources[sid] = source
+	if points := details.SegmentElevation(context.Background(), effort, member); points != nil {
+		t.Fatalf("restricted source yielded %+v", points)
+	}
+	if points := details.SegmentElevation(context.Background(), effort, Viewer{IsOwner: true}); len(points) != 3 {
+		t.Fatalf("owner profile: %+v", points)
+	}
+}

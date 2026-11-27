@@ -1,10 +1,13 @@
 <script lang="ts">
+	import HistoryBars from '#lib/components/HistoryBars.svelte';
+	import { prefs } from '#lib/prefs.svelte.js';
 	import {
 		formatDistance,
 		formatDuration,
 		formatDateOnly,
 		formatPace,
-		formatSpeed
+		formatSpeed,
+		intlLocale
 	} from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
@@ -67,42 +70,38 @@
 		return isRide ? formatSpeed(mps) : formatPace(mps);
 	}
 
+	const number = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 }));
 	const chart = $derived.by(() => {
-		if (!payload || payload.activities.length < 2) return null;
-		const rows = payload.activities;
-		const times = rows
-			.map((r) => r.average_speed_kmh)
-			.filter((v): v is number => v != null && v > 0);
-		if (times.length < 2) return null;
-		const highest = Math.max(...times);
-		const max = isRide ? highest : 3600 / Math.min(...times);
-		const W = 760;
-		const H = 160;
-		const pad = 8;
-		const n = rows.length;
-		const bw = (W - pad * 2) / n;
-		return {
-			W,
-			H,
-			pad,
-			bw,
-			max,
-			bars: rows.map((r, i) => {
-				const speed = r.average_speed_kmh;
-				const value = speed && (isRide ? speed : 3600 / speed);
-				const frac = value ? value / max : 0;
-				const h = Math.max(2, frac * (H - pad * 2));
-				return {
-					x: pad + i * bw,
-					y: H - pad - h,
-					h,
-					w: Math.max(1, bw - 2),
-					row: r,
-					isBest: speed === highest
-				};
-			})
-		};
+		const rows = payload?.activities ?? [];
+		const highest = rows.reduce((max, row) => Math.max(max, row.average_speed_kmh ?? 0), 0);
+		return rows.map((row) => {
+			const speed = row.average_speed_kmh;
+			const value =
+				speed != null && Number.isFinite(speed) && speed > 0
+					? isRide
+						? speed / (prefs.units === 'imperial' ? 1.609344 : 1)
+						: (3600 / speed) * (prefs.units === 'imperial' ? 1.609344 : 1)
+					: null;
+			return {
+				id: row.id,
+				date: row.start_time,
+				value,
+				title: `${formatDateOnly(row.start_time)} · ${performance(speed)}${isRide ? ` · ${m.ride_elapsed()} ${formatDuration(row.elapsed_s)}` : ''}`,
+				color: row.is_current
+					? 'var(--accent-primary)'
+					: speed === highest
+						? 'var(--success-strong)'
+						: 'var(--plot-axis)'
+			};
+		});
 	});
+
+	function formatTick(value: number) {
+		if (isRide) return `${number.format(value)} ${prefs.units === 'imperial' ? 'mph' : 'km/h'}`;
+		return prefs.units === 'imperial'
+			? `${formatDuration(value)} /mi`
+			: `${formatDuration(value)} /km`;
+	}
 </script>
 
 <section class="space-y-8">
@@ -138,44 +137,23 @@
 			</div>
 		{/if}
 
-		{#if chart}
+		{#if chart.filter((point) => point.value !== null).length > 1}
 			<section>
 				<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">
 					{isRide ? 'Average moving speed' : 'Average moving pace'} (oldest → newest)
 				</h2>
-				<svg
-					viewBox={`0 0 ${chart.W} ${chart.H}`}
-					class="w-full"
-					role="img"
-					aria-label={isRide ? 'Average moving speed trend' : 'Average moving pace trend'}
-				>
-					{#each chart.bars as b (b.row.id)}
-						<rect
-							x={b.x}
-							y={b.y}
-							width={b.w}
-							height={b.h}
-							rx="1.5"
-							class={b.row.is_current
-								? 'fill-accent-400'
-								: b.isBest
-									? 'fill-emerald-500'
-									: 'fill-zinc-600'}
-						>
-							<title>
-								{formatDateOnly(b.row.start_time)} · {performance(b.row.average_speed_kmh)}
-								{#if isRide}
-									· {m.ride_elapsed()} {formatDuration(b.row.elapsed_s)}
-								{/if}
-							</title>
-						</rect>
-					{/each}
-				</svg>
+				<HistoryBars
+					label={isRide ? m.chart_moving_speed_trend() : m.chart_moving_pace_trend()}
+					points={chart}
+					{formatTick}
+				/>
 				<div class="mt-1 flex gap-4 text-[11px] text-zinc-500">
 					<span
-						><span class="inline-block h-2 w-2 rounded-sm bg-accent-400"></span> this effort</span
+						><span class="inline-block h-2 w-2 rounded-sm bg-[var(--accent-primary)]"></span> this effort</span
 					>
-					<span><span class="inline-block h-2 w-2 rounded-sm bg-emerald-500"></span> fastest</span>
+					<span
+						><span class="inline-block h-2 w-2 rounded-sm bg-[var(--success-strong)]"></span> fastest</span
+					>
 				</div>
 			</section>
 		{/if}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cutTrack, moveTrackStart, rebaseTrack, reverseTrack } from './recorded.js';
-import { axisTicks, elevationProfile, profilePoint, tickStep } from './profile.js';
+import { axisTicks, elevationScale, tickStep } from '#lib/chart-scale.js';
+import { elevationProfile, profilePoint } from './profile.js';
 
 const point = (lon: number, distance_m: number, elevation_m?: number) => ({
 	lat: 51,
@@ -81,6 +82,16 @@ describe('route elevation profile', () => {
 
 	it('uses clean intervals at different metric scales', () => {
 		expect(tickStep(31)).toBe(50);
+		expect(elevationScale(-5, 13, 4)).toEqual({
+			min: -10,
+			max: 20,
+			ticks: [-10, 0, 10, 20]
+		});
+		expect(elevationScale(1500, 1500, 2)).toEqual({
+			min: 1499,
+			max: 1501,
+			ticks: [1499, 1500, 1501]
+		});
 		expect(axisTicks(-20, 20, 10)).toEqual([-20, -10, 0, 10, 20]);
 		expect(axisTicks(0, 0.125, tickStep(0.02))).toEqual([0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12]);
 	});

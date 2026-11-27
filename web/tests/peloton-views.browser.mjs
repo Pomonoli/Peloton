@@ -92,9 +92,10 @@ const asCatalog = (row) => ({
 	distance_m: row.segment_distance_m,
 	average_speed_kmh: row.average_speed_kmh,
 	best_elapsed_s: row.elapsed_s,
-	local_kom_holder: row.local_kom_position === 1 ? 'Mira' : 'Sam',
-	member_count: 2,
-	my_attempts: 1,
+	local_kom_holder:
+		row.segment_id === 'forest' ? longRiderName : row.local_kom_position === 1 ? 'Mira' : 'Sam',
+	member_count: row.segment_id === 'forest' ? 1234 : 2,
+	my_attempts: row.segment_id === 'forest' ? 56789 : 1,
 	start: [-120.2, 38.5],
 	polyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
 });
@@ -148,15 +149,17 @@ function trainingFixture(days, rider) {
 	};
 }
 
+const widths = [320, 360, 390, 424, 430, 768, 900, 1440, 1536];
 try {
-	for (const width of [320, 360, 390, 424, 430, 768, 900, 1440]) {
+	for (const width of widths) {
+		const dark = [360, 430, 1536].includes(width);
 		const mobile = width < 768;
 		const page = await browser.newPage({
 			viewport: { width, height: width === 424 ? 933 : 900 },
 			locale: mobile ? 'en-US' : 'de-DE',
 			timezoneId: 'Europe/Brussels',
 			hasTouch: mobile,
-			colorScheme: width === 360 || width === 430 ? 'dark' : 'light'
+			colorScheme: dark ? 'dark' : 'light'
 		});
 		page.setDefaultTimeout(6000);
 		const errors = [];
@@ -180,6 +183,21 @@ try {
 				}
 			});
 		}, width === 390);
+		await page.addInitScript(() => {
+			window.axisLabels = new WeakMap();
+			const { clearRect, fillText } = CanvasRenderingContext2D.prototype;
+			CanvasRenderingContext2D.prototype.clearRect = function (...args) {
+				if (args[0] === 0 && args[1] === 0 && args[2] >= this.canvas.width)
+					window.axisLabels.set(this.canvas, []);
+				return clearRect.apply(this, args);
+			};
+			CanvasRenderingContext2D.prototype.fillText = function (label, x, y, ...rest) {
+				const labels = window.axisLabels.get(this.canvas) ?? [];
+				labels.push({ label, x, width: this.measureText(label).width, align: this.textAlign });
+				window.axisLabels.set(this.canvas, labels);
+				return fillText.call(this, label, x, y, ...rest);
+			};
+		});
 		await page.route('**/*', async (route) => {
 			const url = new URL(route.request().url());
 			if (url.hostname === 'api.open-meteo.com') {
@@ -279,9 +297,25 @@ try {
 				'/cairn.v1.ActivityService/GetActivityStream': {
 					stream: {
 						sampleCount: 4,
-						channels: ['STREAM_CHANNEL_SPEED'],
+						channels: [
+							'STREAM_CHANNEL_SPEED',
+							'STREAM_CHANNEL_HEART_RATE',
+							'STREAM_CHANNEL_POWER',
+							'STREAM_CHANNEL_CADENCE',
+							'STREAM_CHANNEL_ALTITUDE',
+							'STREAM_CHANNEL_DISTANCE',
+							'STREAM_CHANNEL_LATITUDE',
+							'STREAM_CHANNEL_LONGITUDE'
+						],
 						timeS: [0, 5, 10, 15],
-						speedMps: [8, 10, 10, 11]
+						speedMps: [8, 10, 10, 11],
+						heartRateBpm: [139, 142, 147, 150],
+						powerW: [200, 310, 250, 270],
+						cadence: [90, 90, 90, 90],
+						altitudeM: [-5, 15, 50, 40],
+						distanceM: [0, 50, 100, 150],
+						latitude: [51.1, 51.1002, 51.1004, 51.1006],
+						longitude: [4.1, 4.1002, 4.1004, 4.1006]
 					}
 				},
 				'/cairn.v1.GearService/ListGear': {
@@ -381,6 +415,19 @@ try {
 						{ value: 'virtual_ride', ...largeTotals, speed_kmh: 23.37 }
 					]
 				},
+				'/api/best-efforts/history': {
+					best: 15,
+					count: 2,
+					items: [
+						{ activity_id: 'previous', start_time: '2025-11-14T13:00:00Z', achieved_value: 10 },
+						{
+							activity_id: recent.id,
+							start_time: recent.start_time,
+							achieved_value: 15,
+							is_best: true
+						}
+					]
+				},
 				'/api/records': {
 					records: [
 						{
@@ -428,6 +475,65 @@ try {
 				`Value "${await locator.textContent()}" exceeds its line or container at ${width}px`
 			);
 		};
+		async function checkStreams(count) {
+			await page.waitForFunction((expected) => {
+				const canvases = [...document.querySelectorAll('.uplot canvas')];
+				return (
+					canvases.length === expected &&
+					canvases.every((canvas) => window.axisLabels.get(canvas)?.length)
+				);
+			}, count);
+			const plots = await page.locator('.uplot').evaluateAll((plots) =>
+				plots.map((plot) => {
+					const canvas = plot.querySelector('canvas');
+					return {
+						width: canvas.width,
+						plotWidth: plot.querySelector('.u-over').clientWidth,
+						labels: window.axisLabels.get(canvas)
+					};
+				})
+			);
+			for (const { width, plotWidth, labels } of plots) {
+				assert.ok(plotWidth >= width * 0.48, `Crowded chart at ${width}px`);
+				assert.ok(labels.some(({ label }) => /^\d+:\d{2}$/.test(label)));
+				for (const { x, width: textWidth, align, label } of labels) {
+					const left =
+						x -
+						(align === 'right' || align === 'end'
+							? textWidth
+							: align === 'center'
+								? textWidth / 2
+								: 0);
+					assert.ok(
+						left >= -1 && left + textWidth <= width + 1,
+						`Clipped chart label ${label} on ${width}px canvas`
+					);
+				}
+			}
+			for (const unit of ['m', 'bpm', 'W', 'rpm', 'km/h']) {
+				const labels = plots
+					.flatMap((plot) => plot.labels)
+					.map(({ label }) => label)
+					.filter((label) => label.endsWith(' ' + unit));
+				assert.ok(new Set(labels).size >= 2, `Expected multiple numerical ticks in ${unit}`);
+			}
+		}
+		async function checkSVG(chart, unit, xTick) {
+			await chart.waitFor();
+			const ticks = await chart.locator('text').allTextContents();
+			assert.ok(ticks.some((value) => unit.test(value.trim())));
+			assert.ok(ticks.some((value) => xTick.test(value.trim())));
+			assert.ok(
+				await chart.evaluate((svg) => {
+					const bounds = svg.getBoundingClientRect();
+					return Array.from(svg.querySelectorAll('text')).every((node) => {
+						const text = node.getBoundingClientRect();
+						return text.left >= bounds.left - 1 && text.right <= bounds.right + 1;
+					});
+				}),
+				`SVG tick label overflows at ${width}px`
+			);
+		}
 		const main = page.getByRole('main');
 		const sheet = page.getByRole('dialog');
 		const done = () => sheet.getByRole('button', { name: 'Done' }).click();
@@ -447,10 +553,7 @@ try {
 		);
 		await noPageOverflow('/');
 		await main.getByText('36.00 km/h', { exact: true }).waitFor();
-		assert.equal(
-			await page.locator('html').getAttribute('data-theme'),
-			width === 360 || width === 430 ? 'dark' : 'light'
-		);
+		assert.equal(await page.locator('html').getAttribute('data-theme'), dark ? 'dark' : 'light');
 		assert.equal(await main.getByRole('button', { name: 'Last week' }).count(), 0);
 		assert.equal(await page.getByRole('contentinfo').count(), 0);
 		if (width === 430) {
@@ -583,7 +686,7 @@ try {
 		await page.getByRole('link', { name: 'Canal ride' }).click();
 		await page.waitForURL(origin + '/activities/mira-ride?member=mira');
 		await page.getByText('Viewing Mira', { exact: true }).filter({ visible: true }).waitFor();
-		const headline = main.locator('dl').first();
+		const headline = main.locator('dl.metric-strip');
 		await headline.getByText('36.00 km/h', { exact: true }).waitFor();
 		await headline.getByText('1:15:00', { exact: true }).waitFor();
 		const secondary = main
@@ -610,12 +713,22 @@ try {
 		);
 		assert.equal(await page.getByText('Kudos', { exact: true }).count(), 0);
 		assert.equal(await page.getByText('Comments', { exact: true }).count(), 0);
+		await checkSVG(
+			main.getByRole('img', { name: 'Elevation profile' }),
+			/-?\d+ m/,
+			/^(?:0|50|100|150) m$/
+		);
+		await checkStreams(width <= 768 ? 5 : 1);
 		await open('/activities/mira-ride/similar');
 		const comparison = main.getByRole('table');
 		await comparison.getByRole('cell', { name: '1:23:20', exact: true }).waitFor();
 		await comparison.getByRole('cell', { name: /36\.00 km\/h/ }).waitFor();
+		await checkSVG(main.getByRole('img', { name: 'Average moving speed trend' }), /km\/h/, /Nov/);
 		await open('/activities/mira-ride/streams');
-		await page.locator('.uplot').waitFor();
+		await checkStreams(5);
+		await noPageOverflow('/activities/mira-ride/streams');
+		await open('/best-efforts/ride/speed/duration/60');
+		await checkSVG(main.getByRole('img', { name: 'Best-effort trend' }), /km\/h/, /Nov/);
 
 		await open('/segments');
 		if (mobile) {
@@ -637,6 +750,32 @@ try {
 			await main.getByRole('link', { name: longSegmentName }).getAttribute('title'),
 			longSegmentName
 		);
+		const catalogTable = main.getByRole('table');
+		for (const title of ['Riders: 1,234', 'My Attempts: 56,789']) {
+			const metric = catalogTable.getByTitle(title, { exact: true }).filter({ visible: true });
+			await fitsOnOneLine(metric.locator('dd'));
+			assert.ok(
+				await metric.evaluate(
+					(element) =>
+						element.getBoundingClientRect().right <=
+						element.closest('th, td').getBoundingClientRect().right
+				)
+			);
+		}
+		if (mobile) {
+			assert.ok(
+				await catalogTable.evaluate(
+					(table) => table.parentElement.scrollWidth <= table.parentElement.clientWidth
+				)
+			);
+			assert.ok(
+				await catalogTable
+					.getByTitle(`Local KOM: ${longRiderName}`)
+					.filter({ visible: true })
+					.locator('dd')
+					.evaluate((name) => name.scrollWidth > name.clientWidth)
+			);
+		}
 		await fitsOnOneLine(main.getByRole('cell', { name: '40.0 km/h', exact: true }));
 		assert.deepEqual(catalogSort.slice(0, 2), ['local_kom_holder:asc', 'average_speed_kmh:desc']);
 		if (width === 390 || width === 1440) {
@@ -648,6 +787,8 @@ try {
 			const details = main.getByRole('link', { name: 'View segment details' });
 			await details.waitFor();
 			assert.equal(await details.getAttribute('href'), '/segment/canal');
+			await main.getByTitle('Riders: 2', { exact: true }).waitFor();
+			await main.getByTitle('My Attempts: 1', { exact: true }).waitFor();
 			await main.getByRole('button', { name: 'Clear segment selection' }).click();
 			await details.waitFor({ state: 'hidden' });
 			await segmentView.getByRole('button', { name: 'List', exact: true }).click();
@@ -892,7 +1033,7 @@ try {
 		await page.close();
 	}
 	console.log(
-		'Peloton views, navigation, filters, and responsive layouts passed at 320px, 360px, 390px, 424px, 430px, 768px, 900px, and 1440px.'
+		`Peloton views, charts, and responsive layouts passed at ${widths.join(', ')} px in light and dark mode.`
 	);
 } finally {
 	await browser.close();

@@ -1,3 +1,4 @@
+import { axisTicks, tickStep } from '#lib/chart-scale.js';
 import { intlLocale } from '#lib/format.js';
 import { m } from '#lib/paraglide/messages.js';
 import { prefs } from '#lib/prefs.svelte.js';
@@ -314,14 +315,12 @@ export function aggregateStress(
 }
 
 export function yScale(min: number, max: number) {
-	const step = Math.max((max - min) / 4, 1);
-	const power = 10 ** Math.floor(Math.log10(step));
-	const interval = ([1, 2, 2.5, 5, 10].find((factor) => factor * power >= step) ?? 10) * power;
+	const interval = tickStep(Math.max((max - min) / 4, 1));
 	const bottom = Math.floor(min / interval);
 	const top = Math.max(bottom + 1, Math.ceil(max / interval));
 	return {
 		min: bottom * interval,
 		max: top * interval,
-		ticks: Array.from({ length: top - bottom + 1 }, (_, i) => (bottom + i) * interval)
+		ticks: axisTicks(bottom * interval, top * interval, interval)
 	};
 }

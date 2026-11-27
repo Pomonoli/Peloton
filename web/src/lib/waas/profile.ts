@@ -61,14 +61,3 @@ function lineAtDistance(track: RecordedTrack, meters: number, start?: { distance
 		? line
 		: null;
 }
-
-export function tickStep(raw: number) {
-	const base = 10 ** Math.floor(Math.log10(raw));
-	return ([1, 2, 2.5, 5, 10].find((step) => step * base >= raw) ?? 10) * base;
-}
-
-export function axisTicks(start: number, end: number, step: number) {
-	return Array.from({ length: Math.max(0, Math.floor((end - start) / step + 1e-8) + 1) }, (_, i) =>
-		Number((start + i * step).toPrecision(10))
-	);
-}

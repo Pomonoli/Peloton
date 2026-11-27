@@ -221,7 +221,7 @@ func (h *SegmentHandlers) detail(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err, "load failed")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	response := map[string]any{
 		"segment": map[string]any{
 			"id":                 seg.ID.String(),
 			"source":             string(seg.Source),
@@ -238,7 +238,23 @@ func (h *SegmentHandlers) detail(w http.ResponseWriter, r *http.Request) {
 			"max_grade":          seg.MaxGrade,
 		},
 		"efforts": segEffortsJSON(efforts),
-	})
+	}
+	if h.Details != nil && h.Access != nil {
+		if viewer, ok := port.CommunityViewer(ctx); ok {
+			for _, effort := range efforts[:min(len(efforts), 3)] {
+				_, access, err := h.Access.Visible(ctx, effort.ActivityID, &viewer)
+				if err != nil {
+					continue
+				}
+				if profile := h.Details.SegmentElevation(ctx, effort, access); len(profile) > 0 {
+					response["elevation_profile"] = profile
+					break
+				}
+			}
+		}
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *SegmentHandlers) activityEfforts(w http.ResponseWriter, r *http.Request) {

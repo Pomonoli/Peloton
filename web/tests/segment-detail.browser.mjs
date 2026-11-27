@@ -7,7 +7,8 @@ import { chromium } from 'playwright-core';
 const origin = 'http://peloton-segments.test';
 const build = fileURLToPath(new URL('../build/', import.meta.url));
 const browser = await chromium.launch({
-	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+	args: ['--enable-unsafe-swiftshader']
 });
 const riders = [
 	{ id: 'ada', username: 'ada', display_name: 'Ada' },
@@ -59,12 +60,13 @@ const entries = riders.map((rider, index) => ({
 try {
 	for (const { member, width } of [
 		{ member: null, width: 1440 },
-		{ member: 'mira', width: 424 }
+		{ member: 'mira', width: 320 }
 	]) {
 		const page = await browser.newPage({
-			viewport: { width, height: width === 424 ? 933 : 900 },
+			viewport: { width, height: 900 },
 			locale: 'en-US',
-			timezoneId: 'UTC'
+			timezoneId: 'UTC',
+			colorScheme: member ? 'dark' : 'light'
 		});
 		page.setDefaultTimeout(5000);
 		const requests = [];
@@ -121,7 +123,12 @@ try {
 				return route.fulfill({
 					json: {
 						segment: segments.find((segment) => segment.id === id),
-						efforts: efforts(id, searchParams.get('member') ?? 'ada')
+						efforts: efforts(id, searchParams.get('member') ?? 'ada'),
+						elevation_profile: [
+							{ time_s: 0, distance_m: 0, elevation_m: -12 },
+							{ time_s: 60, distance_m: 650, elevation_m: null },
+							{ time_s: 120, distance_m: 1300, elevation_m: 40 }
+						]
 					}
 				});
 			}
@@ -147,6 +154,17 @@ try {
 			await main.getByRole('heading', { name: 'Local KOM' }).waitFor();
 			await main.getByText(member ? 'Mira’s Best' : 'Your Best', { exact: true }).waitFor();
 			await main.locator('.maplibregl-canvas').waitFor();
+			const elevation = main.getByRole('img', { name: 'Elevation profile' });
+			await elevation.waitFor();
+			await elevation.getByText('1 km', { exact: true }).waitFor();
+			assert.match(
+				await elevation
+					.locator('text')
+					.allTextContents()
+					.then((ticks) => ticks.join(' ')),
+				/-\d+ m/
+			);
+			assert.equal(await elevation.locator('circle').count(), 2);
 			await chart.waitFor();
 		};
 		const assertRequests = async (
@@ -215,7 +233,17 @@ try {
 			assert.equal(await leaderboardTab.getAttribute('aria-selected'), 'true');
 			const fullBoard = main.getByRole('tabpanel', { name: 'Leaderboard' });
 			assert.equal(await fullBoard.locator('tbody tr').count(), 5);
-			await fullBoard.getByRole('columnheader', { name: 'Attempts' }).waitFor();
+			if (width < 352) {
+				assert.equal(
+					await fullBoard
+						.getByTitle('Attempts: 1', { exact: true })
+						.filter({ visible: true })
+						.count(),
+					5
+				);
+			} else {
+				await fullBoard.getByRole('columnheader', { name: 'Attempts' }).waitFor();
+			}
 			await page.keyboard.press('End');
 			assert.equal(await attemptsTab.getAttribute('aria-selected'), 'true');
 			const attempts = main.getByRole('tabpanel', { name: 'Attempts' });
