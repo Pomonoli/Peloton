@@ -2,9 +2,21 @@
 	import { onMount, onDestroy } from 'svelte';
 	import uPlot, { type AlignedData, type Options } from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
-	import { formatClockTime, formatDateOnly, intlLocale } from '#lib/format.js';
+	import {
+		formatClockTime,
+		formatDate,
+		formatDateOnly,
+		formatDuration,
+		intlLocale
+	} from '#lib/format.js';
 	import { appearance, appearanceColor } from '#lib/appearance.js';
 	import { m } from '#lib/paraglide/messages.js';
+
+	// Use clock intervals for elapsed time so the ticks land on whole minutes and hours.
+	const elapsedIncrements = [
+		0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 180, 300,
+		600, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 172800, 604800, 2592000
+	];
 
 	interface Series {
 		label: string;
@@ -32,7 +44,7 @@
 		calendar?: boolean;
 		yAxis?: {
 			label: string;
-			format: (value: number) => string;
+			unit: string;
 			range?: (min: number, max: number) => [number, number];
 		};
 		legend?: boolean;
@@ -54,13 +66,15 @@
 
 	// Full x-extent of the data; used to detect zoom state and to reset.
 	function fullRange(): [number, number] {
-		return [offsets[0] ?? 0, offsets.at(-1) ?? 0];
+		const start = offsets[0] ?? 0;
+		return [start, Math.max(start + 1, offsets.at(-1) ?? start)];
 	}
 
 	function resetZoom() {
 		if (!plot) return;
 		const [min, max] = fullRange();
-		plot.setScale('x', { min, max });
+		const charts = syncKey ? uPlot.sync(syncKey).plots : [plot];
+		for (const chart of charts) chart.setScale('x', { min, max });
 	}
 
 	function build() {
@@ -77,21 +91,76 @@
 
 		const data: AlignedData = [offsets, ...ordered.map((s) => s.values)] as AlignedData;
 
-		// Keep independent scales for overlaid channels with different units.
-		const number = new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 });
-		const scales: Options['scales'] = { x: { time: calendar } };
-		if (calendar) {
+		const number = new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 3 });
+		const font = appearanceColor('--plot-font');
+		const axisColor = appearanceColor('--plot-axis');
+		const gridColor = appearanceColor('--plot-grid');
+		const seriesColor = (color: string) =>
+			color.startsWith('var(') ? appearanceColor(color.slice(4, -1)) : color;
+
+		// Share a scale only between series reporting the same unit.
+		const scaleKey = (s: Series) => `y:${s.unit ?? yAxis?.unit ?? s.label}`;
+		const metrics = new Map(ordered.map((s) => [scaleKey(s), s]));
+		const scales: Options['scales'] = {
+			x: {
+				time: calendar,
+				range: (_u, min, max) => (min === max ? fullRange() : [min, max])
+			}
+		};
+		const measure = document.createElement('canvas').getContext('2d')!;
+		measure.font = font;
+		const axes: uPlot.Axis[] = [
+			{
+				stroke: axisColor,
+				font,
+				size: 24,
+				space: calendar ? 88 : 57,
+				...(!calendar ? { incrs: elapsedIncrements } : {}),
+				ticks: { size: 4, stroke: axisColor },
+				border: { stroke: axisColor },
+				grid: { stroke: gridColor },
+				values: (_u, splits, _idx, increment) =>
+					splits.map((value) =>
+						calendar
+							? increment < 86400
+								? formatClockTime(value * 1000, { seconds: increment < 60 })
+								: formatDateOnly(new Date(value * 1000).toISOString())
+							: increment < 1
+								? `${number.format(value)} s`
+								: formatDuration(value)
+					)
+			}
+		];
+
+		for (const [key, metric] of metrics) {
 			const range = yAxis?.range;
-			scales.y = range
+			scales[key] = range
 				? {
-						range: (_plot, min, max) =>
-							min == null || max == null ? [null, null] : range(min, max)
+						range: (_u, min, max) => (min == null || max == null ? [null, null] : range(min, max))
 					}
 				: {};
-		} else
-			ordered.forEach((_, i) => {
-				scales[`y${i}`] = {};
+			const index = axes.length - 1;
+			const stroke = metrics.size > 1 ? seriesColor(metric.color) : axisColor;
+			const unit = metric.unit ?? yAxis?.unit;
+			axes.push({
+				scale: key,
+				side: index % 2 === 0 ? 3 : 1,
+				stroke,
+				font,
+				space: 34,
+				gap: 4,
+				size: (_u, values) =>
+					Math.max(
+						metrics.size === 1 ? 58 : 36,
+						...(values ?? []).map((value) => measure.measureText(value).width + 11)
+					),
+				ticks: { size: 4, stroke },
+				border: { stroke },
+				grid: { show: index === 0, stroke: gridColor },
+				values: (_u, splits) =>
+					splits.map((value) => `${number.format(value)}${unit ? ' ' + unit : ''}`)
 			});
+		}
 
 		const opts: Options = {
 			width: container.clientWidth || 800,
@@ -104,58 +173,20 @@
 				...(syncKey ? { sync: { key: syncKey, setSeries: true } } : {})
 			},
 			scales,
-			axes: [
-				{
-					stroke: appearanceColor('--plot-axis'),
-					font: appearanceColor('--plot-font'),
-					grid: { stroke: appearanceColor('--plot-grid') },
-					values: (_u, splits) =>
-						splits.map((s) =>
-							calendar ? formatDateOnly(new Date(s * 1000).toISOString()) : formatSeconds(s)
-						)
-				},
-				...(calendar || ordered.length === 1
-					? [
-							{
-								scale: calendar ? 'y' : 'y0',
-								label:
-									yAxis?.label ??
-									(ordered[0]?.unit
-										? `${ordered[0].label} (${ordered[0].unit})`
-										: (ordered[0]?.label ?? '')),
-								stroke: appearanceColor('--plot-axis'),
-								font: appearanceColor('--plot-font'),
-								labelFont: appearanceColor('--plot-font'),
-								grid: { stroke: appearanceColor('--plot-grid') },
-								values: (_u: uPlot, splits: number[]) =>
-									splits.map((value) =>
-										yAxis
-											? yAxis.format(value)
-											: calendar
-												? formatSeconds(value)
-												: number.format(value)
-									)
-							}
-						]
-					: [])
-			],
+			padding: [8, metrics.size === 1 ? (calendar ? 37 : 22) : 4, 0, 3],
+			axes,
 			series: [
 				{
 					label: m.detail_label_time(),
-					...(calendar
-						? {
-								value: (_plot: uPlot, value: number | null) => {
-									if (value == null) return '—';
-									const date = new Date(value * 1000);
-									return `${date.toLocaleDateString('sv-SE')} ${formatClockTime(date)}`;
-								}
-							}
-						: {})
+					value: (_plot, value) =>
+						value == null
+							? '—'
+							: calendar
+								? formatDate(new Date(value * 1000).toISOString())
+								: formatDuration(value)
 				},
-				...ordered.map((s, i) => {
-					const stroke = s.color.startsWith('var(')
-						? appearanceColor(s.color.slice(4, -1))
-						: s.color;
+				...ordered.map((s) => {
+					const stroke = seriesColor(s.color);
 					const { formatValue } = s;
 					return {
 						label: s.unit ? `${s.label} (${s.unit})` : s.label,
@@ -168,9 +199,9 @@
 						stroke,
 						width: s.fill ? 1 : 1.8,
 						...(s.fill ? { fill: stroke + '2e' } : {}),
-						scale: calendar ? 'y' : `y${i}`,
+						scale: scaleKey(s),
 						spanGaps: calendar,
-						points: { show: calendar }
+						points: { show: calendar || s.values.filter((value) => value != null).length === 1 }
 					};
 				})
 			],
@@ -205,7 +236,7 @@
 	}
 
 	function inspectTouch(event: PointerEvent) {
-		if (!plot || !onHover || !yAxis || event.pointerType === 'mouse') return;
+		if (!plot || !onHover || event.pointerType === 'mouse') return;
 		const rect = plot.over.getBoundingClientRect();
 		if (
 			event.clientX < rect.left ||
@@ -217,17 +248,7 @@
 		plot.setCursor({ left: event.clientX - rect.left, top: event.clientY - rect.top });
 	}
 
-	function formatSeconds(s: number): string {
-		const total = Math.round(s);
-		const h = Math.floor(total / 3600);
-		const m = Math.floor((total % 3600) / 60);
-		const sec = total % 60;
-		if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-		return `${m}:${sec.toString().padStart(2, '0')}`;
-	}
-
 	onMount(() => {
-		build();
 		let resizeFrame = 0;
 		const observer = new ResizeObserver(() => {
 			cancelAnimationFrame(resizeFrame);
@@ -272,7 +293,7 @@
 	});
 </script>
 
-<div class="relative w-full">
+<div class="relative w-full min-w-0">
 	{#if zoomed}
 		<button
 			type="button"
@@ -282,5 +303,21 @@
 			{m.ride_chart_reset()}
 		</button>
 	{/if}
-	<div bind:this={container} class="w-full" role="presentation" onpointerdown={inspectTouch}></div>
+	<div
+		bind:this={container}
+		class="w-full min-w-0"
+		role="group"
+		aria-label={yAxis?.label ?? series.map((s) => s.label).join(', ')}
+		onpointerdown={inspectTouch}
+	></div>
 </div>
+
+<style>
+	:global(.uplot .u-legend) {
+		font-size: 0.75rem;
+	}
+	:global(.uplot .u-legend tr) {
+		margin-inline-end: 0.35rem;
+		white-space: nowrap;
+	}
+</style>

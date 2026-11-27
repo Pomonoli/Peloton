@@ -3,11 +3,12 @@
 	import FilterSheet from '#lib/components/FilterSheet.svelte';
 	import SortControls from '#lib/components/SortControls.svelte';
 	import SortHeader from '#lib/components/SortHeader.svelte';
+	import SegmentMetadata from '#lib/components/SegmentMetadata.svelte';
 	import { promoteSort } from '#lib/stacked-sort.js';
 	import { untrack, onMount } from 'svelte';
 	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { formatMetricDistance, formatDuration, formatSpeedKmh, intlLocale } from '#lib/format.js';
+	import { formatMetricDistance, formatDuration, formatSpeedKmh } from '#lib/format.js';
 
 	import {
 		fetchSegmentCatalog,
@@ -19,6 +20,7 @@
 	} from '#lib/segment-catalog.js';
 
 	let { data } = $props();
+	const attemptsLabel = $derived(data.member ? m.segment_attempts() : m.segment_my_attempts());
 	const columns = $derived([
 		{ key: 'name', label: m.segment_column_name(), align: 'text-left' },
 		{ key: 'distance_m', label: m.detail_stat_distance(), align: 'text-right' },
@@ -35,10 +37,10 @@
 			align: 'text-right'
 		},
 		{ key: 'local_kom_holder', label: m.segment_local_kom(), align: 'text-left' },
-		{ key: 'member_count', label: m.segment_column_members(), align: 'text-right' },
+		{ key: 'member_count', label: m.segment_riders(), align: 'text-right' },
 		{
 			key: 'my_attempts',
-			label: data.member ? m.segment_attempts() : m.segment_my_attempts(),
+			label: attemptsLabel,
 			align: 'text-right'
 		}
 	] satisfies { key: SortColumn; label: string; shortLabel?: string; align: string }[]);
@@ -249,13 +251,8 @@
 					</thead>
 					<tbody class="divide-y divide-zinc-800">
 						{#each segments as segment (segment.id)}
-							{@const summary = m.segment_mobile_summary({
-								holder: segment.local_kom_holder || m.placeholder_dash(),
-								riders: segment.member_count.toLocaleString(intlLocale()),
-								attempts: segment.my_attempts.toLocaleString(intlLocale())
-							})}
 							<tr class="hover:bg-panel">
-								<th scope="row" class="name-cell px-4 py-3 text-left font-medium">
+								<th scope="row" class="name-cell px-2 py-3 md:px-3 text-left font-medium">
 									<a
 										href={memberURL(`/segment/${segment.id}`, data.member)}
 										class="table-name text-accent-400 hover:underline"
@@ -263,29 +260,35 @@
 									>
 										{segment.name}
 									</a>
-									<div
-										class="table-name mt-0.5 text-[11px] leading-4 text-quiet md:hidden"
-										title={summary}
-									>
-										{summary}
+									<div class="mt-0.5 text-[11px] leading-4 text-quiet md:hidden">
+										<SegmentMetadata
+											holder={segment.local_kom_holder ?? ''}
+											riders={segment.member_count}
+											attempts={segment.my_attempts}
+											{attemptsLabel}
+										/>
 									</div>
 								</th>
-								<td class="numeric px-4 py-3">
+								<td class="numeric px-1.5 py-3 md:px-3">
 									{formatMetricDistance(segment.distance_m)}
 								</td>
-								<td class="numeric px-4 py-3">{formatDuration(segment.best_elapsed_s)}</td>
-								<td class="numeric px-4 py-3">
+								<td class="numeric px-1.5 py-3 md:px-3">{formatDuration(segment.best_elapsed_s)}</td
+								>
+								<td class="numeric px-1.5 py-3 md:px-3">
 									{formatSpeedKmh(segment.average_speed_kmh)}
 								</td>
-								<td class="max-w-32 px-4 py-3"
-									><span class="table-name" title={segment.local_kom_holder}
-										>{segment.local_kom_holder}</span
-									></td
+								<td class="max-w-32 px-3 py-3"
+									><SegmentMetadata holder={segment.local_kom_holder ?? ''} /></td
 								>
-								<td class="numeric px-4 py-3">
-									{segment.member_count.toLocaleString(intlLocale())}
-								</td>
-								<td class="numeric px-4 py-3">{segment.my_attempts.toLocaleString(intlLocale())}</td
+								<td class="numeric px-3 py-3"
+									><div class="flex justify-end">
+										<SegmentMetadata riders={segment.member_count} />
+									</div></td
+								>
+								<td class="numeric px-3 py-3"
+									><div class="flex justify-end">
+										<SegmentMetadata attempts={segment.my_attempts} {attemptsLabel} />
+									</div></td
 								>
 							</tr>
 						{/each}
@@ -325,6 +328,16 @@
 </div>
 
 <style>
+	.catalog-table :global(th) {
+		padding-inline: 0.375rem;
+		white-space: nowrap;
+	}
+
+	.catalog-table :global(.sort-heading) {
+		position: relative;
+		white-space: nowrap;
+	}
+
 	@media (width < 48rem) {
 		.catalog-table :global(:is(td, th):nth-child(n + 5)) {
 			display: none;

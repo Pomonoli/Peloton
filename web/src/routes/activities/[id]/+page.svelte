@@ -300,6 +300,9 @@
 	// Build chart series — only include channels that actually carry data
 	// for this activity. Shared with the full-screen streams subpage.
 	const series = $derived(buildSeries(stream));
+	let streamChartWidth = $state(0);
+	const stackStreams = $derived(series.length > 1 && streamChartWidth < 230 + series.length * 68);
+	const streamSyncKey = $derived(`activity-streams-${a.id}`);
 
 	// --- overview stats ---
 	// Pace for foot/swim sports, speed for wheels.
@@ -582,7 +585,25 @@
 					Full screen ↗
 				</a>
 			</div>
-			<StreamChart {offsets} {series} {hoverT} onHover={(t) => (hoverT = t)} />
+			<div class="min-w-0 space-y-2" bind:clientWidth={streamChartWidth}>
+				{#if stackStreams}
+					{#each series as metric (metric.label)}
+						<div class="surface min-w-0 px-1 pt-2">
+							<h3 class="ml-2 text-xs font-semibold" style:color={metric.color}>{metric.label}</h3>
+							<StreamChart
+								{offsets}
+								series={[metric]}
+								height={120}
+								{hoverT}
+								syncKey={streamSyncKey}
+								onHover={(t) => (hoverT = t)}
+							/>
+						</div>
+					{/each}
+				{:else}
+					<StreamChart {offsets} {series} {hoverT} onHover={(t) => (hoverT = t)} />
+				{/if}
+			</div>
 		</section>
 	{/if}
 

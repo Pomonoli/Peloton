@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/domain/streamalign"
@@ -143,6 +144,60 @@ func locateEffort(e domain.SegmentEffort, seg domain.Segment, s []domain.StreamS
 	row.StartOffsetS, row.EndOffsetS = &start, &end
 	row.StartDistanceM, row.EndDistanceM = s[e.StartOffset].DistanceM, s[e.EndOffset].DistanceM
 	return row
+}
+
+// ProfilePoint is a sample measured from the start of the segment effort.
+type ProfilePoint struct {
+	TimeS      float64  `json:"time_s"`
+	DistanceM  *float64 `json:"distance_m"`
+	ElevationM *float64 `json:"elevation_m"`
+}
+
+// SegmentElevation reads the effort's actual source and only returns samples
+// within the effort. Callers must resolve the parent activity for the viewer.
+func (d *Details) SegmentElevation(ctx context.Context, effort domain.SegmentEffort, viewer Viewer) []ProfilePoint {
+	if d.streams == nil || effort.StartOffset < 0 || effort.EndOffset <= effort.StartOffset {
+		return nil
+	}
+	source, err := d.activities.GetSource(ctx, effort.ActivitySourceID)
+	if err != nil || source.ActivityID != effort.ActivityID {
+		return nil
+	}
+	if !viewer.IsOwner && (source.Status == domain.SourceStatusDetached || domain.ProviderDataRestricted(source.Provider)) {
+		return nil
+	}
+	samples := d.rawSamples(ctx, source.ID)
+	if effort.EndOffset >= len(samples) {
+		return nil
+	}
+	samples = samples[effort.StartOffset : effort.EndOffset+1]
+	first := samples[0]
+	points := make([]ProfilePoint, 0, len(samples))
+	valid := 0
+	for _, sample := range samples {
+		point := ProfilePoint{TimeS: sample.Timestamp.Sub(first.Timestamp).Seconds()}
+		if finiteProfileValue(first.DistanceM) && finiteProfileValue(sample.DistanceM) {
+			dist := *sample.DistanceM - *first.DistanceM
+			if dist >= 0 {
+				point.DistanceM = &dist
+			}
+		}
+		if finiteProfileValue(sample.AltitudeM) && (len(viewer.Zones) == 0 ||
+			(finiteProfileValue(sample.Latitude) && finiteProfileValue(sample.Longitude) &&
+				!domain.PointInAnyZone(viewer.Zones, *sample.Latitude, *sample.Longitude))) {
+			point.ElevationM = sample.AltitudeM
+			valid++
+		}
+		points = append(points, point)
+	}
+	if valid < 2 {
+		return nil
+	}
+	return points
+}
+
+func finiteProfileValue(value *float64) bool {
+	return value != nil && !math.IsNaN(*value) && !math.IsInf(*value, 0)
 }
 
 // Similar groups the activity with directionally overlapping GPS routes.

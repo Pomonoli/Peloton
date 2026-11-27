@@ -20,6 +20,7 @@
 		type RivalryPeriod
 	} from '#lib/segment-rivalries.js';
 	import StreamChart from './StreamChart.svelte';
+	import SegmentMetadata from './SegmentMetadata.svelte';
 
 	let {
 		id,
@@ -226,7 +227,6 @@
 							<tr class:leading-rider={entry.rank === 1}>
 								<td class="numeric px-1.5 py-2 sm:px-3">
 									<span class="rank" class:rank-first={entry.rank === 1}>
-										{#if entry.rank === 1}<Icon name="records" size={13} />{/if}
 										{entry.rank}
 									</span>
 								</td>
@@ -235,23 +235,25 @@
 									class:font-semibold={entry.elapsed_s === board[0]?.elapsed_s}
 								>
 									<span class="table-name" title={entry.display_name}>
+										{#if entry.rank === 1}
+											<Icon name="crown" size={13} class="mr-0.5 inline text-accent-300" />
+										{/if}
 										<span class="rider-marker" style:background={riderColor(entry.user_id)}></span>
 										{entry.display_name}
 									</span>
-									{#if !compact}
-										<span class="metric-value block text-[0.6875rem] text-quiet min-[22rem]:hidden">
-											{m.segment_attempts()}
-											{number.format(entry.effort_count)}
-										</span>
-									{/if}
+									<div class="text-[0.6875rem] text-quiet" class:row-attempts={!compact}>
+										<SegmentMetadata attempts={entry.effort_count} />
+									</div>
 								</td>
 								<td class="numeric px-1.5 py-2 sm:px-3">{formatDuration(entry.elapsed_s)}</td>
 								<td class="numeric px-1.5 py-2 sm:px-3"
 									>{formatSpeedKmh(entry.average_speed_kmh)}</td
 								>
-								<td class="numeric attempt-count px-1.5 py-2 sm:px-3"
-									>{number.format(entry.effort_count)}</td
-								>
+								<td class="numeric attempt-count px-1.5 py-2 sm:px-3">
+									<div class="flex justify-end">
+										<SegmentMetadata attempts={entry.effort_count} />
+									</div>
+								</td>
 								<td class="numeric px-1.5 py-2 sm:px-3">
 									<a
 										href={memberURL(`/activities/${entry.activity_id}`, member)}
@@ -317,7 +319,7 @@
 						legend={false}
 						yAxis={{
 							label: m.segment_speed_axis(),
-							format: (value) => number.format(value),
+							unit: 'km/h',
 							range: segmentSpeedRange
 						}}
 						onHover={(time) => (hovered = time)}
@@ -398,6 +400,12 @@
 
 	.compact .attempt-count {
 		display: none;
+	}
+
+	@media (width >= 22rem) {
+		.row-attempts {
+			display: none;
+		}
 	}
 
 	@media (width < 22rem) {

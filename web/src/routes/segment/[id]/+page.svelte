@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import SegmentRivalries from '#lib/components/SegmentRivalries.svelte';
 	import ActivityMap from '#lib/components/ActivityMap.svelte';
+	import ElevationProfile from '#lib/components/ElevationProfile.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import MetricStrip from '#lib/components/MetricStrip.svelte';
 	import SectionTabs from '#lib/components/SectionTabs.svelte';
@@ -50,6 +51,7 @@
 
 	let segment = $state<Segment | null>(null);
 	let efforts = $state<Effort[]>([]);
+	let profile = $state<{ t: number; distM: number | null; eleM: number | null }[]>([]);
 	let loading = $state(true);
 	let failure = $state<'not-found' | 'request' | null>(null);
 	const tabs = $derived([
@@ -80,6 +82,13 @@
 			if (signal.aborted) return;
 			segment = result.segment;
 			efforts = result.efforts ?? [];
+			profile = (result.elevation_profile ?? []).map(
+				(point: { time_s: number; distance_m: number | null; elevation_m: number | null }) => ({
+					t: point.time_s,
+					distM: point.distance_m,
+					eleM: point.elevation_m
+				})
+			);
 		} catch {
 			if (!signal.aborted) failure = 'request';
 		} finally {
@@ -95,6 +104,7 @@
 		failure = null;
 		segment = null;
 		efforts = [];
+		profile = [];
 		tab = 'overview';
 		visibleAttempts = attemptPageSize;
 		hovered = null;
@@ -239,12 +249,12 @@
 									value:
 										number.format(efforts.length) +
 										(efforts.length >= detailAttemptLimit ? '+' : ''),
-									icon: 'activities'
+									icon: 'repeat'
 								}
 							]}
 						/>
 						<div class="overview-grid">
-							<div class="space-y-3 md:space-y-4">
+							<div class="min-w-0 space-y-3 md:space-y-4">
 								{#if tab === 'overview'}
 									{@render leaderboard(true, () => {
 										tab = 'leaderboard';
@@ -253,10 +263,18 @@
 									{@render history()}
 								{/if}
 							</div>
-							{#if coordinates.length > 1}
+							{#if coordinates.length > 1 || profile.length}
 								<section class="surface min-w-0 overflow-hidden">
-									<h2 class="section-title px-3 py-2 sm:px-4">{m.segment_route()}</h2>
-									<div class="h-52 md:h-72"><ActivityMap {coordinates} /></div>
+									{#if coordinates.length > 1}
+										<h2 class="section-title px-3 py-2 sm:px-4">{m.segment_route()}</h2>
+										<ActivityMap {coordinates} heightClass="h-52 md:h-72" />
+									{/if}
+									{#if profile.length}
+										<div class="p-2 sm:px-3">
+											<h2 class="section-title mb-1">{m.waas_elevation_profile()}</h2>
+											<ElevationProfile track={profile} />
+										</div>
+									{/if}
 								</section>
 							{/if}
 						</div>
@@ -292,7 +310,7 @@
 						legend={false}
 						yAxis={{
 							label: m.segment_speed_axis(),
-							format: (value) => number.format(value),
+							unit: 'km/h',
 							range: segmentSpeedRange
 						}}
 						onHover={(value) => (hovered = value)}
@@ -439,6 +457,7 @@
 
 	.overview-grid {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 0.85rem;
 	}
 

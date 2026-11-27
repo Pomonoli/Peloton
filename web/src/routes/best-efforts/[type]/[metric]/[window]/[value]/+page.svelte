@@ -1,9 +1,11 @@
 <script lang="ts">
+	import HistoryBars from '#lib/components/HistoryBars.svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import MetricReadout from '#lib/components/MetricReadout.svelte';
 	import { memberURL } from '#lib/member.js';
 
-	import { formatDateOnly } from '#lib/format.js';
-	import { recordValue, recordLabel } from '#lib/records.js';
+	import { formatDateOnly, formatDuration, intlLocale } from '#lib/format.js';
+	import { isCyclingDistanceRecord, recordValue, recordLabel } from '#lib/records.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -59,37 +61,36 @@
 		window_value: data.value
 	});
 
-	// Bar chart over the chronological series; taller = higher value. For pace
-	// (lower is better) we still draw raw value but mark the best (min) green.
-	const chart = $derived.by(() => {
-		if (!payload || payload.items.length < 2) return null;
-		const vals = payload.items.map((i) => i.achieved_value);
-		const max = Math.max(...vals);
-		const min = Math.min(...vals);
-		const span = max - min || 1;
-		const W = 760;
-		const H = 160;
-		const pad = 8;
-		const bw = (W - pad * 2) / payload.items.length;
-		return {
-			W,
-			H,
-			pad,
-			bw,
-			bars: payload.items.map((it, i) => {
-				// normalise 0..1 within [min,max]; floor at a visible height
-				const norm = (it.achieved_value - min) / span;
-				const h = Math.max(3, 0.15 * (H - pad * 2) + norm * 0.85 * (H - pad * 2));
-				return {
-					x: pad + i * bw,
-					y: H - pad - h,
-					h,
-					w: Math.max(1, bw - 2),
-					item: it
-				};
-			})
-		};
-	});
+	const number = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 }));
+	const cyclingDistance = $derived(isCyclingDistanceRecord(bucket));
+	const chart = $derived(
+		payload?.items.flatMap((item) => {
+			const raw = item.achieved_value;
+			if (!Number.isFinite(raw) || raw <= 0) return [];
+			return [
+				{
+					id: item.activity_id,
+					date: item.start_time,
+					value: cyclingDistance
+						? (raw * bucket.window_value) / 1000
+						: bucket.metric === 'speed'
+							? raw * 3.6
+							: bucket.metric === 'vam'
+								? (raw * bucket.window_value) / 3600
+								: raw,
+					title: `${formatDateOnly(item.start_time)} · ${recordValue(bucket, raw)}`,
+					color: item.is_best ? 'var(--success-strong)' : 'var(--plot-axis)'
+				}
+			];
+		}) ?? []
+	);
+
+	function formatTick(value: number) {
+		if (cyclingDistance) return formatDuration(value);
+		if (bucket.metric === 'speed') return `${number.format(value)} km/h`;
+		if (bucket.metric === 'vam') return `${number.format(value)} m`;
+		return recordValue(bucket, value);
+	}
 </script>
 
 <section class="space-y-8">
@@ -121,37 +122,14 @@
 			</div>
 		</dl>
 
-		{#if chart}
+		{#if chart.length > 1}
 			<section>
 				<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">
 					Over time (oldest → newest)
 				</h2>
-				<svg
-					viewBox={`0 0 ${chart.W} ${chart.H}`}
-					class="w-full"
-					role="img"
-					aria-label="Best-effort trend"
-				>
-					{#each chart.bars as b (b.item.activity_id)}
-						<rect
-							x={b.x}
-							y={b.y}
-							width={b.w}
-							height={b.h}
-							rx="1.5"
-							class={b.item.is_best ? 'fill-emerald-500' : 'fill-zinc-600'}
-						>
-							<title
-								>{formatDateOnly(b.item.start_time)} · {recordValue(
-									bucket,
-									b.item.achieved_value
-								)}</title
-							>
-						</rect>
-					{/each}
-				</svg>
+				<HistoryBars label={m.chart_best_effort_trend()} points={chart} {formatTick} />
 				<div class="mt-1 text-[11px] text-zinc-500">
-					<span class="inline-block h-2 w-2 rounded-sm bg-emerald-500"></span> all-time best
+					<span class="inline-block h-2 w-2 rounded-sm bg-[var(--success-strong)]"></span> all-time best
 				</div>
 			</section>
 		{/if}

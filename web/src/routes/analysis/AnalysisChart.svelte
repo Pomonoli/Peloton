@@ -31,12 +31,6 @@
 	const offset = $derived(isStress ? 0 : ((dates[0] ?? start) - start) / DAY);
 	const current = $derived(Math.min(active ?? size - 1, size - 1));
 
-	const left = $derived(isStress ? 47 : 37);
-	const right = $derived(width - 12);
-	const height = $derived(isStress ? 208 : width >= 520 ? 216 : 192);
-	const top = 12;
-	const bottom = $derived(height - 27);
-	const plotWidth = $derived(Math.max(1, right - left));
 	const scale = $derived.by(() => {
 		let min = 0;
 		let max = 0;
@@ -52,6 +46,19 @@
 		}
 		return yScale(min, max || (min === 0 ? 4 : 0));
 	});
+
+	const number = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 }));
+	const left = $derived(
+		Math.max(
+			37,
+			12 + Math.max(number.format(scale.min).length, number.format(scale.max).length) * 6
+		) + (isStress ? 17 : 0)
+	);
+	const right = $derived(width - 12);
+	const height = $derived(isStress ? 208 : width >= 520 ? 216 : 192);
+	const top = 12;
+	const bottom = $derived(height - 27);
+	const plotWidth = $derived(Math.max(1, right - left));
 
 	function x(index: number) {
 		if (count <= 1) return left + plotWidth / 2;
@@ -136,7 +143,6 @@
 			: m.analysis_date_range({ start: calendarDate(period.from), end: calendarDate(period.to) });
 	});
 
-	const number = $derived(new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 }));
 	const readout = $derived.by(() => {
 		if (current < 0) return [];
 		const period = periods?.[current];

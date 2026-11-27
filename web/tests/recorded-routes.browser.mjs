@@ -323,6 +323,20 @@ try {
 			? page.getByRole('dialog', { name: 'Route details' })
 			: main.locator('aside');
 		await panel.getByRole('heading', { name: 'Waasland Loop' }).waitFor();
+		const elevation = panel.getByRole('img', { name: 'Elevation profile' });
+		await elevation.waitFor();
+		const ticks = await elevation.locator('text').allTextContents();
+		assert.ok(ticks.some((label) => label.trim().endsWith(' m')));
+		assert.ok(ticks.some((label) => label.trim().endsWith(' km')));
+		assert.ok(
+			await elevation.evaluate((svg) => {
+				const bounds = svg.getBoundingClientRect();
+				return [...svg.querySelectorAll('text')].every((label) => {
+					const rect = label.getBoundingClientRect();
+					return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+				});
+			})
+		);
 		await panel.getByRole('heading', { name: 'Rider leaderboard' }).waitFor();
 		await panel.getByRole('link', { name: 'Morning ride' }).waitFor();
 		assert.equal(

@@ -11,6 +11,7 @@
 	import { addMapNavigation } from '#lib/discovery-map.js';
 	import { formatDuration, formatMetricDistance, formatTimeAndSpeed } from '#lib/format.js';
 	import MetricReadout from './MetricReadout.svelte';
+	import SegmentMetadata from './SegmentMetadata.svelte';
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
@@ -312,18 +313,12 @@
 								onclick={() => (selectedId = '')}>×</button
 							>
 						</div>
-						<dl class="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 text-xs sm:text-sm">
+						<dl class="grid grid-cols-2 gap-2 text-xs sm:text-sm">
 							<div>
 								<dt class="text-quiet">{m.detail_stat_distance()}</dt>
 								<dd class="metric-value">{formatMetricDistance(selected.distance_m)}</dd>
 							</div>
-							<div class="min-w-0">
-								<dt class="text-quiet">{m.segment_local_kom()}</dt>
-								<dd class="truncate" title={selected.local_kom_holder}>
-									{selected.local_kom_holder}
-								</dd>
-							</div>
-							<div class="max-w-28 text-right sm:max-w-36">
+							<div class="text-right">
 								<dt class="text-quiet">{m.segment_leaderboard_time()}</dt>
 								<dd>
 									<MetricReadout
@@ -335,6 +330,14 @@
 								</dd>
 							</div>
 						</dl>
+						<div class="text-xs text-quiet">
+							<SegmentMetadata
+								holder={selected.local_kom_holder ?? ''}
+								riders={selected.member_count}
+								attempts={selected.my_attempts}
+								attemptsLabel={member ? m.segment_attempts() : m.segment_my_attempts()}
+							/>
+						</div>
 						<a
 							href={memberURL(`/segment/${selected.id}`, member)}
 							class="inline-flex min-h-8 items-center text-sm text-accent-300 hover:underline"

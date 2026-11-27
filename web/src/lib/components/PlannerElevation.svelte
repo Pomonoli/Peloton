@@ -7,7 +7,8 @@
 		type RecordedTrack,
 		type RoutePoint
 	} from '#lib/recorded-routes.js';
-	import { elevationProfile, profilePoint, axisTicks, tickStep } from '#lib/waas/profile.js';
+	import { axisTicks, elevationScale, tickStep } from '#lib/chart-scale.js';
+	import { elevationProfile, profilePoint } from '#lib/waas/profile.js';
 	import { finiteElevation, trackDistance } from '#lib/waas/recorded.js';
 	import type { ElevationStats } from '#lib/waas/types.js';
 
@@ -42,15 +43,7 @@
 	const xTicks = $derived(axisTicks(0, length / 1000, kilometerStep));
 	const axis = $derived.by(() => {
 		if (elevation?.lowest == null || elevation.highest == null) return null;
-		const span = Math.max(60, (elevation.highest - elevation.lowest) * 1.14);
-		const middle = (elevation.highest + elevation.lowest) / 2;
-		const step = tickStep(span / 4);
-		const minimum =
-			Math.floor(
-				(elevation.lowest >= 0 ? Math.max(0, middle - span / 2) : middle - span / 2) / step
-			) * step;
-		const maximum = Math.ceil(Math.max(minimum + span, middle + span / 2) / step) * step;
-		return { minimum, maximum, ticks: axisTicks(minimum, maximum, step) };
+		return elevationScale(elevation.lowest, elevation.highest, 4);
 	});
 	const cursor = $derived(position == null ? null : profilePoint(track, runs, position));
 	const cursorX = $derived(cursor ? x(cursor.point.distance_m) : 0);
@@ -72,7 +65,7 @@
 	}
 
 	function y(height: number) {
-		return bottom - ((bottom - top) * (height - axis!.minimum)) / (axis!.maximum - axis!.minimum);
+		return bottom - ((bottom - top) * (height - axis!.min)) / (axis!.max - axis!.min);
 	}
 
 	// Retain both extremes per pixel so short climbs remain visible without
@@ -143,8 +136,10 @@
 					{/each}
 					{#each xTicks as tick (tick)}
 						<line x1={x(tick * 1000)} x2={x(tick * 1000)} y1={top} y2={bottom} class="gridline" />
-						<text x={Math.min(width - 20, x(tick * 1000))} y="148" text-anchor="middle"
-							>{fmt(tick, 3)} km</text
+						<text
+							x={x(tick * 1000)}
+							y="148"
+							text-anchor={x(tick * 1000) > width - 35 ? 'end' : 'middle'}>{fmt(tick, 3)} km</text
 						>
 					{/each}
 					{#each paths as { line, area }, i (i)}
