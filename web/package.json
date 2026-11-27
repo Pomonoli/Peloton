@@ -21,7 +21,8 @@
     "test:heatmap": "node tests/heatmap.browser.mjs",
     "test:views": "node tests/peloton-views.browser.mjs",
     "test:segment-detail": "node tests/segment-detail.browser.mjs",
-    "test:routes": "node tests/recorded-routes.browser.mjs"
+    "test:routes": "node tests/recorded-routes.browser.mjs",
+    "test:ride-comparisons": "node tests/ride-comparisons.browser.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

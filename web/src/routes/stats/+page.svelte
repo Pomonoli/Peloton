@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import SpeedDistance from '#lib/components/SpeedDistance.svelte';
+	import { scatterQuery } from '#lib/speed-distance.js';
 	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import Icon from '#lib/components/Icon.svelte';
@@ -111,9 +114,28 @@
 <svelte:head><title>{m.nav_stats()}</title></svelte:head>
 
 <div class="space-y-5 max-md:space-y-4">
-	<header>
+	<header class="flex flex-wrap items-center justify-between gap-2">
 		<h1 class="page-title">{m.nav_stats()}</h1>
+		{#if years.length}
+			<select class="field" aria-label={m.stats_year()} bind:value={selectedYear}>
+				<option value="all">{m.stats_all_years()}</option>
+				{#each years as year (year.year)}
+					<option value={String(year.year)}>{year.year}</option>
+				{/each}
+			</select>
+		{/if}
 	</header>
+
+	{#if data.user}
+		{@const rider = data.member ?? {
+			id: data.user.id,
+			username: data.user.username,
+			display_name: data.user.displayName
+		}}
+		{#key rider.id}
+			<SpeedDistance {rider} query={scatterQuery(page.url.search, selectedYear)} />
+		{/key}
+	{/if}
 
 	{#if loading}
 		<p role="status" class="surface state-panel">{m.ride_loading()}</p>
@@ -189,12 +211,6 @@
 			<section>
 				<header class="mb-2 flex items-center justify-between gap-2">
 					<h2 class="section-title">{m.stats_by_year()}</h2>
-					<select class="field" aria-label={m.stats_year()} bind:value={selectedYear}>
-						<option value="all">{m.stats_all_years()}</option>
-						{#each years as year (year.year)}
-							<option value={String(year.year)}>{year.year}</option>
-						{/each}
-					</select>
 				</header>
 				<div class="surface overflow-hidden">
 					<div class="table-scroll">

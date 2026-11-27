@@ -402,6 +402,7 @@ try {
 						is_best: true
 					}
 				},
+				'/api/stats/speed-distance': [],
 				'/api/stats': {
 					totals: largeTotals,
 					by_year: [

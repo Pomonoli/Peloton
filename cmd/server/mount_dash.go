@@ -16,7 +16,11 @@ import (
 // mountRestDash mounts the owner dashboards, records and the review queue.
 func mountRestDash(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	auth := restAuth(app)
-	(&rest.DashboardHandlers{Auth: auth, Overviews: app.Overviews, Searches: app.Searches, Stats: app.Stats, PerformanceMaps: app.PerformanceMaps, TerritoryMaps: app.TerritoryMaps, Visibility: app.Visibility2, Log: logger}).Mount(mux)
+	(&rest.DashboardHandlers{
+		Auth: auth, Overviews: app.Overviews, Searches: app.Searches, Stats: app.Stats,
+		SpeedDistance: app.Activities, PerformanceMaps: app.PerformanceMaps, TerritoryMaps: app.TerritoryMaps,
+		Visibility: app.Visibility2, Log: logger,
+	}).Mount(mux)
 	(&rest.ReviewHandlers{Auth: auth, Queue: &activity.ReviewQueue{Activities: app.Activities}, Links: app.SourceLinks, Log: logger}).Mount(mux)
 	if app.BestEfforts != nil {
 		(&rest.RecordHandlers{Auth: auth, Stats: app.Stats, Community: &besteffort.CommunityRecords{Reader: app.BestEfforts}, Log: logger}).Mount(mux)
@@ -24,6 +28,7 @@ func mountRestDash(mux *http.ServeMux, app *App, logger *slog.Logger) {
 	if app.Users != nil && app.Segments != nil && app.BestEfforts != nil {
 		(&rest.HeadToHeadHandlers{Auth: auth, Log: logger, Views: &view.HeadToHead{
 			Members: auth.Members, Segments: app.Segments, Records: app.BestEfforts,
+			SharedRides: app.Activities, Visibility: app.Visibility2,
 		}}).Mount(mux)
 	}
 	if app.CustomBestEfforts != nil {

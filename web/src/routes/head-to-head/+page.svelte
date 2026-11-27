@@ -7,6 +7,7 @@
 	import ExcludeDownhills from '#lib/components/ExcludeDownhills.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import SectionTabs from '#lib/components/SectionTabs.svelte';
+	import SharedActivities from '#lib/components/SharedActivities.svelte';
 	import ComparisonTable from '#lib/components/ComparisonTable.svelte';
 	import { intlLocale } from '#lib/format.js';
 	import {
@@ -28,7 +29,7 @@
 	let loading = $state(false);
 	let error = $state('');
 	let retry: (() => void) | undefined;
-	let tab = $state<'segments' | 'records'>('segments');
+	let tab = $state<'segments' | 'records' | 'shared'>('segments');
 
 	const pair = $derived(
 		new SvelteURLSearchParams({ first: data.first, second: data.member }).toString()
@@ -76,7 +77,8 @@
 	]);
 	const tabs = $derived([
 		{ key: 'segments', label: m.nav_segments() },
-		{ key: 'records', label: m.comparison_records() }
+		{ key: 'records', label: m.comparison_records() },
+		{ key: 'shared', label: m.comparison_shared_tab() }
 	] as const);
 	const number = $derived(new Intl.NumberFormat(intlLocale()));
 	let directoryRequest: AbortController | undefined;
@@ -162,6 +164,10 @@
 		if (second) query.set('member', second);
 		if (data.viewedMember) query.set('viewing', data.viewedMember.username);
 		if (excludeDownhills) query.set('exclude_downhills', 'true');
+		for (const key of ['from', 'to']) {
+			const value = page.url.searchParams.get(key);
+			if (value) query.set(key, value);
+		}
 		void goto(query.size ? `/head-to-head?${query}` : '/head-to-head', { reset: false });
 	}
 </script>
@@ -254,27 +260,29 @@
 	{/if}
 
 	{#if comparison && score}
-		<div class="surface comparison-score" class:invisible={tab === 'records' && !recordsCurrent}>
-			<dl class="score-grid" aria-live="polite">
-				{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins, key: 'first' }, { label: m.comparison_ties(), value: score.ties, key: 'tie' }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses, key: 'second' }] as stat (stat.key)}
-					<div class={stat.key}>
-						<dt>{stat.label}</dt>
-						<dd>{number.format(stat.value)}</dd>
+		{#if tab !== 'shared'}
+			<div class="surface comparison-score" class:invisible={tab === 'records' && !recordsCurrent}>
+				<dl class="score-grid" aria-live="polite">
+					{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins, key: 'first' }, { label: m.comparison_ties(), value: score.ties, key: 'tie' }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses, key: 'second' }] as stat (stat.key)}
+						<div class={stat.key}>
+							<dt>{stat.label}</dt>
+							<dd>{number.format(stat.value)}</dd>
+						</div>
+					{/each}
+					<div class="score-total">
+						<dt>{m.comparison_total()}</dt>
+						<dd>{number.format(score.comparable)}</dd>
 					</div>
-				{/each}
-				<div class="score-total">
-					<dt>{m.comparison_total()}</dt>
-					<dd>{number.format(score.comparable)}</dd>
+				</dl>
+				<div class="score-bar" aria-hidden="true">
+					{#if score.comparable > 0}
+						<span class="first" style:flex-grow={score.wins}></span>
+						<span class="tie" style:flex-grow={score.ties}></span>
+						<span class="second" style:flex-grow={score.losses}></span>
+					{/if}
 				</div>
-			</dl>
-			<div class="score-bar" aria-hidden="true">
-				{#if score.comparable > 0}
-					<span class="first" style:flex-grow={score.wins}></span>
-					<span class="tie" style:flex-grow={score.ties}></span>
-					<span class="second" style:flex-grow={score.losses}></span>
-				{/if}
 			</div>
-		</div>
+		{/if}
 		<SectionTabs
 			{tabs}
 			active={tab}
@@ -326,6 +334,17 @@
 					defaultSort="category"
 				/>
 			</div>
+		</div>
+
+		<div
+			role="tabpanel"
+			id="comparison-panel-shared"
+			aria-labelledby="comparison-tab-shared"
+			hidden={tab !== 'shared'}
+		>
+			{#if tab === 'shared'}
+				<SharedActivities {pair} />
+			{/if}
 		</div>
 	{/if}
 </section>

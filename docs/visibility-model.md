@@ -9,3 +9,5 @@ Provider-restricted rides and rides hidden by an administrator are excluded from
 Migration 88 established member visibility for legacy profiles and activities. The database value `public` used by that migration means visible to eligible signed-in members. Existing activities, moderation flags, privacy zones, source identities, and account credentials continue to use the existing migrations.
 
 The former feeds, follow and block controls, clubs, kudos, comments, ActivityPub federation, and profile audience settings have been retired. The notification inbox, delivery preferences, and outbound notification webhooks have also been retired. Their schema and historical rows remain in place. Account email, live activity and admin events, and inbound provider webhooks remain available.
+
+Head-to-Head Shared results apply the same activity visibility rules. A member's GPS privacy zones also exclude affected sections from another member's shared distance, duration, and encounter locations. [Shared activities](ride-analytics.md#shared-activities)

@@ -11,9 +11,11 @@ import (
 )
 
 type HeadToHead struct {
-	Members  *Members
-	Segments port.SegmentComparisonReader
-	Records  port.RecordComparisonReader
+	Members     *Members
+	Segments    port.SegmentComparisonReader
+	Records     port.RecordComparisonReader
+	SharedRides port.SharedRideReader
+	Visibility  *Visibility
 }
 
 type ComparisonWinner string
@@ -65,6 +67,32 @@ type HeadToHeadResult struct {
 
 func (h *HeadToHead) Compare(ctx context.Context, viewer domain.UserID, first, second string) (HeadToHeadResult, error) {
 	var out HeadToHeadResult
+	riders, err := h.riders(ctx, viewer, first, second)
+	if err != nil {
+		return out, err
+	}
+	user, opponent := riders[0], riders[1]
+	segments, err := h.Segments.ListSharedSegments(ctx, viewer, user.ID, opponent.ID)
+	if err != nil {
+		return out, err
+	}
+	records, err := h.Records.ListComparisonRecords(ctx, viewer, user.ID, opponent.ID)
+	if err != nil {
+		return out, err
+	}
+	out.First, out.Opponent = user, opponent
+	out.Segments = make([]ComparedSegment, 0, len(segments))
+	for _, segment := range segments {
+		row := compareSegment(segment)
+		out.Segments = append(out.Segments, row)
+		out.SegmentScore.add(row.Winner)
+	}
+	out.Records, out.RecordScore = compareRecords(user.ID, records)
+	return out, nil
+}
+
+func (h *HeadToHead) riders(ctx context.Context, viewer domain.UserID, first, second string) ([2]domain.User, error) {
+	var out [2]domain.User
 	caller, err := h.Members.Get(ctx, viewer, viewer.String())
 	if err != nil {
 		return out, err
@@ -87,27 +115,10 @@ func (h *HeadToHead) Compare(ctx context.Context, viewer domain.UserID, first, s
 		}
 		riders[i] = rider
 	}
-	user, opponent := riders[0], riders[1]
-	if user.ID == opponent.ID {
+	if riders[0].ID == riders[1].ID {
 		return out, port.NewActionError(port.ActionErrorInvalid, "Choose two distinct riders")
 	}
-	segments, err := h.Segments.ListSharedSegments(ctx, viewer, user.ID, opponent.ID)
-	if err != nil {
-		return out, err
-	}
-	records, err := h.Records.ListComparisonRecords(ctx, viewer, user.ID, opponent.ID)
-	if err != nil {
-		return out, err
-	}
-	out.First, out.Opponent = user, opponent
-	out.Segments = make([]ComparedSegment, 0, len(segments))
-	for _, segment := range segments {
-		row := compareSegment(segment)
-		out.Segments = append(out.Segments, row)
-		out.SegmentScore.add(row.Winner)
-	}
-	out.Records, out.RecordScore = compareRecords(user.ID, records)
-	return out, nil
+	return riders, nil
 }
 
 func compareSegment(s domain.SharedSegment) ComparedSegment {

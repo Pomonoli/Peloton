@@ -24,6 +24,7 @@ type DashboardHandlers struct {
 	Overviews       *dashboard.Overviews
 	Searches        *dashboard.Searches
 	Stats           *dashboard.Stats
+	SpeedDistance   port.SpeedDistanceReader
 	PerformanceMaps *dashboard.PerformanceMaps
 	TerritoryMaps   *dashboard.TerritoryMaps
 	Visibility      *view.Visibility
@@ -35,6 +36,9 @@ func (h *DashboardHandlers) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/overview", h.overview)
 	mux.HandleFunc("GET /api/analysis", h.analysis)
 	mux.HandleFunc("GET /api/stats", h.stats)
+	if h.SpeedDistance != nil {
+		mux.HandleFunc("GET /api/stats/speed-distance", h.speedDistance)
+	}
 	mux.HandleFunc("GET /api/activities/feed", h.feed)
 	mux.HandleFunc("GET /api/activities/heatmap", h.heatmap)
 	if h.TerritoryMaps != nil {

@@ -23,3 +23,15 @@ Open **Explore → Heatmap** and select **Territory** in the layer menu. Every r
 Territory includes shared cycling activities that started in the last 90 days. Deleted, moderated, and provider-restricted activities are excluded. A rider's contributions are hidden in cells intersecting their geographic privacy zones. Each ride contributes through its primary recording, so duplicate sources attached to the same ride count once.
 
 The layer prepares existing rides in batches the first time it is opened. New imports and revised streams are picked up automatically, and rides age out as the window advances. The open map refreshes every 30 seconds and when the browser tab becomes visible.
+
+## Speed vs Distance
+
+In Insights → Stats, each point is one cycling activity. The chart opens with the rider whose Stats page you are viewing. Use Compare riders to overlay other members' eligible activities. The Stats year selector and activity filters in the URL also apply to the chart. Distances and average moving speeds use the validated activity summaries and are displayed in km and km/h. Each rider's dashed line is a linear fit across their displayed activities when they have at least two distinct distances. Select a point to see its ride and open the activity.
+
+## Shared activities
+
+In Social → Head-to-Head → Shared, choose two riders to compare their outdoor GPS recordings. Shared Rides requires at least five minutes of actual moving proximity within about 50 m, with both riders heading within 60° of one another. Brief interruptions can connect matching sections. Shared Distance measures the average of the two distances during those sections, with breaks, stops, and time spent apart omitted. Rejoining during the same ride adds distance without creating a second shared ride.
+
+Crossed Paths shows brief GPS-detected encounters within about 30 m between riders who were both moving on separate rides. It can include riders moving in opposite directions. An encounter is a geographical inference from recordings. Select any of the three totals for details, activity links, and encounter maps. The date filter uses the beginning of each shared ride and the time of each encounter, with both calendar dates included in UTC.
+
+Shared applies member activity visibility and geographic privacy zones before publishing results. It compares overlapping ride windows and interpolates inside validated recording intervals. Existing rides are evaluated from their stored GPS on first use and their results, including empty matches, are cached. A recording replacement, a different primary source, or a privacy zone edit invalidates the corresponding cache entry. Deleted or newly restricted activities are filtered out when the comparison is read.
