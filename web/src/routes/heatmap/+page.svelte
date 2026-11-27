@@ -35,10 +35,17 @@
 		bindMapSelection,
 		emptyFeatures,
 		nearestMapLine,
+		setMapFeatures,
 		showDiscoveryLocation,
 		showDiscoveryTrack
 	} from '#lib/discovery-map.js';
 	import { ActivityFilter, type ActivityFacets } from '#lib/activity-filter.svelte.js';
+	import {
+		addTerritoryLayers,
+		territoryBounds,
+		type Territory,
+		type TerritoryCell
+	} from '#lib/territory-map.js';
 
 	let { data: pageData } = $props();
 
@@ -51,6 +58,9 @@
 		geojson: FeatureCollection;
 	};
 	const PREPARATION_TIMEOUT_MS = 30_000;
+	const TERRITORY_ENDPOINT = '/api/activities/heatmap/territory';
+	const TERRITORY_REFRESH_MS = 30_000;
+	const preparationStalled = Symbol();
 
 	const filter = new ActivityFilter(page.url.searchParams);
 	const allRidersKey = '*';
@@ -78,10 +88,12 @@
 	let facets = $state.raw<ActivityFacets | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
-	let metric = $state<HeatmapMetric>('density');
+	let layer = $state<HeatmapMetric | 'territory'>('density');
+	const territoryMode = $derived(layer === 'territory');
+	const metric = $derived(layer === 'territory' ? 'density' : layer);
 	let scaleMode = $state<'auto' | 'fixed'>('auto');
 	let individual = $state(false);
-	const original = $derived(metric === 'density' && individual && !allRiders);
+	const original = $derived(!territoryMode && metric === 'density' && individual && !allRiders);
 	const scale = $derived(
 		scaleMode === 'fixed'
 			? fixedHeatmapScale(metric)
@@ -99,6 +111,27 @@
 	let selectedTrack = $state.raw<Position[][]>([]);
 	let trackStatus = $state<'idle' | 'loading' | 'missing' | 'failed'>('idle');
 	let trackRetry = $state(0);
+
+	let territoryData = $state.raw<Territory | null>(null);
+	let territoryPending = $state(0);
+	let territoryError = $state<string | null>(null);
+	let territoryLoading = $state(false);
+	let territorySelection = $state.raw<[number, number] | null>(null);
+	let territoryCell = $state.raw<TerritoryCell | null>(null);
+	let territoryCellStatus = $state<'idle' | 'loading' | 'missing' | 'failed'>('idle');
+	const territoryRiders = $derived(
+		new Map(territoryData?.legend.map((rider) => [rider.id, rider]))
+	);
+	const number = new Intl.NumberFormat('en');
+	const area = new Intl.NumberFormat('en', { maximumFractionDigits: 2 });
+	const distance = new Intl.NumberFormat('en', { maximumFractionDigits: 3 });
+	const percent = new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 1 });
+
+	function territoryDistance(meters: number) {
+		return meters < 1000
+			? m.territory_distance_m({ value: distance.format(meters) })
+			: m.territory_distance_km({ value: distance.format(meters / 1000) });
+	}
 
 	function clearDiscovery() {
 		pinned = null;
@@ -131,7 +164,10 @@
 	});
 
 	function applyDiscovery() {
-		showDiscoveryLocation(map, pinned?.location ?? null);
+		showDiscoveryLocation(
+			map,
+			territoryMode ? (territoryCell ? territorySelection : null) : (pinned?.location ?? null)
+		);
 		showDiscoveryTrack(map, selectedTrack);
 	}
 
@@ -257,6 +293,7 @@
 	});
 
 	let fitted = false;
+	let territoryFitted = false;
 
 	function bounds(fc: FeatureCollection): LngLatBounds | null {
 		let b: LngLatBounds | null = null;
@@ -278,14 +315,17 @@
 		(map.getSource('tracks') as GeoJSONSource | undefined)?.setData(fc);
 		// Frame the tracks on the first result only; later filter changes keep
 		// the viewport the user has set up.
-		if (!fitted && data) fitTracks();
+		if (!territoryMode && !fitted && data) fitTracks();
 	}
 
 	function fitTracks() {
-		if (!map || !overview) return;
-		const b = bounds(overview.result.geojson);
+		if (!map) return;
+		const b = territoryMode
+			? territoryData && territoryBounds(territoryData)
+			: overview && bounds(overview.result.geojson);
 		if (!b) return;
-		fitted = true;
+		if (territoryMode) territoryFitted = true;
+		else fitted = true;
 		map.fitBounds(b, { padding: 40, duration: 0, maxZoom: 14 });
 	}
 
@@ -295,51 +335,139 @@
 		applyData();
 	}
 
+	async function fetchPrepared<T>(
+		url: string,
+		signal: AbortSignal,
+		onPending: (count: number) => void,
+		version?: string
+	): Promise<T | null> {
+		let lowestPending = Infinity;
+		let progressDeadline = performance.now() + PREPARATION_TIMEOUT_MS;
+		while (!signal.aborted) {
+			const res = await fetch(url, {
+				signal: AbortSignal.any([signal, AbortSignal.timeout(PREPARATION_TIMEOUT_MS)]),
+				...(version ? { headers: { 'If-None-Match': '"' + version + '"' }, cache: 'no-store' } : {})
+			});
+			if (res.status === 304) return null;
+			if (!res.ok) throw new Error(String(res.status));
+			if (res.status !== 202) return (await res.json()) as T;
+			version = undefined;
+			const result: { pending: number } = await res.json();
+			if (signal.aborted) break;
+			if (
+				Number.isInteger(result.pending) &&
+				result.pending > 0 &&
+				result.pending < lowestPending
+			) {
+				lowestPending = result.pending;
+				progressDeadline = performance.now() + PREPARATION_TIMEOUT_MS;
+			}
+			if (performance.now() >= progressDeadline) throw preparationStalled;
+			onPending(result.pending);
+			await new Promise((resolve) => setTimeout(resolve, 350));
+		}
+		return null;
+	}
+
 	async function load(url: string, signal: AbortSignal, onResult: (result: Heatmap) => void) {
 		loading = true;
 		error = null;
 		pending = 0;
-		let lowestPending = Infinity;
-		let progressDeadline = performance.now() + PREPARATION_TIMEOUT_MS;
 		try {
-			while (!signal.aborted) {
-				const res = await fetch(url, {
-					signal: AbortSignal.any([signal, AbortSignal.timeout(PREPARATION_TIMEOUT_MS)])
-				});
-				if (!res.ok) throw new Error(m.heatmap_load_failed());
-				const result = await res.json();
-				if (signal.aborted) return;
-				if (res.status === 202) {
-					if (
-						Number.isInteger(result.pending) &&
-						result.pending > 0 &&
-						result.pending < lowestPending
-					) {
-						lowestPending = result.pending;
-						progressDeadline = performance.now() + PREPARATION_TIMEOUT_MS;
-					}
-					if (performance.now() >= progressDeadline) {
-						error = m.heatmap_preparation_stalled();
-						showData(null);
-						return;
-					}
-					pending = result.pending;
-					await new Promise((resolve) => setTimeout(resolve, 350));
-					continue;
-				}
+			const result = await fetchPrepared<Heatmap>(url, signal, (count) => (pending = count));
+			if (!signal.aborted && result) {
 				pending = 0;
-				onResult(result as Heatmap);
-				return;
+				onResult(result);
 			}
-		} catch {
+		} catch (err) {
 			if (!signal.aborted) {
-				error = m.heatmap_load_failed();
+				error =
+					err === preparationStalled ? m.heatmap_preparation_stalled() : m.heatmap_load_failed();
 				showData(null);
 			}
 		} finally {
 			if (!signal.aborted) loading = false;
 		}
 	}
+
+	$effect(() => {
+		if (!territoryMode) return;
+		const ctrl = new AbortController();
+		let refreshing = false;
+		async function refresh() {
+			if (refreshing || document.hidden) return;
+			refreshing = true;
+			if (!territoryData) territoryLoading = true;
+			try {
+				const result = await fetchPrepared<Territory>(
+					TERRITORY_ENDPOINT,
+					ctrl.signal,
+					(count) => {
+						territoryData = null;
+						territoryLoading = true;
+						territoryPending = count;
+					},
+					territoryData?.version
+				);
+				if (!ctrl.signal.aborted) {
+					if (result) territoryData = result;
+					territoryError = null;
+				}
+			} catch (err) {
+				if (!ctrl.signal.aborted) {
+					territoryData = null;
+					territoryError =
+						err === preparationStalled
+							? m.heatmap_preparation_stalled()
+							: m.territory_load_failed();
+				}
+			} finally {
+				refreshing = false;
+				if (!ctrl.signal.aborted) {
+					territoryPending = 0;
+					territoryLoading = false;
+				}
+			}
+		}
+		untrack(() => void refresh());
+		const timer = setInterval(() => void refresh(), TERRITORY_REFRESH_MS);
+		document.addEventListener('visibilitychange', refresh);
+		return () => {
+			ctrl.abort();
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', refresh);
+			territoryData = null;
+			territorySelection = null;
+			territoryLoading = false;
+			territoryPending = 0;
+			territoryError = null;
+		};
+	});
+
+	$effect(() => {
+		const selection = territorySelection;
+		const version = territoryData?.version;
+		territoryCell = null;
+		territoryCellStatus = 'idle';
+		if (!territoryMode || !version || !selection) return;
+		const ctrl = new AbortController();
+		const [lon, lat] = selection;
+		const query = new URLSearchParams({ lat: String(lat), lon: String(lon) });
+		territoryCellStatus = 'loading';
+		void fetchPrepared<TerritoryCell>(TERRITORY_ENDPOINT + '?' + query, ctrl.signal, () => {})
+			.then((result) => {
+				if (ctrl.signal.aborted || !result) return;
+				territoryCell = result;
+				territoryCellStatus = 'idle';
+			})
+			.catch((err) => {
+				if (!ctrl.signal.aborted) {
+					territoryCellStatus =
+						err instanceof Error && err.message === '404' ? 'missing' : 'failed';
+				}
+			});
+		return () => ctrl.abort();
+	});
 
 	// Chip/select edits re-query at once; dates and ranges after a debounce.
 	let debounced = $state(0);
@@ -355,6 +483,7 @@
 		debounceTimer = setTimeout(() => (debounced += 1), 350);
 	});
 	const overviewURL = $derived.by(() => {
+		if (territoryMode) return '';
 		void filter.immediateKey;
 		void debounced;
 		const endpoint = original ? '/api/activities/heatmap' : '/api/activities/heatmap/performance';
@@ -372,6 +501,7 @@
 		untrack(() => {
 			clearDiscovery();
 			showData(null);
+			if (!url) return;
 			void load(url, ctrl.signal, (result) => {
 				overview = { url, result };
 				facets = result.facets;
@@ -417,15 +547,25 @@
 			layout: { 'line-cap': 'round', 'line-join': 'round' },
 			paint: { 'line-color': heatmapColor(metric, scale), 'line-width': 3.5, 'line-opacity': 0.9 }
 		});
+		addTerritoryLayers(map, basemap === 'dark');
 		addDiscoveryOverlay(map, basemap === 'dark' ? 'dark' : 'light');
 		applyDiscovery();
 		mapLoaded = true;
 		applyPaint();
 		applyData();
+		applyTerritory();
 	}
 
 	function selectAt(point: Point) {
-		if (!map || !mapLoaded || !data || !map.isSourceLoaded('tracks')) return;
+		if (!map || !mapLoaded) return;
+		if (territoryMode) {
+			if (territoryData?.geojson.features.length) {
+				const location = map.unproject(point).wrap();
+				territorySelection = [location.lng, location.lat];
+			}
+			return;
+		}
+		if (!data || !map.isSourceLoaded('tracks')) return;
 		const hit = nearestMapLine(map, point, 'tracks-line');
 		if (!hit) return;
 		const values = hit.feature.properties;
@@ -484,6 +624,12 @@
 			if (map) map.getCanvas().style.cursor = '';
 			hovered = null;
 		});
+		map.on('mouseenter', 'territory-fill', () => {
+			if (map) map.getCanvas().style.cursor = 'pointer';
+		});
+		map.on('mouseleave', 'territory-fill', () => {
+			if (map) map.getCanvas().style.cursor = '';
+		});
 		bindMapSelection(map, selectAt);
 		return () => ctrl.abort();
 	});
@@ -505,6 +651,7 @@
 		const opacity = raw ? trackOpacity : 0.94;
 		if (!map?.getLayer('tracks-line')) return;
 		map.setLayoutProperty('tracks-glow', 'visibility', raw ? 'visible' : 'none');
+		map.setLayoutProperty('tracks-line', 'visibility', territoryMode ? 'none' : 'visible');
 		map.setPaintProperty('tracks-glow', 'line-color', trackColor);
 		map.setPaintProperty('tracks-line', 'line-color', color);
 		map.setPaintProperty('tracks-line', 'line-width', raw ? 1.8 : 3.5);
@@ -512,6 +659,19 @@
 	}
 
 	$effect(applyPaint);
+
+	function applyTerritory() {
+		const visible = territoryMode;
+		const result = territoryData;
+		if (!map || !mapLoaded) return;
+		const visibility = visible ? 'visible' : 'none';
+		map.setLayoutProperty('territory-fill', 'visibility', visibility);
+		map.setLayoutProperty('territory-outline', 'visibility', visibility);
+		setMapFeatures(map, 'territory', result?.geojson ?? emptyFeatures);
+		if (visible && !territoryFitted && result) fitTracks();
+	}
+
+	$effect(applyTerritory);
 
 	onDestroy(() => {
 		clearTimeout(debounceTimer);
@@ -526,7 +686,7 @@
 <section class="space-y-4 max-md:space-y-2.5">
 	{#snippet mapControls()}
 		<div class="flex flex-wrap items-center gap-2">
-			{#if !original}
+			{#if !territoryMode && !original}
 				<label class="flex items-center gap-2 text-sm">
 					{m.heatmap_scale()}
 					<select
@@ -560,7 +720,7 @@
 					{/each}
 				</div>
 			{/if}
-			{#if metric === 'density' && !allRiders}
+			{#if !territoryMode && metric === 'density' && !allRiders}
 				<label class="flex min-h-10 items-center gap-2 text-xs">
 					<input type="checkbox" bind:checked={individual} />
 					{m.heatmap_original_tracks()}
@@ -610,37 +770,34 @@
 			<button
 				type="button"
 				onclick={fitTracks}
-				disabled={!data || data.with_track === 0}
+				disabled={territoryMode ? !territoryData?.geojson.features.length : !data?.with_track}
 				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50"
 			>
-				{m.heatmap_fit_tracks()}
+				{territoryMode ? m.territory_fit() : m.heatmap_fit_tracks()}
 			</button>
 		</div>
 	{/snippet}
-	<FilterSheet
-		collapsible
-		label={m.heatmap_filters()}
-		active={filter.active}
-		reset={() => filter.clear()}
-	>
-		{#snippet toolbar()}
-			<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
-				<div>
-					<h1 class="page-title">
-						{m.member_heatmap()}
-					</h1>
-					{#if !filter.from && !filter.to}<p class="mt-1 text-sm text-quiet">
-							{m.heatmap_all_time()}
-						</p>{/if}
-					{#if data}
-						<p class="mt-1 text-sm text-zinc-400">
-							<span class="font-medium text-zinc-200">{data.with_track}</span> tracks from {data.matched}
-							{#if filter.active}matching{/if} activities{#if data.truncated}
-								<span class="text-amber-400">(newest {data.with_track} shown)</span>{/if}
-						</p>
-					{/if}
-				</div>
-				<div class="flex flex-wrap gap-2">
+	{#snippet heatmapToolbar()}
+		<header class="flex items-center justify-between gap-4 max-md:flex-wrap">
+			<div>
+				<h1 class="page-title">
+					{m.member_heatmap()}
+				</h1>
+				{#if territoryMode}
+					<p class="mt-1 text-sm text-quiet">{m.territory_window()}</p>
+				{:else if !filter.from && !filter.to}<p class="mt-1 text-sm text-quiet">
+						{m.heatmap_all_time()}
+					</p>{/if}
+				{#if !territoryMode && data}
+					<p class="mt-1 text-sm text-zinc-400">
+						<span class="font-medium text-zinc-200">{data.with_track}</span> tracks from {data.matched}
+						{#if filter.active}matching{/if} activities{#if data.truncated}
+							<span class="text-amber-400">(newest {data.with_track} shown)</span>{/if}
+					</p>
+				{/if}
+			</div>
+			<div class="flex flex-wrap gap-2">
+				{#if !territoryMode}
 					<label class="flex items-center gap-2 text-sm">
 						{m.routes_rider()}
 						<select
@@ -661,20 +818,20 @@
 							{/each}
 						</select>
 					</label>
-					<label class="flex items-center gap-2 text-sm">
-						{m.heatmap_layer()}
-						<select
-							bind:value={metric}
-							class="min-h-10 rounded border border-zinc-700 bg-panel px-2"
-						>
-							{#each heatmapMetrics as layer (layer)}
-								<option value={layer}>{heatmapMetricLabel(layer)}</option>
-							{/each}
-						</select>
-					</label>
-				</div>
-			</header>
-		{/snippet}
+				{/if}
+				<label class="flex items-center gap-2 text-sm">
+					{m.heatmap_layer()}
+					<select bind:value={layer} class="min-h-10 rounded border border-zinc-700 bg-panel px-2">
+						{#each heatmapMetrics as item (item)}
+							<option value={item}>{heatmapMetricLabel(item)}</option>
+						{/each}
+						<option value="territory">{m.territory_layer()}</option>
+					</select>
+				</label>
+			</div>
+		</header>
+	{/snippet}
+	{#snippet heatmapFilters()}
 		{#key rider}
 			<ActivityFilterBar
 				{filter}
@@ -684,18 +841,27 @@
 				member={allRiders ? undefined : rider || undefined}
 			/>
 		{/key}
-	</FilterSheet>
+	{/snippet}
+	<FilterSheet
+		collapsible
+		label={m.heatmap_filters()}
+		active={filter.active}
+		toolbar={heatmapToolbar}
+		belowToolbar={territoryMode ? mapControls : undefined}
+		reset={() => filter.clear()}
+		children={territoryMode ? undefined : heatmapFilters}
+	/>
 
-	{#if error}
+	{#if territoryMode ? territoryError : error}
 		<div
 			role="alert"
 			class="rounded border border-red-700/50 bg-red-950/30 px-3 py-2 text-xs text-red-300"
 		>
-			{error}
+			{territoryMode ? territoryError : error}
 		</div>
 	{/if}
 
-	{#if !original}
+	{#if !territoryMode && !original}
 		<div
 			role="group"
 			class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs"
@@ -739,13 +905,24 @@
 		>
 			{fullscreen ? m.heatmap_exit_fullscreen() : m.heatmap_fullscreen()}
 		</button>
-		{#if loading}
+		{#if territoryMode ? territoryLoading : loading}
+			{@const preparing = territoryMode ? territoryPending : pending}
 			<div
 				class="pointer-events-none absolute top-3 left-3 max-w-[calc(100%-8rem)] rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-300"
 			>
-				{pending > 0 ? m.heatmap_preparing({ count: pending }) : m.heatmap_loading()}
+				{preparing > 0
+					? m.heatmap_preparing({ count: preparing })
+					: territoryMode
+						? m.territory_loading()
+						: m.heatmap_loading()}
 			</div>
-		{:else if data && data.geojson.features.length === 0}
+		{:else if territoryMode && territoryData?.geojson.features.length === 0}
+			<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+				<p class="rounded bg-zinc-900/80 px-4 py-2 text-sm text-zinc-300">
+					{m.territory_empty()}
+				</p>
+			</div>
+		{:else if !territoryMode && data && data.geojson.features.length === 0}
 			<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
 				<p class="rounded bg-zinc-900/80 px-4 py-2 text-sm text-zinc-400">
 					{data.with_track > 0
@@ -756,7 +933,47 @@
 				</p>
 			</div>
 		{/if}
-		{#if !original}
+		{#if territoryMode}
+			{#if territoryData?.geojson.features.length}
+				<div
+					aria-live="polite"
+					class="surface px-3 py-2 text-sm {fullscreen
+						? 'absolute inset-x-2 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-10 mx-auto max-h-[40dvh] max-w-max overflow-y-auto'
+						: 'mt-2'}"
+				>
+					{#if territoryCell}
+						<p class="font-medium" data-testid="territory-owner">
+							{m.territory_owner({ name: territoryRiders.get(territoryCell.owner_id)?.name ?? '' })}
+						</p>
+						<dl class="mt-1 flex flex-wrap gap-x-5 gap-y-1">
+							{#each territoryCell.distances as score (score.rider_id)}
+								{@const owner = territoryRiders.get(score.rider_id)}
+								{#if owner}
+									<div>
+										<dt class="flex items-center gap-1.5 text-xs text-quiet">
+											<span class="size-2.5 shrink-0 rounded-sm" style:background={owner.color}
+											></span>
+											{owner.name}
+										</dt>
+										<dd class="metric-value">{territoryDistance(score.distance_m)}</dd>
+									</div>
+								{/if}
+							{/each}
+						</dl>
+					{:else}
+						<p class="text-quiet">
+							{territoryCellStatus === 'loading'
+								? m.territory_cell_loading()
+								: territoryCellStatus === 'missing'
+									? m.territory_unclaimed()
+									: territoryCellStatus === 'failed'
+										? m.territory_cell_failed()
+										: m.territory_inspect()}
+						</p>
+					{/if}
+				</div>
+			{/if}
+		{:else if !original}
 			<div
 				class="surface px-3 py-2 text-sm {fullscreen
 					? 'absolute inset-x-2 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-10 mx-auto max-w-max'
@@ -782,8 +999,38 @@
 			</div>
 		{/if}
 	</div>
+	{#if territoryMode && territoryData?.legend.length}
+		<div class="surface overflow-x-auto px-3 py-2">
+			<table class="w-full text-left text-xs">
+				<caption class="pb-2 text-left text-sm font-medium">{m.heatmap_legend()}</caption>
+				<thead class="border-b border-zinc-700 text-quiet">
+					<tr>
+						<th scope="col" class="py-1 pr-2">{m.routes_rider()}</th>
+						<th scope="col" class="px-2 py-1 text-right">{m.territory_hexagons()}</th>
+						<th scope="col" class="px-2 py-1 text-right">{m.territory_area()}</th>
+						<th scope="col" class="py-1 pl-2 text-right">{m.territory_share()}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each territoryData.legend as entry (entry.id)}
+						<tr class="border-b border-zinc-700/40 last:border-0">
+							<th scope="row" class="py-1.5 pr-2 font-medium">
+								<span class="flex items-center gap-2">
+									<span class="size-3 shrink-0 rounded-sm" style:background={entry.color}></span>
+									{entry.name}
+								</span>
+							</th>
+							<td class="metric-value px-2 text-right">{number.format(entry.cells)}</td>
+							<td class="metric-value px-2 text-right">{area.format(entry.area_km2)}</td>
+							<td class="metric-value pl-2 text-right">{percent.format(entry.percentage / 100)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
 	{#if original}<p class="text-xs text-zinc-500">{m.heatmap_open_activity()}</p>{/if}
-	{#if !original && pinned && typeof pinned.values.cell === 'string'}
+	{#if !territoryMode && !original && pinned && typeof pinned.values.cell === 'string'}
 		{#if trackStatus === 'loading'}
 			<p role="status" class="text-sm text-quiet">{m.heatmap_track_loading()}</p>
 		{:else if trackStatus === 'missing'}

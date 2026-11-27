@@ -28,11 +28,12 @@ const heatmapSignatureSQL = `md5('v2:' || p.id::text || ':' ||
 	string_agg(src.id::text || ':' || src.heatmap_revision::text || ':' ||
 		COALESCE(src.parsed->>'power_recorded', ''), ',' ORDER BY src.id))`
 
-const heatmapSourcesSQL = `
-	FROM activities a
+const heatmapPrimarySQL = `
 	JOIN activity_sources p ON p.id = a.primary_stream_source_id
 		AND p.activity_id = a.id AND p.status <> 'detached' AND p.provider <> 'derived'
-		AND (p.provider <> 'strava' OR a.provider_restricted)
+		AND (p.provider <> 'strava' OR a.provider_restricted)`
+
+const heatmapSourcesSQL = ` FROM activities a ` + heatmapPrimarySQL + `
 	JOIN activity_sources src ON src.activity_id = a.id
 		AND ` + canonicalPerformanceSourceSQL + ` AND src.provider <> 'derived'
 		AND (src.id = p.id OR src.parsed @> '{"has_stream":true}')`

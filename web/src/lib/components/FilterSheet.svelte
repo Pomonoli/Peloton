@@ -14,9 +14,9 @@
 		collapsible = false,
 		reset
 	}: {
-		children: Snippet;
+		children?: Snippet | undefined;
 		toolbar?: Snippet;
-		belowToolbar?: Snippet;
+		belowToolbar?: Snippet | undefined;
 		label?: string;
 		active?: boolean;
 		collapsible?: boolean;
@@ -37,12 +37,12 @@
 	});
 </script>
 
-{#if toolbar || mobile.current}
+{#if toolbar || (children && mobile.current)}
 	<div class="flex min-w-0 items-start justify-between gap-2">
 		{#if toolbar}
 			<div class="min-w-0 flex-1">{@render toolbar()}</div>
 		{/if}
-		{#if mobile.current}
+		{#if children && mobile.current}
 			<button
 				type="button"
 				class="action ml-auto shrink-0 data-[active=true]:border-accent-500/40 data-[active=true]:text-accent-300"
@@ -67,7 +67,7 @@
 
 {@render belowToolbar?.()}
 
-{#if mobile.current}
+{#if children && mobile.current}
 	<dialog
 		class="filter-sheet"
 		{id}
@@ -110,12 +110,12 @@
 			</footer>
 		</div>
 	</dialog>
-{:else if collapsible}
+{:else if children && collapsible}
 	<details open class="mt-2">
 		<summary class="mb-2 w-fit cursor-pointer text-sm font-medium text-accent-300">{label}</summary>
 		{@render children()}
 	</details>
-{:else}
+{:else if children}
 	<div class:mt-2={!!toolbar}>
 		{@render children()}
 	</div>

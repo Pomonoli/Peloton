@@ -12,6 +12,7 @@ production dependencies, all available under permissive licenses:
 
   * github.com/jackc/pgx/v5            — MIT
   * github.com/pressly/goose/v3        — MIT
+  * github.com/dimchansky/h3-go       — Apache-2.0
   * github.com/google/uuid             — BSD-3-Clause
   * github.com/spf13/cobra             — Apache-2.0
   * github.com/caarlos0/env/v11        — MIT
@@ -20,3 +21,7 @@ production dependencies, all available under permissive licenses:
 
 Refer to `go.sum` and the `go list -m all` output for the exact set
 and versions in any given release.
+
+The H3 implementation is copyright 2019-2026 Dmitrij Koniajev and is
+derived from Uber H3, copyright 2016-2025 Uber Technologies, Inc. Both
+are licensed under the Apache License, Version 2.0.

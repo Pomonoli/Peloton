@@ -15,3 +15,11 @@ The estimate requires at least one minute of usable samples covering 60% of elap
 ## Segment comparisons
 
 The Local KOM table ranks each member by their fastest eligible effort during the selected period. The average speed uses total matched distance divided by total elapsed time for eligible efforts in that period. The chart uses the recorded attempt times and can compare up to four members, with up to 200 recent efforts per member.
+
+## Territory heatmap
+
+Open **Explore → Heatmap** and select **Territory** in the layer menu. Every resolution 8 H3 cell is awarded to the rider with the most validated GPS distance within its boundaries. Cells have an average area of about 0.74 km², and the legend sums their actual areas. An exact distance tie goes to the lower rider ID. Select a claimed territory to see the ranking and distance for the underlying cell.
+
+Territory includes shared cycling activities that started in the last 90 days. Deleted, moderated, and provider-restricted activities are excluded. A rider's contributions are hidden in cells intersecting their geographic privacy zones. Each ride contributes through its primary recording, so duplicate sources attached to the same ride count once.
+
+The layer prepares existing rides in batches the first time it is opened. New imports and revised streams are picked up automatically, and rides age out as the window advances. The open map refreshes every 30 seconds and when the browser tab becomes visible.

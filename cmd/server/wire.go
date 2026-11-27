@@ -164,6 +164,7 @@ type App struct {
 	Details            *view.Details
 	Stats              *dashboard.Stats
 	PerformanceMaps    *dashboard.PerformanceMaps
+	TerritoryMaps      *dashboard.TerritoryMaps
 	SegmentViews       *segmentview.Segments
 	HealthViews        *dashboard.Health
 	MetricStore        *metricsuc.Store
@@ -420,7 +421,9 @@ func wireAppCoreRepos(app *App, pool *pgxpool.Pool, cfg *config.Config) {
 	app.UserSettings = postgres.NewUserSettingsRepo(pool)
 	app.Users = postgres.NewUserRepo(pool)
 	app.Streams = postgres.NewStreamRepo(pool)
-	app.PerformanceMaps = dashboard.NewPerformanceMaps(app.Activities, postgres.NewPerformanceHeatmapRepo(pool))
+	heatmaps := postgres.NewPerformanceHeatmapRepo(pool)
+	app.PerformanceMaps = dashboard.NewPerformanceMaps(app.Activities, heatmaps)
+	app.TerritoryMaps = dashboard.NewTerritoryMaps(postgres.NewTerritoryRepo(pool), heatmaps)
 	app.BestEfforts = postgres.NewBestEffortRepo(pool)
 	app.CustomBestEffortRepo = postgres.NewCustomBestEffortRepo(pool)
 	app.SourcePreviewRepo = postgres.NewSourcePreviewRepo(pool)
