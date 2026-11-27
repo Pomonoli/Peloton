@@ -3,6 +3,9 @@
 Local development runs the **supporting services in Docker Compose** and the
 **Peloton server and web app on the host**. File uploads work without a provider worker. [Development prerequisites](../CONTRIBUTING.md#development-setup)
 
+For a background Cloud workspace setup with sample data, see the
+[Codex Cloud development preview](dev-preview.md).
+
 ## 1. Supporting services (compose)
 
 `docker-compose.dev.yml` is dependencies-only — Postgres/TimescaleDB/PostGIS,

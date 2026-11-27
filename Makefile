@@ -282,3 +282,7 @@ dev-server:
 
 dev-web:
 	set -a; [ -f dev.env ] && . ./dev.env; set +a; cd $(WEB) && npm run dev
+
+.PHONY: dev-preview-backend
+dev-preview-backend:
+	$(AIR) -c .air.server.toml
