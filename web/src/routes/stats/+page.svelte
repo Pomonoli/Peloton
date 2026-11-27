@@ -126,17 +126,6 @@
 		{/if}
 	</header>
 
-	{#if data.user}
-		{@const rider = data.member ?? {
-			id: data.user.id,
-			username: data.user.username,
-			display_name: data.user.displayName
-		}}
-		{#key rider.id}
-			<SpeedDistance {rider} query={scatterQuery(page.url.search, selectedYear)} />
-		{/key}
-	{/if}
-
 	{#if loading}
 		<p role="status" class="surface state-panel">{m.ride_loading()}</p>
 	{:else if !s}
@@ -328,6 +317,17 @@
 				</div>
 			</section>
 		{/if}
+	{/if}
+
+	{#if data.user}
+		{@const rider = data.member ?? {
+			id: data.user.id,
+			username: data.user.username,
+			display_name: data.user.displayName
+		}}
+		{#key rider.id}
+			<SpeedDistance {rider} query={scatterQuery(page.url.search, selectedYear)} />
+		{/key}
 	{/if}
 </div>
 
