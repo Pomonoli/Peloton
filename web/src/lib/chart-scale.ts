@@ -1,6 +1,6 @@
 export function tickStep(raw: number) {
 	const base = 10 ** Math.floor(Math.log10(raw));
-	return ([1, 2, 2.5, 5, 10].find((step) => step * base >= raw) ?? 10) * base;
+	return ([1, 2, 2.5, 5].find((step) => step * base >= raw) ?? 10) * base;
 }
 
 export function axisTicks(start: number, end: number, step: number) {
