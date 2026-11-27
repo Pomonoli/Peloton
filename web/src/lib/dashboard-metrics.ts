@@ -12,8 +12,22 @@ export type ActivityTotals = {
 export function activityMetrics(totals: ActivityTotals) {
 	return [
 		{ label: m.nav_activities(), value: totals.count.toLocaleString(intlLocale()), icon: 'gear' },
-		{ label: m.col_distance(), value: formatDistance(totals.distance_m), icon: 'routes' },
-		{ label: m.metric_moving_time(), value: formatDuration(totals.moving_s), icon: 'clock' },
-		{ label: m.col_elevation(), value: formatElevation(totals.elevation_gain_m), icon: 'segments' }
-	] satisfies { label: string; value: string; icon: IconName }[];
+		{
+			label: m.col_distance(),
+			value: formatDistance(totals.distance_m, { compact: true }),
+			icon: 'routes'
+		},
+		{
+			label: m.metric_moving_time(),
+			shortLabel: m.detail_label_time(),
+			value: formatDuration(totals.moving_s),
+			icon: 'clock'
+		},
+		{
+			label: m.col_elevation(),
+			shortLabel: m.metric_elevation_gain_short(),
+			value: formatElevation(totals.elevation_gain_m),
+			icon: 'segments'
+		}
+	] satisfies { label: string; shortLabel?: string; value: string; icon: IconName }[];
 }

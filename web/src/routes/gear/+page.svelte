@@ -171,7 +171,8 @@
 		gearLabel(g) + (g.retired ? ` ${m.gear_retired_suffix()}` : '');
 
 	const field = 'mt-1 w-full rounded border border-zinc-800 bg-panel px-3 py-2 text-sm';
-	const select = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300';
+	const select =
+		'min-w-0 max-w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300';
 	const btn =
 		'rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-accent-500 hover:text-accent-300 disabled:opacity-50';
 	const btnPrimary =
@@ -278,12 +279,13 @@
 					<li class="surface p-4">
 						<div class="flex flex-wrap items-center gap-2 text-sm">
 							<span class="{badge} bg-zinc-800 text-zinc-300">{r.provider}</span>
-							<span class="font-medium">{r.providerName || r.externalId}</span>
+							<span class="min-w-0 font-medium wrap-anywhere">{r.providerName || r.externalId}</span
+							>
 							<span class="text-zinc-500">· {gearKindLabel(r.kind)}</span>
 							{#if r.brand || r.model}<span class="text-zinc-500"
 									>· {[r.brand, r.model].filter(Boolean).join(' ')}</span
 								>{/if}
-							{#if r.providerDistanceM != null}<span class="text-zinc-500"
+							{#if r.providerDistanceM != null}<span class="metric-value text-zinc-500"
 									>· {formatDistance(r.providerDistanceM)}</span
 								>{/if}
 							{#if r.retired}<span class="text-zinc-500">· {m.gear_retired_suffix()}</span>{/if}
@@ -344,7 +346,7 @@
 								<div class="min-w-0">
 									<div class="flex flex-wrap items-center gap-2">
 										<span class="{badge} bg-zinc-800 text-zinc-400">{gearKindLabel(g.kind)}</span>
-										<span class="font-medium">{g.name}</span>
+										<span class="min-w-0 font-medium wrap-anywhere">{g.name}</span>
 										{#if g.brand || g.model}<span class="text-sm text-zinc-500"
 												>{[g.brand, g.model].filter(Boolean).join(' ')}</span
 											>{/if}
@@ -362,21 +364,26 @@
 										{/each}
 									</div>
 									<p class="mt-1 text-sm text-zinc-400">
-										{formatDistance(g.totalDistanceM)} · {formatDuration(g.totalMovingS)} ·
+										<span class="metric-value"
+											>{formatDistance(g.totalDistanceM, { compact: true })}</span
+										>
+										<span class="metric-value">· {formatDuration(g.totalMovingS)}</span>
 										<a
 											href={memberURL(`/activities?gear_id=${g.id}`, data.member)}
-											class="text-accent-400 hover:text-accent-300"
+											class="metric-value text-accent-400 hover:text-accent-300"
 										>
-											{m.gear_activity_count({ count: g.activityCount })}
+											· {m.gear_activity_count({ count: g.activityCount })}
 										</a>
 										{#if g.purchaseDate}· {m.gear_since({
 												date: formatDateOnly(g.purchaseDate)
 											})}{/if}
 									</p>
-									{#if g.weightKg != null}<p class="mt-1 text-xs text-quiet">
+									{#if g.weightKg != null}<p class="metric-value mt-1 text-xs text-quiet">
 											{m.gear_bicycle_weight_value({ weight: g.weightKg })}
 										</p>{/if}
-									{#if g.notes}<p class="mt-1 text-xs text-zinc-500">{g.notes}</p>{/if}
+									{#if g.notes}<p class="mt-1 text-xs wrap-anywhere text-zinc-500">
+											{g.notes}
+										</p>{/if}
 								</div>
 								{#if !data.member}
 									<div class="flex shrink-0 flex-wrap items-center gap-2">
@@ -396,7 +403,7 @@
 								{/if}
 							</div>
 							{#if !data.member && data.gear.length > 1}
-								<div class="mt-3 flex items-center gap-2 text-xs text-zinc-500">
+								<div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
 									<span>{m.gear_merge_label()}</span>
 									<select bind:value={mergeInto[g.id]} class={select}>
 										<option value="">—</option>
@@ -455,11 +462,16 @@
 				{#each retired as g (g.id)}
 					<li class="flex items-center justify-between gap-4 text-sm max-md:flex-wrap">
 						<span>
-							<span class="font-medium text-zinc-300">{g.name}</span>
+							<span class="font-medium wrap-anywhere text-zinc-300">{g.name}</span>
 							<span class="text-zinc-500">
-								· {formatDistance(g.totalDistanceM)} · {m.gear_activity_count({
-									count: g.activityCount
-								})}</span
+								<span class="metric-value"
+									>· {formatDistance(g.totalDistanceM, { compact: true })}</span
+								>
+								<span class="metric-value"
+									>· {m.gear_activity_count({
+										count: g.activityCount
+									})}</span
+								></span
 							>
 							{#if g.retiredAt}<span class="text-quiet"> · {formatDateOnly(g.retiredAt)}</span>{/if}
 						</span>

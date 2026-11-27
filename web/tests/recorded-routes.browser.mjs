@@ -90,7 +90,7 @@ const loop = {
 const canal = {
 	...loop,
 	id: 'canal',
-	name: 'Canal Ride',
+	name: 'Canal Ride along the ' + 'NorthwesternCanalGreenway'.repeat(5),
 	type: 'point_to_point',
 	riders: riders.slice(0, 1),
 	track: [
@@ -418,7 +418,8 @@ try {
 		await main.getByRole('heading', { name: 'Waasland Loop' }).waitFor();
 
 		await page.goto(origin + '/routes/waasland/recorded/canal');
-		await main.getByRole('heading', { name: 'Canal Ride' }).waitFor();
+		await main.getByRole('heading', { name: canal.name, exact: true }).waitFor();
+		assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
 		const fit = main.getByRole('button', { name: 'Fit route' });
 		await page.waitForFunction(
 			() =>

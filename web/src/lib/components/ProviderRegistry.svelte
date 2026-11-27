@@ -61,7 +61,7 @@
 	{:else}
 		<ul class="mt-3 divide-y divide-zinc-800 rounded border border-zinc-800 text-xs">
 			{#each providers as p (p.provider)}
-				<li class="flex flex-wrap items-center gap-3 px-3 py-2">
+				<li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 wrap-anywhere">
 					<span class="font-medium text-zinc-200">{p.display_name || p.provider}</span>
 					<span class="rounded bg-accent-500/15 px-1.5 py-0.5 text-accent-300">{p.provider}</span>
 					{#if p.package}

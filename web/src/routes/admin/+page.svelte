@@ -28,7 +28,7 @@
 			<h1 class="page-title">{m.admin_title()}</h1>
 			<p class="mt-1 text-sm text-zinc-400">{m.admin_intro()}</p>
 		</div>
-		<div class="flex gap-2">
+		<div class="flex flex-wrap gap-2">
 			<a href="/admin/moderation" class="action"> Moderation → </a>
 			<a href="/admin/oidc" class="action"> Identity Providers → </a>
 		</div>
@@ -45,8 +45,8 @@
 					class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 text-sm wrap-anywhere max-md:grid-cols-1 max-md:gap-2"
 				>
 					<div>
-						<div class="flex items-center gap-2 font-medium">
-							{u.displayName || u.username}
+						<div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
+							<span class="min-w-0">{u.displayName || u.username}</span>
 							{#if u.role === 'admin'}
 								<span
 									class="rounded bg-accent-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-accent-300"
@@ -61,8 +61,8 @@
 						<div class="font-mono max-md:break-all">{u.id}</div>
 						<div class="mt-0.5">{formatDate(u.createdAt)}</div>
 					</div>
-					<div class="flex items-center gap-3 text-xs text-zinc-500 tabular-nums">
-						<span>{u.activityCount} acts</span>
+					<div class="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+						<span class="metric-value">{m.gear_activity_count({ count: u.activityCount })}</span>
 						<select
 							value={u.role}
 							onchange={(e) => setRole(u.id, (e.currentTarget as HTMLSelectElement).value)}

@@ -54,7 +54,7 @@
 <svelte:head><title>Moderation · {APP_NAME} admin</title></svelte:head>
 
 <div class="mx-auto max-w-3xl px-4 py-6">
-	<div class="mb-4 flex items-center justify-between">
+	<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
 		<h1 class="page-title">Moderation queue</h1>
 		<select bind:value={statusFilter} class="rounded border border-zinc-700 px-2 py-1 text-sm">
 			<option value="open">Open</option>
@@ -77,7 +77,7 @@
 		{#each reports as r (r.id)}
 			<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4 shadow-sm">
 				<div
-					class="mb-1 flex items-center justify-between text-xs text-zinc-500 max-md:flex-wrap max-md:gap-1"
+					class="mb-1 flex items-center justify-between text-xs wrap-anywhere text-zinc-500 max-md:flex-wrap max-md:gap-1"
 				>
 					<span>{r.target_kind} · {formatRelativeDate(r.created_at)} · by {r.reporter}</span>
 					<span class="rounded bg-zinc-800 px-2 py-0.5">{r.status}</span>

@@ -316,12 +316,12 @@
 		<div
 			class="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-panel px-3 py-0.5"
 		>
-			<h2 class="min-w-0 text-lg leading-tight font-semibold tracking-tight">
+			<h2 class="min-w-0 text-lg leading-tight font-semibold wrap-anywhere tracking-tight">
 				{detail?.name ?? m.routes_detail_label()}
 			</h2>
 			<button
 				type="button"
-				class="grid size-10 place-items-center rounded-lg text-zinc-300 hover:bg-zinc-800"
+				class="grid size-10 shrink-0 place-items-center rounded-lg text-zinc-300 hover:bg-zinc-800"
 				aria-label={m.mobile_close()}
 				onclick={() => dialog?.close()}
 			>

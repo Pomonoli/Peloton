@@ -10,6 +10,7 @@
 	import { basemapStyle, createMap } from '#lib/basemap.js';
 	import { addMapNavigation } from '#lib/discovery-map.js';
 	import { formatDuration, formatMetricDistance, formatTimeAndSpeed } from '#lib/format.js';
+	import MetricReadout from './MetricReadout.svelte';
 	import { memberURL, type MemberView } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
@@ -303,7 +304,7 @@
 						aria-label={selected.name}
 					>
 						<div class="flex items-start justify-between gap-2">
-							<h2 class="min-w-0 break-words font-medium">{selected.name}</h2>
+							<h2 class="truncate font-medium" title={selected.name}>{selected.name}</h2>
 							<button
 								type="button"
 								class="-mt-1 flex size-8 shrink-0 items-center justify-center rounded text-zinc-400 hover:bg-zinc-800"
@@ -311,22 +312,26 @@
 								onclick={() => (selectedId = '')}>×</button
 							>
 						</div>
-						<dl class="grid grid-cols-3 gap-2 text-sm">
+						<dl class="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 text-xs sm:text-sm">
 							<div>
 								<dt class="text-quiet">{m.detail_stat_distance()}</dt>
-								<dd>{formatMetricDistance(selected.distance_m)}</dd>
+								<dd class="metric-value">{formatMetricDistance(selected.distance_m)}</dd>
 							</div>
 							<div class="min-w-0">
 								<dt class="text-quiet">{m.segment_local_kom()}</dt>
-								<dd class="break-words">{selected.local_kom_holder}</dd>
+								<dd class="truncate" title={selected.local_kom_holder}>
+									{selected.local_kom_holder}
+								</dd>
 							</div>
-							<div>
+							<div class="max-w-28 text-right sm:max-w-36">
 								<dt class="text-quiet">{m.segment_leaderboard_time()}</dt>
 								<dd>
-									{formatTimeAndSpeed(
-										formatDuration(selected.best_elapsed_s),
-										selected.average_speed_kmh
-									)}
+									<MetricReadout
+										value={formatTimeAndSpeed(
+											formatDuration(selected.best_elapsed_s),
+											selected.average_speed_kmh
+										)}
+									/>
 								</dd>
 							</div>
 						</dl>

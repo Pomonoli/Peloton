@@ -633,6 +633,12 @@
 		}
 	}
 	@container (max-width: 620px) {
+		.segmented {
+			grid-auto-columns: minmax(0, 1fr);
+		}
+		.segmented button {
+			padding-inline: 0.35rem;
+		}
 		.status-body {
 			flex-direction: column;
 			gap: 0.7rem;

@@ -171,7 +171,7 @@
 			{#each specs as spec (spec.key)}
 				{@const why = WHY[spec.key]}
 				{@const dr = draft[spec.key]}
-				<section class="surface p-4">
+				<section class="surface p-3 sm:p-4">
 					<div class="mb-1 flex items-baseline justify-between">
 						<h2 class="text-sm font-medium text-zinc-200">{spec.label}</h2>
 						<span class="text-xs text-zinc-500">{spec.unit}</span>
@@ -188,10 +188,12 @@
 					{:else}
 						<ul class="mb-3 divide-y divide-zinc-800 rounded border border-zinc-800">
 							{#each byKey[spec.key] ?? [] as e (e.id)}
-								<li class="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+								<li
+									class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 py-1.5 text-sm sm:px-3"
+								>
 									<span class="text-zinc-400">{formatDateOnly(e.effective_date)}</span>
 									<span class="flex items-center gap-3">
-										<span class="font-medium tabular-nums text-zinc-100"
+										<span class="metric-value font-medium text-zinc-100"
 											>{fmtValue(spec, e.value)}</span
 										>
 										<button

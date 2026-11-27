@@ -94,7 +94,8 @@
 					type="button"
 					aria-pressed={rider === member.id}
 					title={m.heatmap_discovery_count({ count: number.format(member.activities) })}
-					class="min-h-11 rounded border px-2.5 text-sm {rider === member.id
+					class="inline-flex min-h-11 min-w-0 max-w-full items-center gap-1.5 rounded border px-2 text-sm sm:px-2.5 {rider ===
+					member.id
 						? 'border-accent-500 bg-accent-500/10 text-accent-300'
 						: 'border-zinc-700 text-zinc-200 hover:border-accent-500'}"
 					onclick={() => {
@@ -103,7 +104,8 @@
 						onselect('');
 					}}
 				>
-					{label(member)} <span class="ml-1 tabular-nums">{number.format(member.passages)}</span>
+					<span class="truncate" title={label(member)}>{label(member)}</span>
+					<span class="metric-value">{number.format(member.passages)}</span>
 				</button>
 			{/each}
 		</div>

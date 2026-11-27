@@ -53,11 +53,11 @@
 	type SportColumn = keyof Stats['sport_totals'][number];
 	const sportColumns = [
 		{ key: 'value', label: m.col_sport() },
-		{ key: 'count', label: m.nav_activities() },
+		{ key: 'count', label: m.nav_activities(), shortLabel: m.metric_activity_count_short() },
 		{ key: 'distance_m', label: m.col_distance() },
-		{ key: 'moving_s', label: m.col_moving() },
-		{ key: 'speed_kmh', label: m.col_average_speed() }
-	] satisfies { key: SportColumn; label: string }[];
+		{ key: 'moving_s', label: m.col_moving(), shortLabel: m.detail_label_time() },
+		{ key: 'speed_kmh', label: m.col_average_speed(), shortLabel: m.metric_avg_speed_short() }
+	] satisfies { key: SportColumn; label: string; shortLabel?: string }[];
 	const initialSportOrder: SortCriterion<SportColumn>[] = [{ column: 'count', direction: 'desc' }];
 	let sportOrder = $state<SortCriterion<SportColumn>[]>(initialSportOrder);
 	const sports = $derived(
@@ -146,7 +146,7 @@
 						</span>
 						<span class="grid min-w-0 gap-0.5">
 							<span class="text-xs font-medium text-quiet">{card.label}</span>
-							<strong class="text-base leading-tight tracking-tight tabular-nums sm:text-xl">
+							<strong class="metric-value text-base leading-tight tracking-tight sm:text-xl">
 								{card.r
 									? card.distanceRecord
 										? formatDistance(card.r.distance_m)
@@ -154,15 +154,17 @@
 									: '—'}
 							</strong>
 							{#if card.r}
-								<span class="truncate text-xs text-quiet">
+								<span class="truncate text-xs text-quiet" title={card.r.title}>
 									{card.r.title || humanize(card.r.discipline || card.r.type)}
 								</span>
 								{#if card.distanceRecord && card.r.type === 'ride'}
 									<span class="text-[0.6875rem] text-quiet tabular-nums">
 										{m.metric_moving_time()}
-										{formatDuration(card.r.moving_duration_s || null)}
+										<span class="metric-value"
+											>{formatDuration(card.r.moving_duration_s || null)}</span
+										>
 										{#if card.r.avg_speed_mps != null}
-											· {formatSpeed(card.r.avg_speed_mps)}{/if}
+											<span class="metric-value">· {formatSpeed(card.r.avg_speed_mps)}</span>{/if}
 									</span>
 								{/if}
 							{/if}
@@ -195,14 +197,20 @@
 					</select>
 				</header>
 				<div class="surface overflow-hidden">
-					<div class="overflow-x-auto">
-						<table class="stats-table w-full text-sm">
+					<div class="table-scroll">
+						<table class="data-table w-full text-sm">
 							<thead class="text-xs text-quiet">
 								<tr>
 									<th class="px-4 py-2 text-left font-medium">{m.stats_year()}</th>
-									<th class="px-4 py-2 text-right font-medium">{m.nav_activities()}</th>
+									<th class="px-4 py-2 text-right font-medium" title={m.nav_activities()}>
+										<span class="md:hidden">{m.metric_activity_count_short()}</span>
+										<span class="hidden md:inline">{m.nav_activities()}</span>
+									</th>
 									<th class="px-4 py-2 text-right font-medium">{m.col_distance()}</th>
-									<th class="px-4 py-2 text-right font-medium">{m.col_moving()}</th>
+									<th class="px-4 py-2 text-right font-medium" title={m.col_moving()}>
+										<span class="md:hidden">{m.detail_label_time()}</span>
+										<span class="hidden md:inline">{m.col_moving()}</span>
+									</th>
 									<th class="px-4 py-2 text-right font-medium">{m.col_elevation()}</th>
 									<th class="w-1/4 px-4 py-2 max-md:hidden"></th>
 								</tr>
@@ -214,14 +222,14 @@
 										class:current-year={y.year === new Date().getFullYear()}
 									>
 										<th scope="row" class="px-4 py-2 text-left font-semibold">{y.year}</th>
-										<td class="px-4 py-2 text-right tabular-nums text-zinc-300">{y.count}</td>
-										<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
-											>{formatDistance(y.distance_m)}</td
+										<td class="numeric px-4 py-2 text-zinc-300"
+											>{y.count.toLocaleString(intlLocale())}</td
 										>
-										<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
-											>{formatDuration(y.moving_s)}</td
+										<td class="numeric px-4 py-2 text-zinc-300"
+											>{formatDistance(y.distance_m, { compact: true })}</td
 										>
-										<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
+										<td class="numeric px-4 py-2 text-zinc-300">{formatDuration(y.moving_s)}</td>
+										<td class="numeric px-4 py-2 text-zinc-300"
 											>{formatElevation(y.elevation_gain_m)}</td
 										>
 										<td class="px-4 py-2 max-md:hidden">
@@ -258,8 +266,8 @@
 						onchange={(next) => (sportOrder = next)}
 					/>
 				</FilterSheet>
-				<div class="surface mt-2 overflow-x-auto">
-					<table class="stats-table w-full bg-panel text-sm">
+				<div class="surface table-scroll mt-2">
+					<table class="data-table w-full text-sm [--table-name-min:2.75rem]">
 						<thead class="text-xs text-quiet">
 							<tr>
 								{#each sportColumns as column (column.key)}
@@ -268,6 +276,7 @@
 									)}
 									<SortHeader
 										label={column.label}
+										shortLabel={column.shortLabel}
 										{index}
 										direction={sportOrder[index]?.direction}
 										align={column.key === 'value' ? 'text-left' : 'text-right'}
@@ -279,18 +288,21 @@
 						<tbody class="divide-y divide-zinc-800 tabular-nums">
 							{#each sports as sport (sport.value)}
 								<tr>
-									<th scope="row" class="p-2 text-left font-medium sm:px-4">
+									<th scope="row" class="name-cell p-2 text-left font-medium sm:px-4">
 										<a
 											href={memberURL(`/activities?type=${sport.value}`, data.member)}
-											class="hover:text-accent-300">{humanize(sport.value)}</a
+											class="table-name hover:text-accent-300"
+											title={humanize(sport.value)}>{humanize(sport.value)}</a
 										>
 									</th>
-									<td class="p-2 text-right sm:px-4">{sport.count.toLocaleString(intlLocale())}</td>
-									<td class="p-2 text-right sm:px-4">{formatDistance(sport.distance_m || null)}</td>
-									<td class="p-2 text-right sm:px-4"
+									<td class="numeric p-2 sm:px-4">{sport.count.toLocaleString(intlLocale())}</td>
+									<td class="numeric p-2 sm:px-4"
+										>{formatDistance(sport.distance_m || null, { compact: true })}</td
+									>
+									<td class="numeric p-2 sm:px-4"
 										>{sport.moving_s > 0 ? formatDuration(sport.moving_s) : '—'}</td
 									>
-									<td class="p-2 text-right sm:px-4">
+									<td class="numeric p-2 sm:px-4">
 										{formatSpeed(sport.speed_kmh == null ? null : sport.speed_kmh / 3.6)}
 									</td>
 								</tr>
@@ -337,27 +349,13 @@
 	}
 
 	@media (width < 48rem) {
-		.stats-table {
-			table-layout: fixed;
+		.record-icon {
+			width: 1.25rem;
+			height: 1.25rem;
 		}
-		.stats-table :global(:is(th, td)) {
-			padding-inline: 0.25rem;
-			font-size: 0.75rem;
-			overflow-wrap: anywhere;
-		}
-		.stats-table :global(th) {
-			font-size: 0.6875rem;
-			text-transform: none;
-		}
-		.stats-table :global(thead button) {
-			position: relative;
-			padding-inline: 0;
-			white-space: normal;
-			text-transform: none;
-		}
-		.stats-table :global(th:first-child),
-		.stats-table :global(td:first-child) {
-			padding-left: 0.5rem;
+		.record-icon :global(svg) {
+			width: 0.875rem;
+			height: 0.875rem;
 		}
 	}
 </style>

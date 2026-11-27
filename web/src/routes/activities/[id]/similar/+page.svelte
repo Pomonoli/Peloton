@@ -182,8 +182,8 @@
 
 		<section>
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">All efforts</h2>
-			<div class="overflow-x-auto rounded-lg border border-zinc-800">
-				<table class="w-full text-sm">
+			<div class="table-scroll rounded-lg border border-zinc-800">
+				<table class="data-table w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-3 py-2 text-left font-medium">Date</th>
@@ -210,25 +210,25 @@
 									{#if r.is_current}<span class="ml-1 text-[10px] text-accent-300">(this)</span
 										>{/if}
 								</td>
-								<td class="px-3 py-2 text-right tabular-nums">{formatDistance(r.distance_m)}</td>
-								<td class="px-3 py-2 text-right font-medium tabular-nums">
+								<td class="numeric px-3 py-2">{formatDistance(r.distance_m)}</td>
+								<td class="numeric px-3 py-2 font-medium">
 									{formatDuration(r.moving_s)}
 								</td>
 								{#if isRide}
-									<td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+									<td class="numeric px-3 py-2">
 										{formatDuration(r.elapsed_s)}
 									</td>
 								{/if}
-								<td class="px-3 py-2 text-right tabular-nums"
+								<td class="numeric px-3 py-2"
 									>{performance(
 										r.average_speed_kmh
 									)}{#if r.average_speed_kmh != null && r.average_speed_kmh === payload.summary.best_speed_kmh}<span
 											class="ml-1 text-emerald-400">★</span
 										>{/if}</td
 								>
-								<td class="px-3 py-2 text-right tabular-nums">{r.avg_heart_rate ?? '—'}</td>
-								<td class="px-3 py-2 text-right tabular-nums">{r.avg_power ?? '—'}</td>
-								<td class="px-3 py-2 text-right tabular-nums text-zinc-400">
+								<td class="numeric px-3 py-2">{r.avg_heart_rate ?? '—'}</td>
+								<td class="numeric px-3 py-2">{r.avg_power ?? '—'}</td>
+								<td class="numeric px-3 py-2 text-zinc-400">
 									{r.is_current
 										? '—'
 										: new Intl.NumberFormat(undefined, {

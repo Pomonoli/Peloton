@@ -63,7 +63,9 @@
 	{:else if apps.length > 0}
 		<ul class="divide-y divide-zinc-800 rounded border border-zinc-800">
 			{#each apps as a (a.client_id)}
-				<li class="flex items-center justify-between gap-4 px-3 py-2 text-xs max-md:flex-wrap">
+				<li
+					class="flex items-center justify-between gap-2 px-3 py-2 text-xs wrap-anywhere max-md:flex-wrap sm:gap-4"
+				>
 					<div>
 						<span class="font-medium text-zinc-200">{a.client_name}</span>
 						{#if a.software_id}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetricReadout from '#lib/components/MetricReadout.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { intlLocale } from '#lib/format.js';
 	import { memberURL, type MemberView } from '#lib/member.js';
@@ -140,9 +141,11 @@
 							</div>
 							{#if row.result}
 								<div class="text-right text-sm font-bold tabular-nums sm:text-base">
-									{recordValue(row, row.result.achieved_value)}
+									<MetricReadout value={recordValue(row, row.result.achieved_value)} />
 								</div>
-								<div class="truncate text-xs text-quiet">{row.result.display_name}</div>
+								<div class="truncate text-xs text-quiet" title={row.result.display_name}>
+									{row.result.display_name}
+								</div>
 							{:else}
 								<div class="mt-1 text-sm text-quiet">{m.record_no_result()}</div>
 							{/if}

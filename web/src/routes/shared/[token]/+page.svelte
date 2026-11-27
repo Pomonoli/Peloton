@@ -62,9 +62,9 @@
 		<div class="mb-3 text-xs uppercase tracking-wide text-zinc-500">Shared activity</div>
 		<header class="mb-4 flex items-center gap-3">
 			<SportIcon type={activity.type} size={28} />
-			<div>
+			<div class="min-w-0">
 				<h1 class="page-title">{activity.title || 'Untitled'}</h1>
-				<div class="text-sm text-zinc-400">
+				<div class="text-sm wrap-anywhere text-zinc-400">
 					{#if owner}by {owner.display_name || owner.username} ·
 					{/if}{formatRelativeDate(activity.start_time)}
 					{#if activity.start_place && can('location')}
@@ -75,41 +75,51 @@
 		</header>
 
 		{#if activity.description && can('summary')}
-			<p class="mb-4 whitespace-pre-line text-sm text-zinc-300">{activity.description}</p>
+			<p class="mb-4 text-sm wrap-anywhere whitespace-pre-line text-zinc-300">
+				{activity.description}
+			</p>
 		{/if}
 
-		<div
-			class="grid grid-cols-3 gap-4 rounded-lg border bg-panel border border-zinc-800 p-4 shadow-sm max-md:grid-cols-2"
-		>
+		<div class="surface grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 sm:gap-4 sm:p-4">
 			<div>
 				<div class="text-xs text-zinc-400">Distance</div>
-				<div class="text-lg font-semibold">{formatDistance(activity.distance_m ?? 0)}</div>
+				<div class="metric-value text-base font-semibold sm:text-lg">
+					{formatDistance(activity.distance_m ?? 0)}
+				</div>
 			</div>
 			<div>
 				<div class="text-xs text-zinc-400">{m.ride_elapsed()}</div>
-				<div class="text-lg font-semibold">{formatDuration(activity.elapsed_duration_s)}</div>
+				<div class="metric-value text-base font-semibold sm:text-lg">
+					{formatDuration(activity.elapsed_duration_s)}
+				</div>
 			</div>
 			<div>
 				<div class="text-xs text-zinc-400">{m.col_moving()}</div>
-				<div class="text-lg font-semibold">{formatDuration(activity.moving_duration_s)}</div>
+				<div class="metric-value text-base font-semibold sm:text-lg">
+					{formatDuration(activity.moving_duration_s)}
+				</div>
 			</div>
 			{#if activity.avg_speed_mps != null && can('pace_speed')}
 				<div>
 					<div class="text-xs text-zinc-400">{m.col_average_speed()}</div>
-					<div class="text-lg font-semibold">{formatSpeed(activity.avg_speed_mps)}</div>
+					<div class="metric-value text-base font-semibold sm:text-lg">
+						{formatSpeed(activity.avg_speed_mps)}
+					</div>
 				</div>
 			{/if}
 			{#if activity.elevation_gain_m}<div>
 					<div class="text-xs text-zinc-400">Elevation</div>
-					<div class="text-lg font-semibold">{Math.round(activity.elevation_gain_m)} m</div>
+					<div class="metric-value text-base font-semibold sm:text-lg">
+						{Math.round(activity.elevation_gain_m)} m
+					</div>
 				</div>{/if}
 			{#if can('hr') && activity.avg_hr}<div>
 					<div class="text-xs text-zinc-400">Avg HR</div>
-					<div class="text-lg font-semibold">{activity.avg_hr} bpm</div>
+					<div class="metric-value text-base font-semibold sm:text-lg">{activity.avg_hr} bpm</div>
 				</div>{/if}
 			{#if can('power') && activity.avg_power}<div>
 					<div class="text-xs text-zinc-400">Avg Power</div>
-					<div class="text-lg font-semibold">{activity.avg_power} W</div>
+					<div class="metric-value text-base font-semibold sm:text-lg">{activity.avg_power} W</div>
 				</div>{/if}
 		</div>
 

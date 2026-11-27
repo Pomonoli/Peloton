@@ -768,13 +768,13 @@
 										: 'Nothing pending, in progress, or failed.'}
 								</p>
 							{:else}
-								<div class="overflow-x-auto">
-									<table class="w-full text-left">
+								<div class="table-scroll">
+									<table class="data-table w-full text-left">
 										<thead>
 											<tr class="text-[10px] uppercase tracking-wide text-zinc-500">
 												<th class="py-1 pr-3 font-medium">Status</th>
 												<th class="py-1 pr-3 font-medium">Activity</th>
-												<th class="py-1 pr-3 font-medium">Tries</th>
+												<th class="py-1 pr-3 text-right font-medium">Tries</th>
 												<th class="py-1 pr-3 font-medium">Queued</th>
 												<th class="py-1 pr-3 font-medium">Started</th>
 												<th class="py-1 pr-3 font-medium">Last error</th>
@@ -796,7 +796,7 @@
 															<span class="ml-1 text-accent-400" title="Moved to top">⇧</span>
 														{/if}
 													</td>
-													<td class="py-1 pr-3 font-mono text-zinc-200">
+													<td class="min-w-24 py-1 pr-3 font-mono wrap-anywhere text-zinc-200">
 														{#if it.external_url}
 															<a
 																href={it.external_url}
@@ -812,14 +812,14 @@
 															<span class="ml-1 text-zinc-500">({formatDate(it.item_time)})</span>
 														{/if}
 													</td>
-													<td class="py-1 pr-3 text-zinc-300">{it.attempts}</td>
+													<td class="numeric py-1 pr-3 text-zinc-300">{it.attempts}</td>
 													<td class="py-1 pr-3 whitespace-nowrap text-zinc-400"
 														>{formatDate(it.created_at)}</td
 													>
 													<td class="py-1 pr-3 whitespace-nowrap text-zinc-400">
 														{it.started_at ? formatDate(it.started_at) : '—'}
 													</td>
-													<td class="max-w-64 py-1 pr-3 text-red-300/90">
+													<td class="max-w-64 py-1 pr-3 wrap-anywhere text-red-300/90">
 														{it.last_error || ''}
 													</td>
 													<td class="py-1 whitespace-nowrap text-right">

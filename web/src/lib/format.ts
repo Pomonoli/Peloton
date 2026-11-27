@@ -25,19 +25,29 @@ function num(v: number, frac = 2): string {
 	}).format(v);
 }
 
-export function formatDistance(m: number | null | undefined): string {
+export function formatDistance(
+	m: number | null | undefined,
+	{ compact = false }: { compact?: boolean } = {}
+): string {
 	if (m == null) return DASH;
 	if (prefs.units === 'imperial') {
 		if (m < M_PER_MILE / 10) return `${Math.round(m * FT_PER_M)} ft`;
-		return `${num(m / M_PER_MILE)} mi`;
+		const miles = m / M_PER_MILE;
+		return `${num(miles, compact ? distanceDecimals(miles) : 2)} mi`;
 	}
-	return formatMetricDistance(m);
+	return formatMetricDistance(m, compact);
 }
 
-export function formatMetricDistance(m: number): string {
+function distanceDecimals(distance: number): number {
+	if (distance >= 10_000) return 0;
+	return distance >= 1_000 ? 1 : 2;
+}
+
+export function formatMetricDistance(m: number, compact = false): string {
 	if (!(m > 0) || !Number.isFinite(m)) return Number.isFinite(m) && m === 0 ? '0 m' : DASH;
 	if (m < 1000) return `${num(m, 0)} m`;
-	return `${num(m / 1000)} km`;
+	const kilometers = m / 1000;
+	return `${num(kilometers, compact ? distanceDecimals(kilometers) : 2)} km`;
 }
 
 export function formatSpeedKmh(kmh: number | null | undefined): string {

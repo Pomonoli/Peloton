@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetricReadout from '#lib/components/MetricReadout.svelte';
 	import { formatDateOnly } from '#lib/format.js';
 	import { memberURL } from '#lib/member.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -36,13 +37,13 @@
 			{m.record_no_results()}
 		</p>
 	{:else}
-		<div class="overflow-x-auto rounded-lg border border-zinc-800">
-			<table class="w-full text-left text-sm">
+		<div class="table-scroll rounded-lg border border-zinc-800">
+			<table class="data-table w-full text-left text-sm">
 				<thead class="bg-panel text-xs text-quiet">
 					<tr>
 						<th scope="col" class="px-3 py-2">{m.record_rank()}</th>
 						<th scope="col" class="px-3 py-2">{m.record_rider()}</th>
-						<th scope="col" class="px-3 py-2">{m.record_personal_best()}</th>
+						<th scope="col" class="px-3 py-2 text-right">{m.record_personal_best()}</th>
 						<th scope="col" class="px-3 py-2">{m.record_date_activity()}</th>
 					</tr>
 				</thead>
@@ -50,16 +51,17 @@
 					{#each records as row (row.result?.username)}
 						{#if row.result}
 							<tr>
-								<td class="px-3 py-3 tabular-nums">{row.result.rank}</td>
-								<td class="px-3 py-3"
+								<td class="numeric px-3 py-3">{row.result.rank}</td>
+								<td class="name-cell px-3 py-3"
 									><a
-										class="text-accent-400 hover:underline"
+										class="table-name text-accent-400 hover:underline"
+										title={row.result.display_name}
 										href={`/u/${encodeURIComponent(row.result.username)}`}
 										>{row.result.display_name}</a
 									></td
 								>
-								<td class="px-3 py-3 font-semibold whitespace-nowrap tabular-nums"
-									>{recordValue(row, row.result.achieved_value)}</td
+								<td class="px-3 py-3 text-right font-semibold"
+									><MetricReadout value={recordValue(row, row.result.achieved_value)} /></td
 								>
 								<td class="px-3 py-3"
 									><a

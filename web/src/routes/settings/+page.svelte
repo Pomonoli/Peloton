@@ -161,7 +161,9 @@
 						</div>
 					</div>
 				</form>
-				<dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-[160px_1fr]">
+				<dl
+					class="grid grid-cols-1 gap-x-3 gap-y-1 text-sm wrap-anywhere sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-y-3"
+				>
 					<dt class="text-zinc-500">{m.settings_field_username()}</dt>
 					<dd class="text-zinc-200">{data.user.username}</dd>
 					<dt class="text-zinc-500">{m.settings_field_email()}</dt>
@@ -242,8 +244,8 @@
 
 				<p class="mt-4 text-xs text-zinc-500">
 					Preview: <span class="text-zinc-300">{formatDate(sampleIso)}</span> ·
-					<span class="text-zinc-300">{formatDistance(10500)}</span> ·
-					<span class="text-zinc-300">{formatElevation(420)}</span>
+					<span class="metric-value text-zinc-300">{formatDistance(10500)}</span> ·
+					<span class="metric-value text-zinc-300">{formatElevation(420)}</span>
 				</p>
 			</section>
 
@@ -273,6 +275,7 @@
 <style>
 	.settings-grid {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 0.75rem;
 		align-items: start;
 	}

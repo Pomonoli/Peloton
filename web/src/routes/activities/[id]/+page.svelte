@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetricReadout from '#lib/components/MetricReadout.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import MetricStrip from '#lib/components/MetricStrip.svelte';
 	import SortHeader from '#lib/components/SortHeader.svelte';
@@ -358,7 +359,7 @@
 				<h1 class="page-title">
 					{a.title || `${a.discipline || a.type} Activity`}
 				</h1>
-				<p class="mt-1 text-sm text-zinc-400">
+				<p class="mt-1 text-sm wrap-anywhere text-zinc-400">
 					<span class="capitalize text-zinc-300">{a.discipline || a.type}</span>
 					{#if a.customSubtype}· <span class="text-zinc-300">{a.customSubtype}</span>{/if}
 					· {formatDate(a.startTime)}
@@ -368,7 +369,7 @@
 					<GearPrompt activityId={a.id} type={a.type} gear={data.gear} />
 				{/if}
 				{#if a.gearId}
-					<p class="mt-1 text-sm text-zinc-400">
+					<p class="mt-1 text-sm wrap-anywhere text-zinc-400">
 						<a
 							href={memberURL('/gear', data.activityOwner)}
 							class="text-zinc-300 hover:text-accent-300">{a.gearName || m.gear_title()}</a
@@ -391,10 +392,21 @@
 				value: formatDistance(a.summary.distanceM ?? null),
 				icon: 'routes'
 			},
-			{ label: m.detail_stat_moving(), value: formatDuration(a.movingDurationS), icon: 'clock' },
-			{ label: primaryPace.label, value: primaryPace.value, icon: 'speed' },
+			{
+				label: m.detail_stat_moving(),
+				shortLabel: m.detail_label_time(),
+				value: formatDuration(a.movingDurationS),
+				icon: 'clock'
+			},
+			{
+				label: primaryPace.label,
+				shortLabel: useSpeed ? m.metric_avg_speed_short() : m.metric_avg_pace_short(),
+				value: primaryPace.value,
+				icon: 'speed'
+			},
 			{
 				label: m.detail_stat_elevation(),
+				shortLabel: m.metric_elevation_gain_short(),
 				value: formatElevation(a.summary.elevationGainM ?? null),
 				icon: 'segments'
 			}
@@ -438,16 +450,17 @@
 					>
 						<a
 							href={memberURL(`/segment/${effort.segment_id}`, data.activityOwner)}
-							class="font-medium text-accent-300 hover:underline">{effort.segment_name}</a
+							class="min-w-0 truncate font-medium text-accent-300 hover:underline"
+							title={effort.segment_name}>{effort.segment_name}</a
 						>
-						<span class="text-quiet tabular-nums"
-							>{formatMetricDistance(effort.segment_distance_m)} · {formatDuration(
-								effort.elapsed_s
-							)} · {formatSpeedKmh(effort.average_speed_kmh)} · {m.segment_personal_record()}{effort.personal_rank >
-							0
+						<span class="text-quiet">
+							<MetricReadout
+								value={`${formatMetricDistance(effort.segment_distance_m)} · ${formatDuration(effort.elapsed_s)} · ${formatSpeedKmh(effort.average_speed_kmh)}`}
+							/>
+							· {m.segment_personal_record()}{effort.personal_rank > 0
 								? ` #${effort.personal_rank}`
-								: ''}</span
-						>
+								: ''}
+						</span>
 					</li>
 				{/each}
 			</ul>
@@ -456,11 +469,15 @@
 
 	<!-- Secondary stats: only those that carry a value. -->
 	{#if secondaryStats.length > 0}
-		<dl class="grid grid-cols-2 gap-x-6 gap-y-3 surface p-5 sm:grid-cols-3 lg:grid-cols-4">
+		<dl
+			class="grid grid-cols-2 gap-x-3 gap-y-2 surface p-3 sm:grid-cols-3 sm:gap-x-6 sm:gap-y-3 sm:p-5 lg:grid-cols-4"
+		>
 			{#each secondaryStats as s (s.label)}
-				<div class="flex items-baseline justify-between gap-2 border-b border-zinc-800/60 pb-1.5">
+				<div
+					class="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 border-b border-zinc-800/60 pb-1.5"
+				>
 					<dt class="text-xs text-zinc-500">{s.label}</dt>
-					<dd class="text-sm font-medium tabular-nums text-zinc-200">{s.value}</dd>
+					<dd class="metric-value text-sm font-medium text-zinc-200">{s.value}</dd>
 				</div>
 			{/each}
 		</dl>
@@ -605,8 +622,8 @@
 	{#if bestEfforts.length > 0}
 		<section>
 			<h2 class="section-title mb-3">Best Efforts</h2>
-			<div class="overflow-x-auto rounded-lg border border-zinc-800">
-				<table class="w-full text-sm">
+			<div class="table-scroll rounded-lg border border-zinc-800">
+				<table class="data-table w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-4 py-2 text-left">Metric</th>
@@ -638,8 +655,8 @@
 										: recordMetric(b.metric, false)}
 								</td>
 								<td class="px-4 py-2 text-zinc-300">{recordWindow(b.windowKind, b.windowValue)}</td>
-								<td class="px-4 py-2 text-right tabular-nums"
-									>{recordValue(bucket, b.achievedValue)} ↗</td
+								<td class="px-4 py-2 text-right"
+									><MetricReadout value={recordValue(bucket, b.achievedValue)} /> ↗</td
 								>
 							</tr>
 						{/each}
@@ -654,8 +671,8 @@
 			<h2 class="mb-3 text-sm font-medium text-zinc-300">
 				Laps <span class="text-quiet">({laps.length})</span>
 			</h2>
-			<div class="overflow-x-auto rounded-xl border border-zinc-800">
-				<table class="w-full text-sm">
+			<div class="table-scroll rounded-xl border border-zinc-800">
+				<table class="data-table w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-4 py-2 text-left font-medium">Lap</th>
@@ -671,22 +688,16 @@
 						{#each laps as l, i (i)}
 							<tr class="border-t border-zinc-800/70">
 								<td class="px-4 py-2 font-medium text-zinc-200">{l.label || `Lap ${l.index}`}</td>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
-									>{formatDistance(l.distance_m)}</td
-								>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
+								<td class="numeric px-4 py-2 text-zinc-300">{formatDistance(l.distance_m)}</td>
+								<td class="numeric px-4 py-2 text-zinc-300"
 									>{formatDuration(l.moving_s || l.elapsed_s)}</td
 								>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
-									>{formatPace(l.avg_speed_mps)}</td
-								>
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
-									>{formatHeartRate(l.avg_heart_rate)}</td
-								>
-								{#if anyLapPower}<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
+								<td class="numeric px-4 py-2 text-zinc-300">{formatPace(l.avg_speed_mps)}</td>
+								<td class="numeric px-4 py-2 text-zinc-300">{formatHeartRate(l.avg_heart_rate)}</td>
+								{#if anyLapPower}<td class="numeric px-4 py-2 text-zinc-300"
 										>{formatPower(l.avg_power)}</td
 									>{/if}
-								<td class="px-4 py-2 text-right tabular-nums text-zinc-300"
+								<td class="numeric px-4 py-2 text-zinc-300"
 									>{formatElevation(l.elevation_gain_m)}</td
 								>
 							</tr>
@@ -761,7 +772,7 @@
 											>{z.label}</span
 										>
 										{#if zset.reference}
-											<span class="w-24 shrink-0 tabular-nums text-zinc-500 max-md:hidden">
+											<span class="metric-value w-24 shrink-0 text-zinc-500 max-md:hidden">
 												{Math.round(z.low_pct * zset.reference)}{z.high_pct > 0
 													? `–${Math.round(z.high_pct * zset.reference)}`
 													: '+'}
@@ -775,7 +786,7 @@
 												style:background={ZONE_COLORS[i]}
 											></div>
 										</div>
-										<span class="w-16 shrink-0 text-right tabular-nums text-zinc-300"
+										<span class="metric-value min-w-16 shrink-0 text-right text-zinc-300"
 											>{formatDuration(z.seconds)}</span
 										>
 										<span class="w-10 shrink-0 text-right tabular-nums text-zinc-500"
@@ -823,7 +834,7 @@
 			{#if segmentEfforts.length === 0}
 				<p class="text-sm text-quiet">{m.segment_no_matches()}</p>
 			{:else}
-				<div class="max-h-[28rem] overflow-auto rounded-lg border border-zinc-800">
+				<div class="table-scroll max-h-[28rem] overflow-y-auto rounded-lg border border-zinc-800">
 					{#if hasElevation}
 						<!-- Elevation profile pinned to the top of the scroll area; hovering a
 					     row shades the segment's span on it. -->
@@ -833,15 +844,16 @@
 							<ElevationProfile {track} highlight={segHighlight} />
 						</div>
 					{/if}
-					<table class="w-full text-sm">
+					<table class="data-table w-full text-sm">
 						<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 							<tr>
-								{#each [{ column: 'segment_name', label: m.comparison_segment(), align: 'text-left' }, { column: 'segment_distance_m', label: m.col_distance() }, { column: 'elapsed_s', label: m.col_duration() }, { column: 'average_speed_kmh', label: m.segment_avg_speed() }, ...(hasLocalKOM ? [{ column: 'local_kom_position', label: m.segment_local_kom() } as const] : []), { column: 'avg_heart_rate', label: m.col_avg_hr(), align: 'hidden md:table-cell text-right' }] satisfies { column: EffortColumn; label: string; align?: string }[] as item (item.column)}
+								{#each [{ column: 'segment_name', label: m.comparison_segment(), align: 'text-left' }, { column: 'segment_distance_m', label: m.col_distance() }, { column: 'elapsed_s', label: m.col_duration(), shortLabel: m.detail_label_time() }, { column: 'average_speed_kmh', label: m.segment_avg_speed(), shortLabel: m.segment_speed_column() }, ...(hasLocalKOM ? [{ column: 'local_kom_position', label: m.segment_local_kom() } as const] : []), { column: 'avg_heart_rate', label: m.col_avg_hr(), align: 'hidden md:table-cell text-right' }] satisfies { column: EffortColumn; label: string; shortLabel?: string; align?: string }[] as item (item.column)}
 									{@const index = effortOrder.findIndex(
 										(criterion) => criterion.column === item.column
 									)}
 									<SortHeader
 										label={item.label}
+										shortLabel={item.shortLabel}
 										align={item.align ?? 'text-right'}
 										{index}
 										direction={effortOrder[index]?.direction}
@@ -857,10 +869,11 @@
 									onmouseenter={() => (hoveredSeg = s)}
 									onmouseleave={() => (hoveredSeg = null)}
 								>
-									<td class="px-4 py-2">
+									<td class="name-cell px-4 py-2">
 										<a
 											href={memberURL(`/segment/${s.segment_id}`, data.activityOwner)}
-											class="text-accent-400 hover:text-accent-300 hover:underline"
+											class="table-name text-accent-400 hover:text-accent-300 hover:underline"
+											title={s.segment_name}
 										>
 											{s.segment_name}
 										</a>
@@ -878,23 +891,23 @@
 											</span>
 										{/if}
 									</td>
-									<td class="px-4 py-2 text-right tabular-nums text-zinc-300">
+									<td class="numeric px-4 py-2 text-zinc-300">
 										{formatMetricDistance(s.segment_distance_m)}
 									</td>
-									<td class="px-4 py-2 text-right tabular-nums text-zinc-100">
+									<td class="numeric px-4 py-2 text-zinc-100">
 										{formatDuration(s.elapsed_s)}
 									</td>
-									<td class="whitespace-nowrap px-4 py-2 text-right tabular-nums text-zinc-300">
+									<td class="numeric px-4 py-2 text-zinc-300">
 										{formatSpeedKmh(s.average_speed_kmh)}
 									</td>
 									{#if hasLocalKOM}
-										<td class="px-4 py-2 text-right tabular-nums text-zinc-300">
+										<td class="numeric px-4 py-2 text-zinc-300">
 											{s.local_kom_position == null
 												? m.placeholder_dash()
 												: `#${s.local_kom_position}`}
 										</td>
 									{/if}
-									<td class="hidden px-4 py-2 text-right tabular-nums text-zinc-300 md:table-cell">
+									<td class="numeric hidden px-4 py-2 text-zinc-300 md:table-cell">
 										{s.avg_heart_rate ? formatHeartRate(s.avg_heart_rate) : m.placeholder_dash()}
 									</td>
 								</tr>
@@ -911,7 +924,7 @@
 			<h2 class="section-title mb-3">
 				{m.detail_section_description()}
 			</h2>
-			<p class="whitespace-pre-line text-sm text-zinc-300">{a.description}</p>
+			<p class="text-sm wrap-anywhere whitespace-pre-line text-zinc-300">{a.description}</p>
 		</section>
 	{/if}
 

@@ -44,7 +44,7 @@
 				</div>
 				<div class="min-w-0 flex-1">
 					<div class="flex items-center gap-2">
-						<span class="truncate font-semibold">
+						<span class="truncate font-semibold" title={activity.title}>
 							{activity.title || `${humanize(activity.discipline || activity.type)} Activity`}
 						</span>
 						{#if activity.gear_unset}
@@ -55,9 +55,11 @@
 						{/if}
 					</div>
 					{#if riderName?.(activity)}
-						<p class="text-xs text-zinc-400">{riderName(activity)}</p>
+						<p class="truncate text-xs text-zinc-400" title={riderName(activity)}>
+							{riderName(activity)}
+						</p>
 					{/if}
-					<div class="mt-0.5 text-xs text-zinc-500">
+					<div class="mt-0.5 truncate text-xs text-zinc-500">
 						{formatRelativeDate(activity.start_time)}{activity.start_place
 							? ` · ${humanize(activity.discipline || activity.type)} from ${activity.start_place}`
 							: ` · ${activity.timezone}`}
@@ -70,36 +72,34 @@
 					class="activity-map h-9 w-24 shrink-0 rounded-md border border-zinc-800 object-cover"
 					onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 				/>
-				<dl
-					class="activity-metrics grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs text-quiet tabular-nums"
-				>
+				<dl class="activity-metrics grid gap-x-2 gap-y-1.5 text-xs text-quiet">
 					<div>
 						<dt class="text-zinc-500">{m.col_distance()}</dt>
-						<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
+						<dd class="metric-value mt-0.5 text-sm text-zinc-100 max-md:text-xs">
 							{formatDistance(activity.distance_m)}
 						</dd>
 					</div>
 					<div>
 						<dt class="text-zinc-500">{m.col_moving()}</dt>
-						<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
+						<dd class="metric-value mt-0.5 text-sm text-zinc-100 max-md:text-xs">
 							{formatDuration(activity.moving_duration_s)}
 						</dd>
 					</div>
 					<div>
 						<dt class="text-zinc-500">{m.ride_elapsed()}</dt>
-						<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
+						<dd class="metric-value mt-0.5 text-sm text-zinc-100 max-md:text-xs">
 							{formatDuration(activity.elapsed_duration_s)}
 						</dd>
 					</div>
 					<div>
-						<dt class="text-zinc-500">{m.col_elevation()}</dt>
-						<dd class="mt-0.5 text-sm tabular-nums text-zinc-100 max-md:text-xs">
+						<dt class="text-zinc-500">{m.metric_elevation_gain_short()}</dt>
+						<dd class="metric-value mt-0.5 text-sm text-zinc-100 max-md:text-xs">
 							{formatElevation(activity.elevation_gain_m)}
 						</dd>
 					</div>
 					<div>
-						<dt class="text-zinc-500">{m.col_average_speed()}</dt>
-						<dd class="mt-0.5 font-bold text-accent-300 tabular-nums">
+						<dt class="text-zinc-500">{m.metric_avg_speed_short()}</dt>
+						<dd class="metric-value mt-0.5 font-bold text-accent-300">
 							{formatSpeed(activity.avg_speed_mps)}
 						</dd>
 					</div>
@@ -145,14 +145,15 @@
 	}
 
 	.activity-metrics {
-		grid-column: 2;
+		grid-column: 1 / -1;
+		grid-template-columns: repeat(3, minmax(min-content, 1fr));
 	}
 
 	.activity-map {
 		display: none;
 	}
 
-	@container (width >= 43rem) {
+	@container (width >= 45rem) {
 		.activity-row {
 			grid-template-columns: auto minmax(9.5rem, 1fr) minmax(0, 1.5fr);
 			gap: 0.9rem;
@@ -161,7 +162,7 @@
 
 		.activity-metrics {
 			grid-column: auto;
-			grid-template-columns: repeat(5, minmax(0, 1fr));
+			grid-template-columns: repeat(5, minmax(min-content, 1fr));
 			text-align: right;
 		}
 	}

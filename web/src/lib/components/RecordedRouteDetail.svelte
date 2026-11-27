@@ -94,10 +94,12 @@
 		</p>
 	{/if}
 
-	<dl class="grid grid-cols-3 gap-x-3 gap-y-2 border-b border-zinc-800 pb-3 text-sm">
+	<dl
+		class="grid grid-cols-[repeat(3,minmax(min-content,1fr))] gap-x-2 gap-y-2 border-b border-zinc-800 pb-3 text-sm"
+	>
 		{@render metric(m.routes_distance(), routeDistance(route.distance_m))}
 		{@render metric(m.routes_elevation(), routeElevation(route.elevation_gain_m))}
-		{@render metric(m.routes_route_type(), routeKind(route.type))}
+		{@render metric(m.routes_route_type(), routeKind(route.type), false)}
 		{@render metric(m.routes_total_rides(), String(route.rides))}
 		{@render metric(m.routes_riders(), String(route.rider_count))}
 		{@render metric(m.routes_best_speed(), formatSpeedKmh(route.best_speed_kmh))}
@@ -130,13 +132,13 @@
 
 	<section>
 		<h3 class="mb-1 text-sm font-semibold text-zinc-100">{m.routes_leaderboard()}</h3>
-		<table class="w-full table-fixed text-xs sm:text-sm">
+		<table class="data-table w-full text-xs sm:text-sm">
 			<thead class="border-b border-zinc-800 text-quiet">
 				<tr>
 					{#each [['rider', m.routes_rider()], ['rides', m.routes_rides()], ['speed', m.routes_best_speed()]] as [key, label], index (key)}
 						<th
 							scope="col"
-							class={index === 0 ? 'w-1/2 text-left' : 'text-right'}
+							class={index === 0 ? 'name-cell text-left' : 'text-right'}
 							aria-sort={sort === key ? (descending ? 'descending' : 'ascending') : undefined}
 						>
 							<button
@@ -154,35 +156,35 @@
 				{#each sorted as rider (rider.id)}
 					<tr>
 						<td>
-							<a
-								href={memberProfile(rider)}
-								class="flex min-h-10 min-w-0 items-center gap-2 py-1 font-semibold hover:text-accent-300"
-							>
-								<RouteRiderAvatar {rider} size="size-7" />
-								<span class="truncate">{riderName(rider)}</span>
-								{#if rider.id === featured?.id}
-									<span
-										class="text-accent-300"
-										title={m.routes_featured_rider()}
-										aria-label={m.routes_featured_rider()}
-									>
-										<svg
-											viewBox="0 0 24 24"
-											class="size-4"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="1.8"
-											stroke-linejoin="round"
-											aria-hidden="true"><path d="m3 7 4.5 4L12 5l4.5 6L21 7l-2 11H5z" /></svg
+							<div class="table-name" title={riderName(rider)}>
+								<a
+									href={memberProfile(rider)}
+									class="flex min-h-10 min-w-0 items-center gap-2 py-1 font-semibold hover:text-accent-300"
+								>
+									<RouteRiderAvatar {rider} size="size-7" />
+									<span class="truncate">{riderName(rider)}</span>
+									{#if rider.id === featured?.id}
+										<span
+											class="text-accent-300"
+											title={m.routes_featured_rider()}
+											aria-label={m.routes_featured_rider()}
 										>
-									</span>
-								{/if}
-							</a>
+											<svg
+												viewBox="0 0 24 24"
+												class="size-4"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="1.8"
+												stroke-linejoin="round"
+												aria-hidden="true"><path d="m3 7 4.5 4L12 5l4.5 6L21 7l-2 11H5z" /></svg
+											>
+										</span>
+									{/if}
+								</a>
+							</div>
 						</td>
-						<td class="text-right tabular-nums">{rider.rides}</td>
-						<td class="whitespace-nowrap text-right tabular-nums"
-							>{formatSpeedKmh(rider.best_speed_kmh)}</td
-						>
+						<td class="numeric">{rider.rides}</td>
+						<td class="numeric">{formatSpeedKmh(rider.best_speed_kmh)}</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -228,9 +230,9 @@
 	</section>
 </div>
 
-{#snippet metric(label: string, value: string)}
+{#snippet metric(label: string, value: string, numeric = true)}
 	<div class="flex min-w-0 flex-col-reverse">
 		<dt class="text-xs text-quiet">{label}</dt>
-		<dd class="font-semibold text-zinc-100">{value}</dd>
+		<dd class="font-semibold text-zinc-100" class:metric-value={numeric}>{value}</dd>
 	</div>
 {/snippet}

@@ -73,6 +73,18 @@ describe('formatDistance', () => {
 		locale.current = 'en';
 		expect(formatDistance(1609.344 * 2.5)).toBe('2.50 mi');
 	});
+
+	it('rounds large totals when compact formatting is requested', () => {
+		locale.current = 'en';
+		const options = { compact: true };
+		expect(formatDistance(861770, options)).toBe('861.77 km');
+		expect(formatDistance(2977810, options)).toBe('2,977.8 km');
+		expect(formatDistance(12345678, options)).toBe('12,346 km');
+		expect(formatDistance(2977810)).toBe('2,977.81 km');
+
+		setPrefs({ units: 'imperial' });
+		expect(formatDistance(1609.344 * 2977.81, options)).toBe('2,977.8 mi');
+	});
 });
 
 describe('formatDuration', () => {

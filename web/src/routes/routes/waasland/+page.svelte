@@ -536,12 +536,12 @@
 					<ul class="mt-1 divide-y divide-zinc-800">
 						{#each sections.slice(0, 16) as section, index (index)}
 							<li class="flex justify-between gap-3 py-2 text-sm">
-								<span class="text-zinc-200"
+								<span class="min-w-0 wrap-anywhere text-zinc-200"
 									>{section.name}{section.passes > 1
 										? ` · ${m.waas_passages_label({ count: section.passes })}`
 										: ''}</span
 								>
-								<span class="shrink-0 text-zinc-400"
+								<span class="metric-value shrink-0 text-zinc-400"
 									>{ride.profile === 'climb'
 										? routeElevation(section.gain)
 										: routeDistance(section.meters)}</span

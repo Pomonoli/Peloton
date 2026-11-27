@@ -40,7 +40,9 @@
 					<Icon name={metric.icon} size={15} class="text-accent-300" />
 					{metric.label}
 				</dt>
-				<dd class="mt-1 text-lg leading-tight font-bold tracking-tight tabular-nums text-zinc-100">
+				<dd
+					class="metric-value mt-1 text-base leading-tight font-bold tracking-tight text-zinc-100 sm:text-lg"
+				>
 					{metric.value}
 				</dd>
 			</div>

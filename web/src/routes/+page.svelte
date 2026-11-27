@@ -161,7 +161,7 @@
 											{#each [{ label: m.detail_stat_distance(), value: formatDistance(activity.distance_m) }, { label: m.col_moving(), value: formatDuration(activity.moving_duration_s) }, { label: m.col_elevation(), value: formatElevation(activity.elevation_gain_m) }] as stat (stat.label)}
 												<div>
 													<dt class="sr-only">{stat.label}</dt>
-													<dd>{stat.value}</dd>
+													<dd class="metric-value">{stat.value}</dd>
 												</div>
 											{/each}
 										</dl>
@@ -170,7 +170,7 @@
 										{#if activity.avg_speed_mps != null}
 											<dl>
 												<dt class="sr-only">{m.col_average_speed()}</dt>
-												<dd class="text-xs font-bold text-accent-300 tabular-nums">
+												<dd class="metric-value text-xs font-bold text-accent-300">
 													{formatSpeed(activity.avg_speed_mps)}
 												</dd>
 											</dl>

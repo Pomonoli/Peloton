@@ -180,7 +180,7 @@
 							class="-mt-2 flex items-center justify-between gap-2 border-b border-zinc-800 pb-3 text-xs text-zinc-400"
 						>
 							{m.planner_trim_distance()}
-							<strong class="text-sm tabular-nums text-zinc-100">{routeDistance(distance)}</strong>
+							<strong class="metric-value text-sm text-zinc-100">{routeDistance(distance)}</strong>
 						</div>
 					{/if}
 					<button
@@ -194,7 +194,8 @@
 					{#if canRotate}
 						<label class="block text-xs text-zinc-300">
 							<span class="flex items-center justify-between gap-2"
-								>{m.routes_recorded_start()} <strong>{routeDistance(start)}</strong></span
+								>{m.routes_recorded_start()}
+								<strong class="metric-value">{routeDistance(start)}</strong></span
 							>
 							<input
 								type="range"

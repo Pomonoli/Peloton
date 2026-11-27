@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetricReadout from '#lib/components/MetricReadout.svelte';
 	import { memberURL } from '#lib/member.js';
 
 	import { formatDateOnly } from '#lib/format.js';
@@ -157,8 +158,8 @@
 
 		<section>
 			<h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-400">All efforts</h2>
-			<div class="overflow-x-auto rounded-lg border border-zinc-800">
-				<table class="w-full text-sm">
+			<div class="table-scroll rounded-lg border border-zinc-800">
+				<table class="data-table w-full text-sm">
 					<thead class="bg-panel text-xs uppercase tracking-wide text-zinc-500">
 						<tr>
 							<th class="px-3 py-2 text-left font-medium">Date</th>
@@ -170,16 +171,17 @@
 						{#each [...payload.items].reverse() as it (it.activity_id)}
 							<tr class={it.is_best ? 'bg-emerald-500/5' : ''}>
 								<td class="px-3 py-2 tabular-nums">{formatDateOnly(it.start_time)}</td>
-								<td class="px-3 py-2">
+								<td class="name-cell px-3 py-2">
 									<a
 										href={`/activities/${it.activity_id}`}
-										class="text-accent-400 hover:text-accent-300"
+										class="table-name text-accent-400 hover:text-accent-300"
+										title={it.title}
 									>
 										{it.title || 'Activity'}
 									</a>
 								</td>
 								<td class="px-3 py-2 text-right font-medium tabular-nums">
-									{recordValue(bucket, it.achieved_value)}
+									<MetricReadout value={recordValue(bucket, it.achieved_value)} />
 									{#if it.is_best}<span class="ml-1 text-emerald-400">★</span>{/if}
 								</td>
 							</tr>

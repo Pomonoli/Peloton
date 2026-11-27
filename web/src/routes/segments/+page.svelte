@@ -22,8 +22,18 @@
 	const columns = $derived([
 		{ key: 'name', label: m.segment_column_name(), align: 'text-left' },
 		{ key: 'distance_m', label: m.detail_stat_distance(), align: 'text-right' },
-		{ key: 'best_elapsed_s', label: m.segment_leaderboard_time(), align: 'text-right' },
-		{ key: 'average_speed_kmh', label: m.segment_top_speed(), align: 'text-right' },
+		{
+			key: 'best_elapsed_s',
+			label: m.segment_leaderboard_time(),
+			shortLabel: m.detail_label_time(),
+			align: 'text-right'
+		},
+		{
+			key: 'average_speed_kmh',
+			label: m.segment_top_speed(),
+			shortLabel: m.segment_speed_column(),
+			align: 'text-right'
+		},
 		{ key: 'local_kom_holder', label: m.segment_local_kom(), align: 'text-left' },
 		{ key: 'member_count', label: m.segment_column_members(), align: 'text-right' },
 		{
@@ -31,7 +41,7 @@
 			label: data.member ? m.segment_attempts() : m.segment_my_attempts(),
 			align: 'text-right'
 		}
-	] satisfies { key: SortColumn; label: string; align: string }[]);
+	] satisfies { key: SortColumn; label: string; shortLabel?: string; align: string }[]);
 
 	let segments = $state<CatalogSegment[]>([]);
 	let mine = $state(untrack(() => !!data.member));
@@ -219,8 +229,8 @@
 		{/await}
 	{:else}
 		{#if segments.length > 0 || sorting}
-			<div class="surface overflow-x-auto">
-				<table class="catalog-table w-full bg-panel text-sm" aria-busy={loading}>
+			<div class="surface table-scroll">
+				<table class="data-table catalog-table w-full text-sm" aria-busy={loading}>
 					<thead class="bg-zinc-950/65 text-xs text-zinc-500">
 						<tr>
 							{#each columns as column (column.key)}
@@ -228,6 +238,7 @@
 								{@const active = order[index]}
 								<SortHeader
 									label={column.label}
+									shortLabel={column.shortLabel}
 									align={column.align}
 									{index}
 									direction={active?.direction}
@@ -238,37 +249,43 @@
 					</thead>
 					<tbody class="divide-y divide-zinc-800">
 						{#each segments as segment (segment.id)}
+							{@const summary = m.segment_mobile_summary({
+								holder: segment.local_kom_holder || m.placeholder_dash(),
+								riders: segment.member_count.toLocaleString(intlLocale()),
+								attempts: segment.my_attempts.toLocaleString(intlLocale())
+							})}
 							<tr class="hover:bg-panel">
-								<th scope="row" class="px-4 py-3 text-left font-medium">
+								<th scope="row" class="name-cell px-4 py-3 text-left font-medium">
 									<a
 										href={memberURL(`/segment/${segment.id}`, data.member)}
-										class="text-accent-400 hover:underline"
+										class="table-name text-accent-400 hover:underline"
+										title={segment.name}
 									>
 										{segment.name}
 									</a>
-									<div class="mt-0.5 text-[11px] leading-4 text-quiet md:hidden">
-										{m.segment_mobile_summary({
-											holder: segment.local_kom_holder || m.placeholder_dash(),
-											riders: segment.member_count.toLocaleString(intlLocale()),
-											attempts: segment.my_attempts.toLocaleString(intlLocale())
-										})}
+									<div
+										class="table-name mt-0.5 text-[11px] leading-4 text-quiet md:hidden"
+										title={summary}
+									>
+										{summary}
 									</div>
 								</th>
-								<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+								<td class="numeric px-4 py-3">
 									{formatMetricDistance(segment.distance_m)}
 								</td>
-								<td class="px-4 py-3 text-right tabular-nums"
-									>{formatDuration(segment.best_elapsed_s)}</td
-								>
-								<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+								<td class="numeric px-4 py-3">{formatDuration(segment.best_elapsed_s)}</td>
+								<td class="numeric px-4 py-3">
 									{formatSpeedKmh(segment.average_speed_kmh)}
 								</td>
-								<td class="px-4 py-3">{segment.local_kom_holder}</td>
-								<td class="px-4 py-3 text-right tabular-nums">
+								<td class="max-w-32 px-4 py-3"
+									><span class="table-name" title={segment.local_kom_holder}
+										>{segment.local_kom_holder}</span
+									></td
+								>
+								<td class="numeric px-4 py-3">
 									{segment.member_count.toLocaleString(intlLocale())}
 								</td>
-								<td class="px-4 py-3 text-right tabular-nums"
-									>{segment.my_attempts.toLocaleString(intlLocale())}</td
+								<td class="numeric px-4 py-3">{segment.my_attempts.toLocaleString(intlLocale())}</td
 								>
 							</tr>
 						{/each}
@@ -309,26 +326,6 @@
 
 <style>
 	@media (width < 48rem) {
-		.catalog-table {
-			table-layout: fixed;
-		}
-		.catalog-table :global(:is(td, th)) {
-			padding: 0.375rem;
-			white-space: normal;
-			overflow-wrap: anywhere;
-			font-size: 0.75rem;
-		}
-		.catalog-table :global(thead button) {
-			position: relative;
-			min-height: 2.375rem;
-			padding: 0.125rem 0;
-			white-space: normal;
-			text-transform: none;
-			font-weight: 600;
-		}
-		.catalog-table :global(th:first-child) {
-			width: 38%;
-		}
 		.catalog-table :global(:is(td, th):nth-child(n + 5)) {
 			display: none;
 		}

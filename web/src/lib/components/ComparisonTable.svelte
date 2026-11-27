@@ -108,15 +108,17 @@
 		{query.trim() || winner ? m.comparison_no_matches() : empty}
 	</p>
 {:else}
-	<div class="overflow-hidden surface">
-		<table class="comparison-table w-full text-left text-sm">
+	<div class="surface table-scroll">
+		<table class="data-table comparison-table w-full text-left text-sm">
 			<thead class="bg-zinc-950/70">
 				<tr>
 					{#each columns as col (col.key)}
 						<th
 							scope="col"
 							class="px-3 py-1 text-quiet"
+							class:name-cell={col.key === 'name'}
 							class:distance-cell={col.key === 'distance'}
+							class:text-right={col.key === 'distance'}
 							class:first-rider={col.key === 'you'}
 							class:second-rider={col.key === 'opponent'}
 							aria-sort={sort === col.key ? (descending ? 'descending' : 'ascending') : undefined}
@@ -126,7 +128,8 @@
 								title={col.label}
 								aria-label={col.label}
 								onclick={() => sortBy(col.key)}
-								class="min-h-10 text-left font-semibold hover:text-accent-300"
+								class="min-h-10 align-middle font-semibold hover:text-accent-300"
+								class:table-name={col.key === 'you' || col.key === 'opponent'}
 							>
 								{col.label}
 								{sort === col.key ? (descending ? ' ↓' : ' ↑') : ''}
@@ -143,22 +146,28 @@
 							{@const won =
 								(row.winner === 'you' || row.winner === 'opponent') && col.key === row.winner}
 							<td
-								class="min-w-0 px-3 py-2.5 align-middle tabular-nums"
+								class="px-3 py-2.5 align-middle"
+								class:numeric={col.key === 'you' ||
+									col.key === 'opponent' ||
+									col.key === 'distance'}
 								class:distance-cell={col.key === 'distance'}
 								class:first-rider={col.key === 'you'}
 								class:second-rider={col.key === 'opponent'}
 							>
 								{#if col.key === 'winner'}
-									<span
-										title={cell?.text}
-										class="winner-label inline-block rounded-md px-1.5 py-0.5 text-xs font-semibold"
-										class:first-win={row.winner === 'you'}
-										class:second-win={row.winner === 'opponent'}>{cell?.text}</span
-									>
+									<span class="table-name" title={cell?.text}>
+										<span
+											class="winner-label inline-block max-w-full truncate rounded-md px-1.5 py-0.5 align-middle text-xs font-semibold"
+											class:first-win={row.winner === 'you'}
+											class:second-win={row.winner === 'opponent'}>{cell?.text}</span
+										>
+									</span>
 								{:else if cell?.href}
 									<a
 										href={cell.href}
 										class="text-accent-300 hover:underline"
+										class:table-name={col.key === 'name'}
+										title={col.key === 'name' ? cell.text : undefined}
 										class:font-bold={won || col.key === 'name'}
 										class:result-win={won}>{cell.text}</a
 									>
@@ -168,9 +177,11 @@
 									>
 								{/if}
 								{#if col.key === 'name' && row.cells.distance}
-									<span class="inline-distance text-xs text-quiet">{row.cells.distance.text}</span>
+									<span class="metric-value inline-distance text-xs text-quiet"
+										>{row.cells.distance.text}</span
+									>
 								{/if}
-								{#if cell?.detail}<span class="cell-detail block text-xs text-quiet"
+								{#if cell?.detail}<span class="metric-value cell-detail block text-xs text-quiet"
 										>{cell.detail}</span
 									>{/if}
 							</td>
@@ -186,9 +197,15 @@
 	.inline-distance {
 		display: none;
 	}
-	td {
-		overflow-wrap: anywhere;
+	th:last-child {
+		min-width: 3.5rem;
+		width: 14%;
 	}
+
+	:is(th, td):is(.first-rider, .second-rider) {
+		text-align: right;
+	}
+
 	.winner-label {
 		background: var(--surface-muted);
 		color: var(--text-secondary);
@@ -211,24 +228,14 @@
 	}
 
 	@media (width < 64rem) {
-		.comparison-table {
-			table-layout: fixed;
-		}
 		.comparison-table :is(th, td) {
 			padding-inline: 0.3125rem;
 			font-size: 0.75rem;
 			line-height: 1.125rem;
 		}
-		.comparison-table th:first-child {
-			width: 30%;
-		}
-		.comparison-table th:last-child {
-			width: 16%;
-		}
 		.comparison-table th button {
 			max-width: 100%;
 			font-size: 0.6875rem;
-			overflow-wrap: anywhere;
 		}
 		.distance-cell {
 			display: none;

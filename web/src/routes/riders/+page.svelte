@@ -115,8 +115,8 @@
 			{m.friends_empty()}
 		</p>
 	{:else}
-		<div class="overflow-hidden surface">
-			<table class="w-full table-fixed text-sm">
+		<div class="surface table-scroll">
+			<table class="data-table w-full text-sm">
 				<thead class="border-b border-zinc-800 bg-zinc-950/75 text-xs text-quiet">
 					<tr>
 						{#each columns as column (column.key)}
@@ -127,9 +127,7 @@
 										? 'descending'
 										: 'ascending'
 									: undefined}
-								class={column.key === 'name'
-									? 'w-[44%] px-2 text-left md:w-[36%] md:px-4'
-									: 'px-1 text-right md:w-[14%] md:px-3'}
+								class={column.key === 'name' ? 'px-2 text-left md:px-4' : 'px-1 text-right md:px-3'}
 							>
 								<button
 									type="button"
@@ -153,39 +151,41 @@
 						{@const name = riderName(member)}
 						{@const open = expanded === member.id}
 						<tr class="hover:bg-zinc-950/75">
-							<th scope="row" class="px-2 py-1 text-left font-normal md:px-4">
-								<a href={memberProfile(member)} class="group flex min-h-11 items-center gap-2">
-									<span
-										class="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-accent-500/12 font-semibold text-accent-300 md:size-9"
-										aria-hidden="true"
-									>
-										{name.slice(0, 1).toLocaleUpperCase(intlLocale())}
-										{#if member.avatar_url && !brokenAvatars.includes(member.id)}
-											<img
-												src={member.avatar_url}
-												alt=""
-												loading="lazy"
-												referrerpolicy="no-referrer"
-												onerror={() => (brokenAvatars = [...brokenAvatars, member.id])}
-												class="absolute inset-0 size-full object-cover"
-											/>
-										{/if}
-									</span>
-									<span class="min-w-0">
-										<span class="block truncate font-semibold group-hover:text-accent-300"
-											>{name}</span
+							<th scope="row" class="name-cell px-2 py-1 text-left font-normal md:px-4">
+								<a href={memberProfile(member)} class="table-name group" title={name}>
+									<span class="flex min-h-11 items-center gap-1.5 sm:gap-2"
+										><span
+											class="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-accent-500/12 font-semibold text-accent-300 md:size-9"
+											aria-hidden="true"
 										>
-										<span class="block truncate text-xs text-quiet">@{member.username}</span>
-									</span>
-								</a>
+											{name.slice(0, 1).toLocaleUpperCase(intlLocale())}
+											{#if member.avatar_url && !brokenAvatars.includes(member.id)}
+												<img
+													src={member.avatar_url}
+													alt=""
+													loading="lazy"
+													referrerpolicy="no-referrer"
+													onerror={() => (brokenAvatars = [...brokenAvatars, member.id])}
+													class="absolute inset-0 size-full object-cover"
+												/>
+											{/if}
+										</span>
+										<span class="min-w-0">
+											<span class="block truncate font-semibold group-hover:text-accent-300"
+												>{name}</span
+											>
+											<span class="block truncate text-xs text-quiet">@{member.username}</span>
+										</span>
+									</span></a
+								>
 							</th>
-							<td class="px-1 py-2 text-right text-xs font-semibold tabular-nums sm:text-sm md:px-3"
-								>{formatDistance(member.cycling_distance_m)}</td
+							<td class="numeric px-1 py-2 text-xs font-semibold sm:text-sm md:px-3"
+								>{formatDistance(member.cycling_distance_m, { compact: true })}</td
 							>
-							<td class="px-1 py-2 text-right text-xs font-semibold tabular-nums sm:text-sm md:px-3"
+							<td class="numeric px-1 py-2 text-xs font-semibold sm:text-sm md:px-3"
 								>{number.format(member.activity_count)}</td
 							>
-							<td class="hidden px-3 py-2 md:table-cell">{@render recentRide(member)}</td>
+							<td class="hidden min-w-24 px-3 py-2 md:table-cell">{@render recentRide(member)}</td>
 							<td>
 								<button
 									type="button"
@@ -235,7 +235,8 @@
 	{#if member.latest_ride}
 		<a
 			href={`/activities/${member.latest_ride.id}`}
-			class="break-words text-xs text-accent-300 hover:underline"
+			class="block truncate text-xs text-accent-300 hover:underline md:table-name"
+			title={member.latest_ride.title}
 		>
 			{member.latest_ride.title || m.ride_activity()} · {formatDateOnly(
 				member.latest_ride.start_time

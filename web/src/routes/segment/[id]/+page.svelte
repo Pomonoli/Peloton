@@ -184,14 +184,14 @@
 				</p>
 				<h1 class="page-title">{segment.name || m.segment_page_title()}</h1>
 				<ul class="flex flex-wrap gap-x-2.5 gap-y-1 text-xs font-semibold tabular-nums">
-					<li>{formatMetricDistance(segment.distance_m)}</li>
+					<li class="metric-value">{formatMetricDistance(segment.distance_m)}</li>
 					{#if segment.avg_grade != null}<li>
 							{m.segment_gradient_average({ grade: number.format(segment.avg_grade) })}
 						</li>{/if}
 					{#if segment.max_grade != null}<li>
 							{m.segment_gradient_maximum({ grade: number.format(segment.max_grade) })}
 						</li>{/if}
-					{#if segment.elevation_gain_m != null}<li>
+					{#if segment.elevation_gain_m != null}<li class="metric-value">
 							{formatElevation(segment.elevation_gain_m)}
 						</li>{/if}
 					{#if segment.climb_category}<li>
@@ -316,46 +316,50 @@
 						{data.member ? m.member_segment_no_efforts() : m.segment_no_personal_efforts()}
 					</p>
 				{:else}
-					<table class="attempts-table w-full text-sm">
-						<thead class="text-xs text-quiet">
-							<tr>
-								<th scope="col" class="text-left">{m.segment_leaderboard_date()}</th>
-								<th scope="col">{m.detail_label_time()}</th>
-								<th scope="col">{m.segment_leaderboard_rank()}</th>
-								<th scope="col">{m.segment_heart_rate()}</th>
-								<th scope="col">{m.segment_power()}</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-zinc-800">
-							{#each efforts.slice(0, visibleAttempts) as effort (effort.id)}
+					<div class="table-scroll">
+						<table class="data-table attempts-table w-full text-sm">
+							<thead class="text-xs text-quiet">
 								<tr>
-									<th scope="row" class="text-left font-semibold">
-										<a
-											href={memberURL(`/activities/${effort.activity_id}`, data.member)}
-											class="text-accent-300 hover:underline"
-										>
-											{formatDate(effort.start_time)}
-										</a>
-									</th>
-									<td>
-										{formatDuration(effort.elapsed_s)}
-										<span class="block text-xs text-quiet"
-											>{formatSpeedKmh(segmentSpeedKmh(segment.distance_m, effort.elapsed_s))}</span
-										>
-									</td>
-									<td>
-										{effort.personal_rank > 0 ? effort.personal_rank : '—'}
-										{#if effort.is_personal_record}<span
-												title={m.segment_personal_record()}
-												class="attempt-pr">PR</span
-											>{/if}
-									</td>
-									<td>{effort.avg_heart_rate ?? '—'}</td>
-									<td>{effort.avg_power ?? '—'}</td>
+									<th scope="col" class="text-left">{m.segment_leaderboard_date()}</th>
+									<th scope="col" class="text-right">{m.detail_label_time()}</th>
+									<th scope="col" class="text-right">{m.segment_leaderboard_rank()}</th>
+									<th scope="col" class="text-right">{m.segment_heart_rate()}</th>
+									<th scope="col" class="text-right">{m.segment_power()}</th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
+							</thead>
+							<tbody class="divide-y divide-zinc-800">
+								{#each efforts.slice(0, visibleAttempts) as effort (effort.id)}
+									<tr>
+										<th scope="row" class="text-left font-semibold">
+											<a
+												href={memberURL(`/activities/${effort.activity_id}`, data.member)}
+												class="text-accent-300 hover:underline"
+											>
+												{formatDate(effort.start_time)}
+											</a>
+										</th>
+										<td class="numeric">
+											{formatDuration(effort.elapsed_s)}
+											<span class="block text-xs text-quiet"
+												>{formatSpeedKmh(
+													segmentSpeedKmh(segment.distance_m, effort.elapsed_s)
+												)}</span
+											>
+										</td>
+										<td class="numeric">
+											{effort.personal_rank > 0 ? effort.personal_rank : '—'}
+											{#if effort.is_personal_record}<span
+													title={m.segment_personal_record()}
+													class="attempt-pr">PR</span
+												>{/if}
+										</td>
+										<td class="numeric">{effort.avg_heart_rate ?? '—'}</td>
+										<td class="numeric">{effort.avg_power ?? '—'}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 					{#if visibleAttempts < efforts.length}
 						<button
 							type="button"
@@ -438,18 +442,12 @@
 		gap: 0.85rem;
 	}
 
-	.attempts-table {
-		table-layout: fixed;
-	}
-
 	.attempts-table :is(th, td) {
 		padding: 0.55rem 0.3rem;
 		text-align: right;
-		overflow-wrap: anywhere;
 	}
 
 	.attempts-table th:first-child {
-		width: 29%;
 		padding-inline-start: 0.7rem;
 		text-align: left;
 	}

@@ -5,7 +5,7 @@
 </script>
 
 <section class="space-y-6">
-	<header class="flex items-baseline justify-between">
+	<header class="flex flex-wrap items-baseline justify-between gap-2">
 		<div>
 			<a href="/admin" class="text-xs text-accent-400 hover:text-accent-300">← back</a>
 			<h1 class="mt-2 page-title">Identity Providers</h1>
@@ -27,7 +27,7 @@
 		<ul class="divide-y divide-zinc-800">
 			{#each data.oidcClients as c (c.id)}
 				<li
-					class="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-4 px-5 py-3 text-sm max-md:grid-cols-[auto_1fr] max-md:gap-3"
+					class="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 text-sm wrap-anywhere max-md:grid-cols-[auto_minmax(0,1fr)] sm:px-5"
 				>
 					<span
 						class="flex h-6 w-6 items-center justify-center rounded bg-accent-500/20 text-[10px] font-bold text-accent-300"

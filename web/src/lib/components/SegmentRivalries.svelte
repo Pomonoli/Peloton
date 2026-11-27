@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetricReadout from '#lib/components/MetricReadout.svelte';
 	import type { Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -200,8 +201,8 @@
 		</div>
 
 		{#if board.length}
-			<div class="overflow-x-auto rounded-lg border border-zinc-800">
-				<table class="leaderboard-table w-full text-xs sm:text-sm" class:compact>
+			<div class="table-scroll rounded-lg border border-zinc-800">
+				<table class="data-table leaderboard-table w-full text-xs sm:text-sm" class:compact>
 					<thead class="bg-panel text-xs text-quiet">
 						<tr>
 							<th scope="col" class="px-1.5 py-2 text-left sm:px-3"
@@ -223,29 +224,35 @@
 					<tbody class="divide-y divide-zinc-800">
 						{#each board.slice(0, compact ? previewSize : visibleCount) as entry (entry.user_id)}
 							<tr class:leading-rider={entry.rank === 1}>
-								<td class="px-1.5 py-2 tabular-nums sm:px-3">
+								<td class="numeric px-1.5 py-2 sm:px-3">
 									<span class="rank" class:rank-first={entry.rank === 1}>
 										{#if entry.rank === 1}<Icon name="records" size={13} />{/if}
 										{entry.rank}
 									</span>
 								</td>
 								<td
-									class="px-1.5 py-2 sm:px-3"
+									class="name-cell px-1.5 py-2 sm:px-3"
 									class:font-semibold={entry.elapsed_s === board[0]?.elapsed_s}
 								>
-									<span class="rider-marker" style:background={riderColor(entry.user_id)}></span>
-									{entry.display_name}</td
-								>
-								<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
-									>{formatDuration(entry.elapsed_s)}</td
-								>
-								<td class="px-1.5 py-2 text-right tabular-nums sm:px-3"
+									<span class="table-name" title={entry.display_name}>
+										<span class="rider-marker" style:background={riderColor(entry.user_id)}></span>
+										{entry.display_name}
+									</span>
+									{#if !compact}
+										<span class="metric-value block text-[0.6875rem] text-quiet min-[22rem]:hidden">
+											{m.segment_attempts()}
+											{number.format(entry.effort_count)}
+										</span>
+									{/if}
+								</td>
+								<td class="numeric px-1.5 py-2 sm:px-3">{formatDuration(entry.elapsed_s)}</td>
+								<td class="numeric px-1.5 py-2 sm:px-3"
 									>{formatSpeedKmh(entry.average_speed_kmh)}</td
 								>
-								<td class="attempt-count px-1.5 py-2 text-right tabular-nums sm:px-3"
+								<td class="numeric attempt-count px-1.5 py-2 sm:px-3"
 									>{number.format(entry.effort_count)}</td
 								>
-								<td class="px-1.5 py-2 text-right sm:px-3">
+								<td class="numeric px-1.5 py-2 sm:px-3">
 									<a
 										href={memberURL(`/activities/${entry.activity_id}`, member)}
 										class="text-accent-300 hover:underline">{formatDateOnly(entry.start_time)}</a
@@ -334,7 +341,9 @@
 							<span class="size-2 shrink-0 rounded-full" style:background={color}></span>
 							{entry.display_name}
 							{#if !hidden.includes(entry.user_id) && times[hoverIndex] != null}<span
-									>{formatDistanceEffort(distanceM, times[hoverIndex])}</span
+									><MetricReadout
+										value={formatDistanceEffort(distanceM, times[hoverIndex])}
+									/></span
 								>{/if}
 						</button>
 					{/each}
@@ -391,29 +400,9 @@
 		display: none;
 	}
 
-	@media (width < 50rem) {
-		.leaderboard-table {
-			table-layout: fixed;
-		}
-		.leaderboard-table :is(th, td) {
-			padding-inline: 0.25rem;
-			font-size: 0.6875rem;
-			overflow-wrap: anywhere;
-		}
-		.leaderboard-table th:nth-child(2) {
-			width: 24%;
-		}
-		.leaderboard-table th:nth-child(5) {
-			width: 17%;
-		}
-		.leaderboard-table th:last-child {
-			width: 21%;
-		}
-		.compact th:last-child {
-			width: 26%;
-		}
-		.leaderboard-table td:nth-child(4) {
-			white-space: nowrap;
+	@media (width < 22rem) {
+		.leaderboard-table .attempt-count {
+			display: none;
 		}
 	}
 </style>

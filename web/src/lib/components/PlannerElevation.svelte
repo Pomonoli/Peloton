@@ -210,11 +210,11 @@
 					<div
 						class="profile-tooltip"
 						data-profile-tooltip
-						style:left={Math.max(0, Math.min(width - 150, cursorX - 75)) + 'px'}
+						style:--cursor-x={`${cursorX}px`}
 						aria-hidden="true"
 					>
-						<strong>{routeDistance(cursor.point.distance_m)}</strong>
-						<span>{routeElevation(cursorHeight)}</span>
+						<strong class="metric-value">{routeDistance(cursor.point.distance_m)}</strong>
+						<span class="metric-value">{routeElevation(cursorHeight)}</span>
 						<span title={m.planner_gradient()}>{gradientLabel}</span>
 					</div>
 				{/if}
@@ -279,13 +279,16 @@
 		background: transparent;
 	}
 	.profile-tooltip {
+		--tooltip-width: min(100%, 10rem);
 		position: absolute;
 		top: 1px;
+		left: clamp(0px, var(--cursor-x) - 5rem, 100% - var(--tooltip-width));
 		z-index: 1;
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: center;
-		gap: 0.45rem;
-		min-width: 150px;
+		gap: 0.15rem 0.4rem;
+		width: var(--tooltip-width);
 		padding: 0.33rem 0.48rem;
 		border: 1px solid var(--line-subtle);
 		border-radius: 0.45rem;

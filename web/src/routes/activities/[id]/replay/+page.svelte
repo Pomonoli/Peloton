@@ -158,11 +158,11 @@
 				</div>
 				<div>
 					<dt class="text-quiet">{m.ride_distance()}</dt>
-					<dd>{formatDistance(point.distM)}</dd>
+					<dd class="metric-value">{formatDistance(point.distM)}</dd>
 				</div>
 				<div>
 					<dt class="text-quiet">{m.ride_elapsed()}</dt>
-					<dd>{formatDuration(position)}</dd>
+					<dd class="metric-value">{formatDuration(position)}</dd>
 				</div>
 				<div>
 					<dt class="text-quiet">{m.ride_elevation()}</dt>

@@ -52,30 +52,32 @@
 		<RecordedRouteThumbnail track={route.track} />
 	</div>
 	<div class="min-w-0">
-		<h2 class="line-clamp-2 text-base font-semibold leading-tight text-zinc-100 sm:text-lg">
+		<h2
+			class="line-clamp-2 wrap-anywhere text-base font-semibold leading-tight text-zinc-100 sm:text-lg"
+		>
 			{route.name}
 		</h2>
 		<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-300">
-			<span>{routeDistance(route.distance_m)}</span>
+			<span class="metric-value">{routeDistance(route.distance_m)}</span>
 			<span aria-hidden="true">·</span>
-			<span>{routeElevation(route.elevation_gain_m)}</span>
+			<span class="metric-value">{routeElevation(route.elevation_gain_m)}</span>
 			<span aria-hidden="true">·</span>
 			<span>{routeKind(route.type)}</span>
 		</div>
 		<dl
-			class="mt-2 grid grid-cols-[auto_auto_1fr] gap-x-2 border-t border-zinc-800/70 pt-2 text-xs sm:gap-x-4"
+			class="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-zinc-800/70 pt-2 text-xs sm:gap-x-4"
 		>
 			<div>
 				<dt class="text-quiet">{m.routes_total_rides()}</dt>
-				<dd class="font-semibold tabular-nums text-zinc-100">{route.rides}</dd>
+				<dd class="metric-value font-semibold text-zinc-100">{route.rides}</dd>
 			</div>
 			<div>
 				<dt class="text-quiet">{m.routes_riders()}</dt>
-				<dd class="font-semibold tabular-nums text-zinc-100">{route.rider_count}</dd>
+				<dd class="metric-value font-semibold text-zinc-100">{route.rider_count}</dd>
 			</div>
 			<div>
 				<dt class="text-quiet">{m.routes_best_speed()}</dt>
-				<dd class="whitespace-nowrap font-semibold tabular-nums text-zinc-100">
+				<dd class="metric-value font-semibold text-zinc-100">
 					{formatSpeedKmh(route.best_speed_kmh)}
 				</dd>
 			</div>
@@ -87,7 +89,9 @@
 				<p class="mb-1 text-xs text-quiet">{m.routes_featured_rider()}</p>
 				<div class="flex min-w-0 items-center gap-2">
 					<RouteRiderAvatar rider={featured} size="size-7" />
-					<span class="truncate text-sm font-semibold text-zinc-100">{riderName(featured)}</span>
+					<span class="truncate text-sm font-semibold text-zinc-100" title={riderName(featured)}
+						>{riderName(featured)}</span
+					>
 					<span
 						class="ml-auto shrink-0 whitespace-nowrap rounded-full bg-accent-500/13 px-2 py-0.5 text-xs font-semibold text-accent-300"
 					>
@@ -109,7 +113,7 @@
 							</span>
 						{/if}
 					</span>
-					<span class="min-w-0 text-xs leading-tight text-quiet">
+					<span class="min-w-0 truncate text-xs leading-tight text-quiet" title={otherNames}>
 						{m.routes_also_ridden()} <span class="text-zinc-300">{otherNames}</span>
 					</span>
 				</div>

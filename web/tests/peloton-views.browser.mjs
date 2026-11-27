@@ -17,6 +17,16 @@ const basemap = {
 	layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#343434' } }]
 };
 const totals = { count: 1, distance_m: 45000, moving_s: 4500, elevation_gain_m: 50 };
+const largeTotals = {
+	count: 12345,
+	distance_m: 2977810,
+	moving_s: 458711,
+	elevation_gain_m: 4994
+};
+const longRideName = 'Canal ride along the ' + 'NorthwesternCanalGreenway'.repeat(5);
+const longSegmentName = 'Forest Road over the ' + 'NorthwesternCanalGreenway'.repeat(5);
+const longRiderName = 'Alex ' + 'NorthwesternCanalGreenway'.repeat(5);
+const longGearName = 'Touring bike ' + 'NorthwesternCanalGreenway'.repeat(5);
 const mira = {
 	id: 'mira',
 	username: 'mira',
@@ -78,7 +88,7 @@ const weeks = Array.from({ length: 12 }, (_, i) => ({
 }));
 const asCatalog = (row) => ({
 	id: row.segment_id,
-	name: row.segment_name,
+	name: row.segment_id === 'forest' ? longSegmentName : row.segment_name,
 	distance_m: row.segment_distance_m,
 	average_speed_kmh: row.average_speed_kmh,
 	best_elapsed_s: row.elapsed_s,
@@ -139,7 +149,7 @@ function trainingFixture(days, rider) {
 }
 
 try {
-	for (const width of [360, 390, 424, 430, 900, 1440]) {
+	for (const width of [320, 360, 390, 424, 430, 768, 900, 1440]) {
 		const mobile = width < 768;
 		const page = await browser.newPage({
 			viewport: { width, height: width === 424 ? 933 : 900 },
@@ -199,7 +209,19 @@ try {
 						total: 1,
 						matched: 1,
 						facets: { types: [], disciplines: [], years: [] },
-						activities: [{ ...recent, discipline: 'road', timezone: 'UTC' }],
+						activities: [
+							{
+								...recent,
+								title: longRideName,
+								distance_m: 861770,
+								moving_duration_s: largeTotals.moving_s,
+								elapsed_duration_s: 469200,
+								avg_speed_mps: 23.37 / 3.6,
+								elevation_gain_m: 4994,
+								discipline: 'road',
+								timezone: 'UTC'
+							}
+						],
 						has_more: false
 					}
 				});
@@ -262,10 +284,48 @@ try {
 						speedMps: [8, 10, 10, 11]
 					}
 				},
+				'/cairn.v1.GearService/ListGear': {
+					gear: [
+						{
+							id: 'touring',
+							kind: 'GEAR_KIND_BIKE',
+							name: longGearName,
+							totalDistanceM: largeTotals.distance_m,
+							totalMovingS: String(largeTotals.moving_s),
+							activityCount: String(largeTotals.count),
+							weightKg: 12.5
+						}
+					]
+				},
+				'/cairn.v1.AdminService/ListUsers': {
+					users: [
+						{
+							user: {
+								id: 'alex',
+								username: 'alex',
+								displayName: longRiderName,
+								email: `${'long'.repeat(20)}@example.test`,
+								createdAt: recent.start_time
+							},
+							activityCount: largeTotals.count
+						}
+					]
+				},
+				'/api/athlete/metrics': {
+					specs: [{ key: 'weight_kg', label: 'Weight', unit: 'kg', min: 30, max: 250 }],
+					entries: [{ id: 'weight', key: 'weight_kg', value: 79.4, effective_date: '2026-11-22' }]
+				},
 				'/api/members/mira': mira,
 				'/api/riders': {
 					members: [
 						mira,
+						{
+							...mira,
+							id: 'alex',
+							username: 'alex',
+							display_name: longRiderName,
+							cycling_distance_m: largeTotals.distance_m
+						},
 						{ ...mira, id: 'admin', username: 'admin', display_name: 'Dedicated Admin' }
 					]
 				},
@@ -309,15 +369,16 @@ try {
 					}
 				},
 				'/api/stats': {
-					totals,
+					totals: largeTotals,
 					by_year: [
-						{ year: 2026, ...totals },
+						{ year: 2026, ...largeTotals },
 						{ year: 2025, ...totals }
 					],
 					by_discipline: [],
 					records: { longest_distance: recent },
 					sport_totals: [
-						{ value: 'ride', count: 1, distance_m: 45000, moving_s: 4500, speed_kmh: 36 }
+						{ value: 'ride', count: 1, distance_m: 45000, moving_s: 4500, speed_kmh: 36 },
+						{ value: 'virtual_ride', ...largeTotals, speed_kmh: 23.37 }
 					]
 				},
 				'/api/records': {
@@ -332,8 +393,7 @@ try {
 							timestamp: recent.start_time
 						}
 					]
-				},
-				'/api/athlete/metrics': { specs: [], entries: [] }
+				}
 			};
 			if (path.startsWith('/api/') || path.startsWith('/cairn.v1.')) {
 				return route.fulfill({ json: fixtures[path] ?? {} });
@@ -349,9 +409,25 @@ try {
 		const noPageOverflow = (path) =>
 			page.evaluate((url) => {
 				if (document.documentElement.scrollWidth > innerWidth)
-					throw new Error('Horizontal overflow at ' + url);
+					throw new Error(`Horizontal overflow at ${url} (${innerWidth}px)`);
 				return true;
 			}, path);
+		const fitsOnOneLine = async (locator) => {
+			await locator.waitFor();
+			assert.ok(
+				await locator.evaluate((element) => {
+					const range = document.createRange();
+					range.selectNodeContents(element);
+					const text = [...range.getClientRects()].filter((rect) => rect.width > 0);
+					const bounds = element.getBoundingClientRect();
+					return (
+						new Set(text.map((rect) => rect.top)).size === 1 &&
+						text.every((rect) => rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1)
+					);
+				}),
+				`Value "${await locator.textContent()}" exceeds its line or container at ${width}px`
+			);
+		};
 		const main = page.getByRole('main');
 		const sheet = page.getByRole('dialog');
 		const done = () => sheet.getByRole('button', { name: 'Done' }).click();
@@ -441,9 +517,11 @@ try {
 			await page.waitForURL(origin + '/analysis');
 			await tabbar.getByRole('link', { name: 'Activities' }).click();
 			await main.getByRole('link', { name: /Canal ride/ }).waitFor();
-			await main.getByText('36.00 km/h', { exact: true }).waitFor();
-			await main.getByText('1:15:00', { exact: true }).waitFor();
-			await main.getByText('1:23:20', { exact: true }).waitFor();
+			const ride = main.getByRole('link', { name: new RegExp(longRideName) });
+			assert.equal(await ride.getByTitle(longRideName).count(), 1);
+			for (const value of ['861.77 km', '127:25:11', '130:20:00', '23.37 km/h', '4994 m']) {
+				await fitsOnOneLine(ride.getByText(value, { exact: true }));
+			}
 			const filters = main.getByRole('button', { name: /^Filters/ });
 			await filters.click();
 			const filteredRequest = page.waitForRequest((request) => {
@@ -554,6 +632,12 @@ try {
 			);
 		}
 		await noPageOverflow('/segments');
+		await main.getByRole('link', { name: longSegmentName }).waitFor();
+		assert.equal(
+			await main.getByRole('link', { name: longSegmentName }).getAttribute('title'),
+			longSegmentName
+		);
+		await fitsOnOneLine(main.getByRole('cell', { name: '40.0 km/h', exact: true }));
 		assert.deepEqual(catalogSort.slice(0, 2), ['local_kom_holder:asc', 'average_speed_kmh:desc']);
 		if (width === 390 || width === 1440) {
 			const segmentView = main.getByRole('group', { name: 'Segment view' });
@@ -572,6 +656,17 @@ try {
 		await open('/stats?member=mira');
 		await page.getByRole('heading', { name: 'By sport' }).waitFor();
 		await page.getByRole('cell', { name: '36.00 km/h' }).waitFor();
+		const statsTables = main.getByRole('table');
+		for (const value of ['2,977.8 km', '127:25:11', '4994 m']) {
+			await fitsOnOneLine(statsTables.first().getByRole('cell', { name: value, exact: true }));
+		}
+		await fitsOnOneLine(statsTables.last().getByRole('cell', { name: '23.37 km/h', exact: true }));
+		assert.ok(
+			await statsTables.evaluateAll((tables) =>
+				tables.every((table) => table.clientWidth <= table.parentElement.clientWidth)
+			),
+			`Stats tables require horizontal scrolling at ${width}px`
+		);
 		await main.getByText('Moving time 1:15:00 · 36.00 km/h', { exact: true }).waitFor();
 		await main.getByLabel('Year', { exact: true }).selectOption('2025');
 		assert.equal(await main.getByRole('rowheader', { name: '2026' }).count(), 0);
@@ -710,7 +805,14 @@ try {
 		await open('/athlete');
 		await page.waitForURL(origin + '/health');
 		await page.getByRole('heading', { name: 'My body' }).waitFor();
+		await fitsOnOneLine(main.getByText('79.4 kg', { exact: true }));
 		await noPageOverflow('/health');
+		if (width === 390) {
+			await open('/admin');
+			await main.getByRole('heading', { name: 'Admin', exact: true }).waitFor();
+			await main.getByText(longRiderName, { exact: true }).waitFor();
+			await noPageOverflow('/admin');
+		}
 		for (const [path, heading] of [
 			['/gear', 'Gear'],
 			['/connections', 'Connections'],
@@ -719,6 +821,11 @@ try {
 			await open(path);
 			await main.getByRole('heading', { name: heading, exact: true }).waitFor();
 			await noPageOverflow(path);
+			if (path === '/gear') {
+				const gear = main.getByRole('listitem').filter({ hasText: longGearName });
+				await gear.getByText(longGearName, { exact: true }).waitFor();
+				await fitsOnOneLine(gear.getByText('2,977.8 km', { exact: true }));
+			}
 			if (path === '/settings') {
 				await main.getByText('Jun 2, 2026 16:30', { exact: true }).waitFor();
 				assert.equal(await main.getByLabel('Time format', { exact: true }).count(), 0);
@@ -785,7 +892,7 @@ try {
 		await page.close();
 	}
 	console.log(
-		'Peloton views, navigation, filters, and responsive layouts passed at 360px, 390px, 424px, 430px, 900px, and 1440px.'
+		'Peloton views, navigation, filters, and responsive layouts passed at 320px, 360px, 390px, 424px, 430px, 768px, 900px, and 1440px.'
 	);
 } finally {
 	await browser.close();

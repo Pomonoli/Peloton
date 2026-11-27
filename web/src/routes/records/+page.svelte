@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetricReadout from '#lib/components/MetricReadout.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { memberURL } from '#lib/member.js';
 	import { APP_NAME } from '$app/env/public';
@@ -140,15 +141,17 @@
 									`/activities/${r.activity_id}${excludeDownhills ? '?exclude_downhills=true' : ''}`,
 									data.member
 								)}
-								class="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-zinc-950 sm:gap-4 sm:px-4"
+								class="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 px-2.5 py-1.5 hover:bg-zinc-950 sm:gap-x-4 sm:px-4"
 							>
 								<div class="text-xs font-semibold text-zinc-300 sm:text-sm">
 									{recordLabel(r, false)}
 								</div>
-								<div class="text-sm font-bold tabular-nums sm:text-base">
-									{recordValue(r, r.achieved_value)}
+								<div
+									class="max-w-40 text-right text-sm font-bold tabular-nums sm:max-w-none sm:text-base"
+								>
+									<MetricReadout value={recordValue(r, r.achieved_value)} />
 								</div>
-								<div class="w-[5rem] text-right text-[11px] text-quiet sm:w-28 sm:text-xs">
+								<div class="text-[11px] text-quiet sm:w-28 sm:text-right sm:text-xs">
 									{formatDateOnly(r.timestamp)}
 								</div>
 							</a>

@@ -477,16 +477,22 @@
 		{/if}
 		{#if activePoint && !replay}
 			<div
-				class="pointer-events-none absolute inset-x-2 top-2 z-10 w-fit rounded-md border border-zinc-700 bg-panel px-3 py-2 text-xs tabular-nums text-zinc-200 shadow-lg"
+				class="pointer-events-none absolute inset-x-2 top-2 z-10 w-fit max-w-[calc(100%-1rem)] rounded-md border border-zinc-700 bg-panel px-2 py-1.5 text-xs text-zinc-200 shadow-lg sm:px-3 sm:py-2"
 			>
-				<div class="flex flex-wrap gap-x-4 gap-y-1">
-					<span>{formatDuration(activePoint.t)}</span>
-					{#if activePoint.distM != null}<span>{formatDistance(activePoint.distM)}</span>{/if}
+				<div class="flex flex-wrap gap-x-2 gap-y-1 sm:gap-x-4">
+					<span class="metric-value">{formatDuration(activePoint.t)}</span>
+					{#if activePoint.distM != null}<span class="metric-value"
+							>{formatDistance(activePoint.distM)}</span
+						>{/if}
 					{#each rideMetrics as item (item)}
 						{@const value = activePoint[item]}
-						{#if value != null}<span>{metricLabel[item]()} {metricValue(item, value)}</span>{/if}
+						{#if value != null}<span
+								>{metricLabel[item]()}
+								<span class="metric-value">{metricValue(item, value)}</span></span
+							>{/if}
 					{/each}
-					{#if activePoint.cadence != null}<span>{m.ride_cadence()} {activePoint.cadence} rpm</span
+					{#if activePoint.cadence != null}<span
+							>{m.ride_cadence()} <span class="metric-value">{activePoint.cadence} rpm</span></span
 						>{/if}
 				</div>
 			</div>

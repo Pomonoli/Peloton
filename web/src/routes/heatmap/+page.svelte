@@ -705,7 +705,7 @@
 				<span>{m.heatmap_passages()}</span>
 			{/if}
 			{#each scale as tick (tick.value)}
-				<span class="inline-flex items-center gap-1.5">
+				<span class="metric-value inline-flex items-center gap-1.5">
 					<span class="h-2.5 w-5 rounded-sm" style:background={tick.color}></span>{heatmapValue(
 						metric,
 						tick.value
@@ -713,7 +713,7 @@
 				</span>
 			{/each}
 			{#if (!loading && !scale.length) || (metric !== 'density' && metric !== 'speed')}
-				<span class="inline-flex items-center gap-1.5">
+				<span class="metric-value inline-flex items-center gap-1.5">
 					<span class="h-2.5 w-5 rounded-sm" style:background={missingHeatmapColor}
 					></span>{m.heatmap_insufficient()}
 				</span>
@@ -741,7 +741,7 @@
 		</button>
 		{#if loading}
 			<div
-				class="pointer-events-none absolute top-3 left-3 rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-300"
+				class="pointer-events-none absolute top-3 left-3 max-w-[calc(100%-8rem)] rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-300"
 			>
 				{pending > 0 ? m.heatmap_preparing({ count: pending }) : m.heatmap_loading()}
 			</div>
@@ -770,7 +770,7 @@
 								<dt class="text-xs text-quiet">
 									{item === 'density' ? m.heatmap_passages() : heatmapMetricLabel(item)}
 								</dt>
-								<dd class="font-medium tabular-nums">
+								<dd class="metric-value font-medium">
 									{heatmapValue(item, typeof value === 'number' ? value : null)}
 								</dd>
 							</div>
