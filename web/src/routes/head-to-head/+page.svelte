@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import ComparisonRider from '#lib/components/ComparisonRider.svelte';
+	import ExcludeDownhills from '#lib/components/ExcludeDownhills.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import SectionTabs from '#lib/components/SectionTabs.svelte';
 	import ComparisonTable from '#lib/components/ComparisonTable.svelte';
@@ -22,12 +24,18 @@
 	let members = $state<Rider[]>([]);
 	let directoryLoading = $state(true);
 	let directoryError = $state(false);
-	let comparison = $state<Comparison | null>(null);
+	let result = $state<{ pair: string; excludeDownhills: boolean; comparison: Comparison }>();
 	let loading = $state(false);
 	let error = $state('');
 	let retry: (() => void) | undefined;
 	let tab = $state<'segments' | 'records'>('segments');
 
+	const pair = $derived(
+		new SvelteURLSearchParams({ first: data.first, second: data.member }).toString()
+	);
+	const excludeDownhills = $derived(page.url.searchParams.get('exclude_downhills') === 'true');
+	const comparison = $derived(result?.pair === pair ? result.comparison : null);
+	const recordsCurrent = $derived(!!comparison && result?.excludeDownhills === excludeDownhills);
 	const self = $derived(
 		members.find((member) => member.id === data.user.id) ?? {
 			id: data.user.id,
@@ -97,28 +105,29 @@
 	});
 
 	$effect(() => {
-		const { first, member } = data;
-		const controller = new AbortController();
-		comparison = null;
-		error = '';
-		loading = !!member;
-		if (!member) return;
+		const exclude = excludeDownhills;
+		const requestedPair = pair;
+		if (!data.member) {
+			result = undefined;
+			loading = false;
+			error = '';
+			return;
+		}
 
+		const controller = new AbortController();
 		const { signal } = controller;
+		const query = new SvelteURLSearchParams(requestedPair);
+		if (exclude) query.set('exclude_downhills', 'true');
 		let pending = false;
 		async function refresh() {
 			if (pending || signal.aborted) return;
 			pending = true;
+			loading = true;
+			error = '';
 			try {
-				const response = await fetch(
-					`/api/head-to-head?${new URLSearchParams({ first, second: member })}`,
-					{
-						signal
-					}
-				);
+				const response = await fetch(`/api/head-to-head?${query}`, { signal });
 				if (!response.ok) {
 					if (!signal.aborted) {
-						comparison = null;
 						error =
 							response.status === 404 || response.status === 400
 								? m.comparison_member_unavailable()
@@ -128,12 +137,10 @@
 				}
 				const next = (await response.json()) as Comparison;
 				if (!signal.aborted) {
-					comparison = next;
-					error = '';
+					result = { pair: requestedPair, excludeDownhills: exclude, comparison: next };
 				}
 			} catch {
 				if (!signal.aborted) {
-					comparison = null;
 					error = m.comparison_failed();
 				}
 			} finally {
@@ -154,11 +161,23 @@
 		if (first && first !== self.username) query.set('first', first);
 		if (second) query.set('member', second);
 		if (data.viewedMember) query.set('viewing', data.viewedMember.username);
+		if (excludeDownhills) query.set('exclude_downhills', 'true');
 		void goto(query.size ? `/head-to-head?${query}` : '/head-to-head', { reset: false });
 	}
 </script>
 
 <svelte:head><title>{m.comparison_title()}</title></svelte:head>
+
+{#snippet comparisonError()}
+	<p role="status" class="surface p-4 text-sm text-quiet">{error}</p>
+	<button
+		type="button"
+		onclick={() => retry?.()}
+		class="min-h-10 text-sm text-accent-300 hover:underline"
+	>
+		{m.community_retry()}
+	</button>
+{/snippet}
 
 <section class="mx-auto min-w-0 max-w-6xl space-y-3 md:space-y-4">
 	<header>
@@ -224,19 +243,10 @@
 		>
 	{/if}
 
-	{#if loading || (directoryLoading && !comparison)}
+	{#if !comparison && (loading || directoryLoading)}
 		<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
-	{:else if error}
-		<p role="status" class="surface p-4 text-sm text-quiet">
-			{error}
-		</p>
-		<button
-			type="button"
-			onclick={() => retry?.()}
-			class="min-h-10 text-sm text-accent-300 hover:underline"
-		>
-			{m.community_retry()}
-		</button>
+	{:else if !comparison && error}
+		{@render comparisonError()}
 	{:else if !comparison && !directoryError}
 		<p class="surface p-4 text-sm text-quiet">
 			{opponents.length ? m.comparison_pair_intro() : m.comparison_no_members()}
@@ -244,7 +254,7 @@
 	{/if}
 
 	{#if comparison && score}
-		<div class="surface comparison-score">
+		<div class="surface comparison-score" class:invisible={tab === 'records' && !recordsCurrent}>
 			<dl class="score-grid" aria-live="polite">
 				{#each [{ label: m.comparison_rider_wins( { rider: firstName } ), value: score.wins, key: 'first' }, { label: m.comparison_ties(), value: score.ties, key: 'tie' }, { label: m.comparison_rider_wins( { rider: opponentName } ), value: score.losses, key: 'second' }] as stat (stat.key)}
 					<div class={stat.key}>
@@ -295,18 +305,27 @@
 			aria-labelledby="comparison-tab-records"
 			hidden={tab !== 'records'}
 		>
-			{#if score.comparable === 0 && tab === 'records'}
+			<div class="mb-2">
+				<ExcludeDownhills checked={excludeDownhills} />
+			</div>
+			{#if error && tab === 'records'}
+				{@render comparisonError()}
+			{:else if !recordsCurrent}
+				<p role="status" class="text-sm text-quiet">{m.ride_loading()}</p>
+			{:else if score.comparable === 0 && tab === 'records'}
 				<p class="mb-3 text-sm text-quiet">{m.comparison_no_records()}</p>
 			{/if}
-			<ComparisonTable
-				rows={records}
-				columns={recordColumns}
-				opponent={opponentName}
-				first={firstName}
-				searchLabel={m.comparison_search_records()}
-				empty={m.comparison_no_records()}
-				defaultSort="category"
-			/>
+			<div hidden={!recordsCurrent}>
+				<ComparisonTable
+					rows={records}
+					columns={recordColumns}
+					opponent={opponentName}
+					first={firstName}
+					searchLabel={m.comparison_search_records()}
+					empty={m.comparison_no_records()}
+					defaultSort="category"
+				/>
+			</div>
 		</div>
 	{/if}
 </section>

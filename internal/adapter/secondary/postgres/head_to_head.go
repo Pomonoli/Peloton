@@ -78,7 +78,7 @@ func (r *BestEffortRepo) ListComparisonRecords(ctx context.Context, viewer, firs
 		JOIN activity_sources src ON src.id = b.activity_source_id AND src.activity_id = a.id
 		WHERE b.user_id IN ($1, $2) AND b.activity_type = 'ride'
 			AND `+comparisonSourceSQL+`
-			AND NOT b.downhill_excluded AND `+recordDistanceSQL+` AND `+validRecordSQL+`
+			AND `+recordVariantSQL(ctx)+` AND `+recordDistanceSQL+` AND `+validRecordSQL+`
 			AND ((b.metric = 'pace' AND b.window_kind = 'distance')
 				OR (b.metric <> 'pace' AND b.window_kind = 'duration'))
 		ORDER BY b.user_id, b.metric, b.window_kind, b.window_value,

@@ -35,7 +35,7 @@ func (h *HeadToHeadHandlers) compare(w http.ResponseWriter, r *http.Request) {
 	if second == "" {
 		second = query.Get("member")
 	}
-	result, err := h.Views.Compare(r.Context(), caller.UserID, query.Get("first"), second)
+	result, err := h.Views.Compare(recordReadContext(r.Context(), r), caller.UserID, query.Get("first"), second)
 	if err != nil {
 		h.Log.Debug("load head-to-head comparison", "error", err)
 		writeActionError(w, err, "Unable to load the comparison")

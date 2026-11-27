@@ -16,6 +16,7 @@ import (
 
 	"github.com/opencairn-org/cairn-core/internal/domain"
 	"github.com/opencairn-org/cairn-core/internal/port"
+	"github.com/opencairn-org/cairn-core/internal/usecase/activity"
 )
 
 type comparedSegmentResponse struct {
@@ -313,6 +314,84 @@ func TestAPI_HeadToHead(t *testing.T) {
 		if err := json.Unmarshal(body, &member); err != nil || member["display_name"] != renamed || member["id"] != bob.userID.String() {
 			t.Fatalf("member lookup after rename: %v %s", err, body)
 		}
+	}
+}
+
+func TestAPI_HeadToHeadExcludeDownhills(t *testing.T) {
+	env := newITestEnv(t)
+	alice := env.user("descent-alice", domain.UserRoleUser)
+	bob := env.user("descent-bob", domain.UserRoleUser)
+	start := time.Date(2025, 6, 2, 9, 0, 0, 0, time.UTC)
+	record := func(rider *itestClient, day int, speed, grade float64) string {
+		t.Helper()
+		from := start.AddDate(0, 0, day)
+		const duration = 120 * time.Second
+		samples := make([]domain.StreamSample, 121)
+		for i := range samples {
+			distance := float64(i) * speed
+			samples[i] = domain.StreamSample{
+				Timestamp: from.Add(time.Duration(i) * time.Second), RecordingIndex: int32(i + 1),
+				Latitude: new(51 + distance*180/(math.Pi*domain.EarthRadiusMeters)), Longitude: new(4.0),
+				DistanceM: &distance, AltitudeM: new(120 + distance*grade), PowerW: new(int16(200)),
+			}
+		}
+		ride, err := env.app.IngestActivity.Execute(t.Context(), activity.IngestInput{
+			UserID: rider.userID, Provider: "upload", SourceWorkerName: "test", ExternalID: fmt.Sprint(day),
+			Payload: domain.ActivitySourcePayload{
+				Type: domain.ActivityTypeRide, StartTime: from, EndTime: from.Add(duration),
+				HasStream: true, Timezone: "UTC", MovingDuration: duration, ElapsedDuration: duration,
+			},
+			Stream: samples,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := env.app.ComputeBestEfforts.Recalculate(t.Context(), ride.SourceID); err != nil {
+			t.Fatal(err)
+		}
+		return ride.ActivityID.String()
+	}
+	aliceDescent := record(alice, 0, 15, -.06)
+	bobDescent := record(bob, 0, 13, -.06)
+	aliceFlat := record(alice, 1, 8, 0)
+	bobFlat := record(bob, 1, 9, 0)
+
+	read := func(filter, aliceRide, bobRide, winner string) headToHeadResponse {
+		t.Helper()
+		var result headToHeadResponse
+		body := alice.do(http.MethodGet, "/api/head-to-head?second="+bob.name+"&exclude_downhills="+filter, nil, http.StatusOK)
+		if err := json.Unmarshal(body, &result); err != nil {
+			t.Fatal(err)
+		}
+		board := readRecordBoard(t, alice, "/api/records/leaderboards/ride/speed/duration/60?exclude_downhills="+filter)
+		if len(board) != 2 {
+			t.Fatalf("60-second leaderboard (%s): %+v", filter, board)
+		}
+		values := make(map[string]float64)
+		for _, row := range board {
+			values[row.Result.ActivityID] = row.Result.AchievedValue
+		}
+		if !slices.ContainsFunc(result.Records, func(row comparedRecordResponse) bool {
+			return row.Metric == "speed" && row.Window == 60 && row.Winner == winner &&
+				row.You != nil && row.You.ActivityID == aliceRide && row.You.Value == values[aliceRide] &&
+				row.Opponent != nil && row.Opponent.ActivityID == bobRide && row.Opponent.Value == values[bobRide]
+		}) {
+			t.Fatalf("60-second comparison (%s) does not match the leaderboard or expected winner", filter)
+		}
+		return result
+	}
+	standard := read("false", aliceDescent, bobDescent, "you")
+	filtered := read("true", aliceFlat, bobFlat, "opponent")
+	if !slices.ContainsFunc(filtered.Records, func(row comparedRecordResponse) bool {
+		return row.Metric == "pace" && row.Window == 1000 && row.You == nil &&
+			row.Opponent != nil && row.Opponent.ActivityID == bobFlat && row.Winner == ""
+	}) {
+		t.Fatal("the 1 km record should be unscored when only Bob has an eligible effort")
+	}
+	if standard.RecordScore.Wins == 0 || filtered.RecordScore.Wins != 0 || filtered.RecordScore.Losses == 0 ||
+		filtered.RecordScore.Ties == 0 || filtered.RecordScore.Ties != standard.RecordScore.Ties ||
+		filtered.RecordScore.Comparable >= standard.RecordScore.Comparable {
+		t.Fatalf("comparison scores before and after filtering: %+v, %+v", standard.RecordScore, filtered.RecordScore)
 	}
 }
 

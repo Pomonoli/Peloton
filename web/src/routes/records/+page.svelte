@@ -4,7 +4,7 @@
 	import { APP_NAME } from '$app/env/public';
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
-	import { goto } from '$app/navigation';
+	import ExcludeDownhills from '#lib/components/ExcludeDownhills.svelte';
 	import RecordLeaderboards from '#lib/components/RecordLeaderboards.svelte';
 	import {
 		compareRecordCategories,
@@ -56,13 +56,6 @@
 		return memberURL(query.size ? `/records?${query}` : '/records', data.member);
 	}
 
-	function setDownhill(exclude: boolean) {
-		const url = new URL(page.url.href);
-		if (exclude) url.searchParams.set('exclude_downhills', 'true');
-		else url.searchParams.delete('exclude_downhills');
-		void goto(url, { reset: false });
-	}
-
 	// Group by activity type, preserving a sensible type order.
 	const TYPE_ORDER = ['ride', 'run', 'swim', 'walk', 'hike', 'workout'];
 	let byType = $derived.by(() => {
@@ -88,15 +81,7 @@
 <div class="mx-auto max-w-4xl space-y-3">
 	<h1 class="page-title">{m.member_records()}</h1>
 	{#snippet downhillFilter()}
-		<label class="inline-flex min-h-11 items-center gap-2 text-sm font-medium">
-			<input
-				type="checkbox"
-				checked={excludeDownhills}
-				onchange={(event) => setDownhill(event.currentTarget.checked)}
-			/>
-			{m.records_exclude_downhills()}
-		</label>
-		{#if excludeDownhills}<p class="text-xs text-quiet">{m.records_downhill_help()}</p>{/if}
+		<ExcludeDownhills checked={excludeDownhills} />
 	{/snippet}
 	{#snippet recordTabs()}
 		<nav class="inline-flex gap-1 surface p-1" aria-label={m.member_records()}>

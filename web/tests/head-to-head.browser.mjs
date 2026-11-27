@@ -48,11 +48,30 @@ const records = [
 	{
 		...distance,
 		window_value: 20000,
-		you: null,
-		opponent: null,
-		winner: '',
-		difference: null,
-		difference_percent: null
+		you: effort(125, 'ada-ride'),
+		opponent: effort(115, 'mira-ride'),
+		winner: 'opponent',
+		difference: 200,
+		difference_percent: (10 / 115) * 100
+	}
+];
+const filteredRecords = [
+	{
+		...distance,
+		you: effort(140, 'ada-flat'),
+		opponent: effort(130, 'mira-flat'),
+		winner: 'opponent',
+		difference: 50,
+		difference_percent: (10 / 130) * 100
+	},
+	{
+		...distance,
+		window_value: 20000,
+		you: effort(135, 'ada-flat'),
+		opponent: effort(135, 'mira-flat'),
+		winner: 'tie',
+		difference: 0,
+		difference_percent: 0
 	}
 ];
 
@@ -63,12 +82,14 @@ try {
 		page.setDefaultTimeout(7500);
 		const errors = [];
 		let improved = false;
+		let documents = 0;
 		page.on('pageerror', (error) => errors.push(error.message));
 
 		await page.route('**/*', async (route) => {
 			const url = new URL(route.request().url());
 			if (url.origin !== origin) return route.abort();
 			const path = url.pathname;
+			const filtered = url.searchParams.get('exclude_downhills') === 'true';
 			const fixtures = {
 				'/cairn.v1.AuthService/GetCurrentUser': {
 					user: { id: you.id, username: you.username, displayName: you.display_name }
@@ -92,16 +113,19 @@ try {
 					segments: improved
 						? [segment('canal', 'Canal Sprint', 100, 90, 'opponent'), ...segments.slice(1)]
 						: segments,
-					records,
+					records: filtered ? filteredRecords : records,
 					segment_score: improved
 						? { wins: 0, losses: 2, ties: 1, comparable: 3 }
 						: { wins: 1, losses: 1, ties: 1, comparable: 3 },
-					record_score: { wins: 1, losses: 0, ties: 0, comparable: 1 }
+					record_score: filtered
+						? { wins: 0, losses: 1, ties: 1, comparable: 2 }
+						: { wins: 1, losses: 1, ties: 0, comparable: 2 }
 				}
 			};
 			if (path.startsWith('/api/') || path.startsWith('/cairn.v1.')) {
 				return route.fulfill({ json: fixtures[path] ?? {} });
 			}
+			if (route.request().resourceType() === 'document') documents++;
 			return route.fulfill({
 				path:
 					route.request().resourceType() === 'document'
@@ -176,6 +200,55 @@ try {
 		assert.equal(await pr.locator('tbody tr').count(), 1);
 		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
+		const checkbox = pr.getByRole('checkbox', { name: 'Exclude downhills' });
+		assert.equal(await checkbox.isChecked(), false);
+		assert(
+			await checkbox.evaluate((input) => {
+				const label = input.closest('label').getBoundingClientRect();
+				return label.left >= 0 && label.right <= innerWidth && label.height >= 44;
+			})
+		);
+		const documentCount = documents;
+		const bar = page.locator('.score-bar');
+		const barValues = () =>
+			bar.locator('span').evaluateAll((spans) => spans.map((span) => Number(span.style.flexGrow)));
+		await checkbox.check();
+		await page.waitForURL((url) => url.searchParams.get('exclude_downhills') === 'true');
+		assert.equal(new URL(page.url()).searchParams.get('viewing'), 'mira');
+		const flat = pr.getByRole('row').filter({ hasText: '5 km' });
+		await flat.getByText('10:50', { exact: true }).waitFor();
+		assert.equal(
+			await flat.getByRole('link', { name: '11:40' }).getAttribute('href'),
+			'/activities/ada-flat'
+		);
+		assert.equal(
+			await flat.getByRole('link', { name: '10:50' }).getAttribute('href'),
+			'/activities/mira-flat'
+		);
+		await flat.getByText('Mira', { exact: true }).waitFor();
+		await pr.getByText(/Cycling speed and distance records require/).waitFor();
+		assert.deepEqual(await page.locator('.comparison-score dd').allTextContents(), [
+			'0',
+			'1',
+			'1',
+			'2'
+		]);
+		assert.deepEqual(await barValues(), [0, 1, 1]);
+		await pr.getByLabel('Search record categories').fill('20 km');
+		await pr.getByText('Tie', { exact: true }).waitFor();
+		assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+		await page.getByRole('tab', { name: 'Segments' }).click();
+		assert.deepEqual(await barValues(), [1, 1, 1]);
+		assert.equal(await page.getByRole('checkbox', { name: 'Exclude downhills' }).count(), 0);
+		await page.getByRole('tab', { name: 'Personal Records' }).click();
+		assert.equal(await checkbox.isChecked(), true);
+		await pr.getByLabel('Search record categories').fill('5 km');
+		await checkbox.uncheck();
+		await page.waitForURL((url) => !url.searchParams.has('exclude_downhills'));
+		await pr.getByText('8:20', { exact: true }).waitFor();
+		assert.deepEqual(await barValues(), [1, 0, 1]);
+		assert.equal(documents, documentCount);
+
 		await page.getByRole('tab', { name: 'Segments' }).click();
 		if (mobile) await showFilters();
 		assert.equal(await panel.getByLabel('Filter by winner').inputValue(), 'tie');
@@ -189,13 +262,7 @@ try {
 		assert.equal(await picker.locator('option[value="sam"]').count(), 0);
 		await canal.getByText('1:30', { exact: true }).waitFor();
 		assert.equal(await page.getByRole('main').locator('dl dd').first().textContent(), '0');
-		const bar = page.locator('.score-bar');
-		assert.deepEqual(
-			await bar
-				.locator('span')
-				.evaluateAll((spans) => spans.map((span) => Number(span.style.flexGrow))),
-			[0, 1, 2]
-		);
+		assert.deepEqual(await barValues(), [0, 1, 2]);
 		await page.getByRole('button', { name: 'Swap riders' }).click();
 		await page.waitForURL(
 			(url) => url.searchParams.get('first') === 'mira' && url.searchParams.get('member') === 'sam'
