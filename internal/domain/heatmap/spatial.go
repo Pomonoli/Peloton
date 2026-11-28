@@ -120,12 +120,12 @@ func (s Weighted) Value() *float64 {
 // Bin stores additive totals so combined maps never average precomputed
 // ride averages. U/V are geometry in the direction-aligned grid.
 type Bin struct {
-	Key                                   Key
-	Passages                              uint32
-	Distance, Moving                      float64
-	HeartRate, Power, Elevation, Gradient Weighted
-	GeometryV                             float64
-	MinU, MaxU                            float64
+	Key                                            Key
+	Passages                                       uint32
+	Distance, Moving                               float64
+	HeartRate, Power, Elevation, Gradient, Cadence Weighted
+	GeometryV                                      float64
+	MinU, MaxU                                     float64
 }
 
 func (b *Bin) Merge(other Bin) {
@@ -138,6 +138,7 @@ func (b *Bin) Merge(other Bin) {
 	b.Moving += other.Moving
 	b.HeartRate.merge(other.HeartRate)
 	b.Power.merge(other.Power)
+	b.Cadence.merge(other.Cadence)
 	b.Elevation.merge(other.Elevation)
 	b.Gradient.merge(other.Gradient)
 	b.GeometryV += other.GeometryV
@@ -230,7 +231,8 @@ func Aggregate(samples []domain.StreamSample) [3][]Bin {
 			gradient = mean(smoothGrade(samples, i-1), smoothGrade(samples, i))
 		}
 		leg := contribution{distance: distance, time: legTime.Seconds, hr: meanInt(a.HeartRateBpm, b.HeartRateBpm, 25, 250),
-			power: meanInt(a.PowerW, b.PowerW, 0, 3000), altitude: altitude, gradient: gradient, traveled: traveled}
+			power: meanInt(a.PowerW, b.PowerW, 0, 3000), cadence: meanInt(a.Cadence, b.Cadence, 0, 255),
+			altitude: altitude, gradient: gradient, traveled: traveled}
 		for level := range levels {
 			bins, previous := levels[level], visits[level]
 			rasterize(pa.projected, dx, dy, axis, uint8(axisIndex), Level(level), func(key Key, u0, u1, cross, from, to float64) {
@@ -381,9 +383,9 @@ func slope(points []reading, legs []float64, i int) *float64 {
 }
 
 type contribution struct {
-	distance, time                float64
-	hr, power, altitude, gradient *float64
-	traveled                      float64
+	distance, time                         float64
+	hr, power, altitude, gradient, cadence *float64
+	traveled                               float64
 }
 type visit struct {
 	end, direction, reversal float64
@@ -424,6 +426,9 @@ func (b *Bin) record(visits map[Key]visit, leg contribution, u0, u1, cross, from
 	}
 	if leg.power != nil {
 		b.Power.add(*leg.power, t)
+	}
+	if leg.cadence != nil {
+		b.Cadence.add(*leg.cadence, t)
 	}
 	if leg.altitude != nil {
 		b.Elevation.add(*leg.altitude, t)

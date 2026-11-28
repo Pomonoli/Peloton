@@ -14,6 +14,7 @@
 		heatmapValue,
 		heatmapViewport,
 		missingHeatmapColor,
+		visibleHeatmapFeatures,
 		type HeatmapMetric
 	} from '#lib/performance-heatmap.js';
 	import {
@@ -23,7 +24,7 @@
 		type MapLayerMouseEvent,
 		type Point
 	} from 'maplibre-gl';
-	import type { FeatureCollection, Position } from 'geojson';
+	import type { Feature, FeatureCollection, Position } from 'geojson';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { basemapStyle, createMap, basemapVariants, type BasemapVariant } from '#lib/basemap.js';
 	import { appearance } from '#lib/appearance.js';
@@ -91,18 +92,20 @@
 	let layer = $state<HeatmapMetric | 'territory'>('density');
 	const territoryMode = $derived(layer === 'territory');
 	const metric = $derived(layer === 'territory' ? 'density' : layer);
-	let scaleMode = $state<'auto' | 'fixed'>('auto');
+	let densityScaleMode = $state<'auto' | 'fixed'>('auto');
 	let individual = $state(false);
 	const original = $derived(!territoryMode && metric === 'density' && individual && !allRiders);
-	const scale = $derived(
-		scaleMode === 'fixed'
-			? fixedHeatmapScale(metric)
-			: adaptiveHeatmapScale(
-					metric,
-					overview?.result.geojson.features.map((f) => f.properties?.[metric]) ?? []
-				)
-	);
+	let visibleFeatures = $state.raw<Feature[]>([]);
+	const scale = $derived.by(() => {
+		if (territoryMode || original) return [];
+		if (metric === 'density' && densityScaleMode === 'fixed') return fixedHeatmapScale(metric);
+		const features = metric === 'density' ? overview?.result.geojson.features : visibleFeatures;
+		return adaptiveHeatmapScale(metric, features?.map((f) => f.properties?.[metric]) ?? []);
+	});
 	let viewport = $state('');
+	let renderedViewport = '';
+	let viewportTimer: ReturnType<typeof setTimeout> | undefined;
+	let lastSample = $state.raw<{ data: Heatmap; camera: string }>();
 	let pending = $state(0);
 	let hovered = $state<Record<string, unknown> | null>(null);
 	let pinned = $state<{ values: Record<string, unknown>; location: Position } | null>(null);
@@ -329,11 +332,69 @@
 		map.fitBounds(b, { padding: 40, duration: 0, maxZoom: 14 });
 	}
 
-	function showData(result: Heatmap | null) {
+	function showData(result: Heatmap | null, area = '') {
 		data = result;
+		renderedViewport = area;
 		hovered = null;
+		if (!result) {
+			lastSample = undefined;
+			visibleFeatures = [];
+		}
 		applyData();
+		if (viewportTimer === undefined) updateViewport();
 	}
+
+	function updateViewport() {
+		const currentMap = map;
+		if (!currentMap || currentMap.isMoving()) return;
+		const bounds = currentMap.getBounds();
+		const [west, south] = bounds.getSouthWest().toArray();
+		const [east, north] = bounds.getNorthEast().toArray();
+		const next = heatmapViewport(currentMap.getZoom(), west, south, east, north);
+		if (next !== viewport) viewport = next;
+		// Keep the last scale while finer data loads. Color and legend change
+		// together once geometry for the settled viewport is available.
+		if (territoryMode || metric === 'density' || !data || renderedViewport !== next) return;
+		const { clientWidth: width, clientHeight: height } = currentMap.getCanvas();
+		const bearing = currentMap.getBearing();
+		const pitch = currentMap.getPitch();
+		const camera = [west, south, east, north, width, height, bearing, pitch].join(',');
+		if (!width || !height || (lastSample?.data === data && lastSample.camera === camera)) return;
+		lastSample = { data, camera };
+		const features = visibleHeatmapFeatures(data.geojson.features, {
+			west,
+			south,
+			east,
+			north,
+			width,
+			height,
+			axisAligned: bearing === 0 && pitch === 0,
+			project: (position) => currentMap.project(position)
+		});
+		if (
+			features.length !== visibleFeatures.length ||
+			features.some((feature, index) => feature !== visibleFeatures[index])
+		) {
+			visibleFeatures = features;
+		}
+	}
+
+	function cancelViewportUpdate() {
+		clearTimeout(viewportTimer);
+		viewportTimer = undefined;
+	}
+
+	function scheduleViewportUpdate() {
+		cancelViewportUpdate();
+		viewportTimer = setTimeout(() => {
+			viewportTimer = undefined;
+			updateViewport();
+		}, 120);
+	}
+
+	$effect(() => {
+		if (metric !== 'density' && viewportTimer === undefined) untrack(updateViewport);
+	});
 
 	async function fetchPrepared<T>(
 		url: string,
@@ -493,7 +554,7 @@
 		return `${endpoint}?${params}`;
 	});
 	// The overview covers the selected rider and filters at a single resolution.
-	// Viewport requests draw finer geometry using the same overview scale.
+	// Finer geometry is requested only when the map has settled.
 	$effect(() => {
 		const url = overviewURL;
 		const ctrl = new AbortController();
@@ -522,7 +583,7 @@
 		}
 		const url = `${base.url}&${area}`;
 		const ctrl = new AbortController();
-		untrack(() => void load(url, ctrl.signal, showData));
+		untrack(() => void load(url, ctrl.signal, (result) => showData(result, area)));
 		return () => ctrl.abort();
 	});
 
@@ -604,18 +665,9 @@
 		map.on('style.load', addTracks);
 		// Layer-bound listeners resolve the layer per event, so they survive
 		// style swaps.
-		map.on('moveend', () => {
-			if (!map) return;
-			const bounds = map.getBounds();
-			const next = heatmapViewport(
-				map.getZoom(),
-				bounds.getWest(),
-				bounds.getSouth(),
-				bounds.getEast(),
-				bounds.getNorth()
-			);
-			if (next !== viewport) viewport = next;
-		});
+		map.on('movestart', cancelViewportUpdate);
+		map.on('moveend', scheduleViewportUpdate);
+		map.on('resize', scheduleViewportUpdate);
 		map.on('mousemove', 'tracks-line', (event) => {
 			if (map) map.getCanvas().style.cursor = 'pointer';
 			if (!original) hovered = featureValues(event);
@@ -675,6 +727,7 @@
 
 	onDestroy(() => {
 		clearTimeout(debounceTimer);
+		cancelViewportUpdate();
 		map?.remove();
 		map = null;
 	});
@@ -686,11 +739,11 @@
 <section class="space-y-4 max-md:space-y-2.5">
 	{#snippet mapControls()}
 		<div class="flex flex-wrap items-center gap-2">
-			{#if !territoryMode && !original}
+			{#if !territoryMode && metric === 'density' && !original}
 				<label class="flex items-center gap-2 text-sm">
 					{m.heatmap_scale()}
 					<select
-						bind:value={scaleMode}
+						bind:value={densityScaleMode}
 						class="min-h-10 rounded border border-zinc-700 bg-panel px-2"
 					>
 						<option value="auto">{m.heatmap_scale_auto()}</option>
@@ -861,10 +914,12 @@
 		</div>
 	{/if}
 
-	{#if !territoryMode && !original}
+	{#snippet scaleLegend()}
 		<div
 			role="group"
-			class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs"
+			class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs {fullscreen
+				? 'pointer-events-none absolute top-16 left-3 right-3 z-10 max-w-max rounded bg-zinc-900/90 p-2 text-zinc-100'
+				: ''}"
 			aria-label={m.heatmap_legend()}
 		>
 			{#if metric === 'density' && scale.length}
@@ -885,6 +940,9 @@
 				</span>
 			{/if}
 		</div>
+	{/snippet}
+	{#if !fullscreen && !territoryMode && !original}
+		{@render scaleLegend()}
 	{/if}
 
 	<div
@@ -905,7 +963,10 @@
 		>
 			{fullscreen ? m.heatmap_exit_fullscreen() : m.heatmap_fullscreen()}
 		</button>
-		{#if territoryMode ? territoryLoading : loading}
+		{#if fullscreen && !territoryMode && metric !== 'density'}
+			{@render scaleLegend()}
+		{/if}
+		{#if territoryMode ? territoryLoading : loading && (!data || metric === 'density' || pending > 0)}
 			{@const preparing = territoryMode ? territoryPending : pending}
 			<div
 				class="pointer-events-none absolute top-3 left-3 max-w-[calc(100%-8rem)] rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-300"
@@ -922,7 +983,7 @@
 					{m.territory_empty()}
 				</p>
 			</div>
-		{:else if !territoryMode && data && data.geojson.features.length === 0}
+		{:else if !territoryMode && data && !loading && (data.geojson.features.length === 0 || (metric !== 'density' && lastSample?.data === data && !visibleFeatures.length))}
 			<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
 				<p class="rounded bg-zinc-900/80 px-4 py-2 text-sm text-zinc-400">
 					{data.with_track > 0

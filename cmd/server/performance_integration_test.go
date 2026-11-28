@@ -24,6 +24,7 @@ type performanceProperties struct {
 	Speed     float64
 	HeartRate *float64 `json:"heart_rate"`
 	Power     *float64
+	Cadence   *float64
 }
 
 type performanceMapFeature struct {
@@ -191,7 +192,7 @@ func TestAPI_CumulativeHeatmap(t *testing.T) {
 	properties := findOverlap(result, 2)
 	// Identical displacement and 1s vs 3s sample intervals make HR 135,
 	// with watts taking their weight exclusively from the first ride.
-	if properties.HeartRate == nil || *properties.HeartRate != 135 || properties.Power == nil || *properties.Power != 250 || properties.Speed < 12 || properties.Speed > 18 {
+	if properties.HeartRate == nil || *properties.HeartRate != 135 || properties.Power == nil || *properties.Power != 250 || properties.Cadence != nil || properties.Speed < 12 || properties.Speed > 18 {
 		t.Fatalf("bad cumulative values: %+v", properties)
 	}
 	checkEmpty := readPerformanceMap(t, bob, "level=2&west=20&east=21&south=40&north=41&member="+alice.name)
@@ -223,12 +224,13 @@ func TestAPI_CumulativeHeatmap(t *testing.T) {
 	}
 	for i := range stream.Samples {
 		stream.Samples[i].HeartRateBpm = new(int16(160))
+		stream.Samples[i].Cadence = new(int16(88))
 	}
 	if err := env.app.Streams.WriteStream(t.Context(), sourceID, stream.Samples); err != nil {
 		t.Fatal(err)
 	}
 	revised := findOverlap(readPerformanceMap(t, bob, query), 1)
-	if revised.HeartRate == nil || *revised.HeartRate != 160 {
+	if revised.HeartRate == nil || *revised.HeartRate != 160 || revised.Cadence == nil || *revised.Cadence != 88 {
 		t.Fatal("replaced stream did not invalidate cached bins")
 	}
 	bob.upload("community.gpx", performanceGPX(early.AddDate(0, 0, 1), time.Second, 120, 0))

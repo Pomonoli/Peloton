@@ -1,8 +1,7 @@
+import type { Feature } from 'geojson';
 import type { DataDrivenPropertyValueSpecification, ExpressionSpecification } from 'maplibre-gl';
 import { intlLocale } from '#lib/format.js';
 import { m } from '#lib/paraglide/messages.js';
-
-export type HeatmapMetric = 'density' | 'speed' | 'heart_rate' | 'elevation' | 'gradient' | 'power';
 
 export const heatmapMetrics = [
 	'density',
@@ -10,10 +9,15 @@ export const heatmapMetrics = [
 	'heart_rate',
 	'elevation',
 	'gradient',
-	'power'
+	'power',
+	'cadence'
 ] as const;
+export type HeatmapMetric = (typeof heatmapMetrics)[number];
+type NumericalHeatmapMetric = Exclude<HeatmapMetric, 'density'>;
 export type HeatmapValues = Record<HeatmapMetric, number | null>;
 export type HeatmapStop = { value: number; color: string };
+
+const powerColors = ['#64748b', '#0369a1', '#0f766e', '#d97706', '#be185d'];
 
 const scales: Record<HeatmapMetric, { ticks: number[]; colors: string[]; unit: string }> = {
 	density: {
@@ -43,9 +47,10 @@ const scales: Record<HeatmapMetric, { ticks: number[]; colors: string[]; unit: s
 	},
 	power: {
 		ticks: [0, 100, 200, 300, 500],
-		colors: ['#64748b', '#0369a1', '#0f766e', '#d97706', '#be185d'],
+		colors: powerColors,
 		unit: 'W'
-	}
+	},
+	cadence: { ticks: [0, 30, 60, 90, 120], colors: powerColors, unit: 'rpm' }
 };
 
 export function heatmapMetricLabel(metric: HeatmapMetric) {
@@ -55,7 +60,8 @@ export function heatmapMetricLabel(metric: HeatmapMetric) {
 		heart_rate: m.heatmap_heart_rate,
 		elevation: m.heatmap_elevation,
 		gradient: m.heatmap_gradient,
-		power: m.heatmap_power
+		power: m.heatmap_power,
+		cadence: m.ride_cadence
 	}[metric]();
 }
 
@@ -75,7 +81,7 @@ export function fixedHeatmapScale(metric: HeatmapMetric): HeatmapStop[] {
 
 // Round P5/P95 ranks inward so an isolated extreme can't pull the thresholds
 // outward through interpolation. With fewer than four values use the full range.
-function percentileRange(sorted: number[]): [number, number] {
+function densityPercentileRange(sorted: number[]): [number, number] {
 	const last = sorted.length - 1;
 	const trim = last >= 3 ? Math.ceil(last * 0.05) : 0;
 	const low = sorted[trim]!;
@@ -99,7 +105,7 @@ function rangeStops(
 		const value =
 			metric === 'density'
 				? Math.round(Math.expm1(Math.log1p(low) * (1 - fraction) + Math.log1p(high) * fraction))
-				: Number((low * (1 - fraction) + high * fraction).toFixed(1));
+				: Number((low * (1 - fraction) + high * fraction).toFixed(metric === 'gradient' ? 1 : 0));
 		// Keep thresholds at the precision of the aggregated values and ensure
 		// MapLibre always receives strictly increasing stops.
 		if (value > stops.at(-1)!.value && value < high) {
@@ -109,6 +115,15 @@ function rangeStops(
 	stops.push({ value: high, color: colors[last]! });
 	return stops;
 }
+
+const minimumRange: Record<NumericalHeatmapMetric, number> = {
+	speed: 10,
+	heart_rate: 20,
+	elevation: 20,
+	gradient: 4,
+	power: 50,
+	cadence: 20
+};
 
 export function adaptiveHeatmapScale(
 	metric: HeatmapMetric,
@@ -120,25 +135,118 @@ export function adaptiveHeatmapScale(
 	if (!sorted.length) return [];
 	const { colors } = scales[metric];
 	const middle = Math.floor(colors.length / 2);
-	if (metric === 'gradient') {
-		// Find the extent on each side independently so a minority of climbs or
-		// descents can still use its palette. Flat roads always use the neutral color.
-		const descents = sorted.filter((v) => v < 0);
-		const climbs = sorted.filter((v) => v > 0);
-		const below = descents.length
-			? rangeStops(metric, percentileRange(descents)[0], 0, colors.slice(0, middle + 1)).slice(
-					0,
-					-1
-				)
-			: [];
-		const above = climbs.length
-			? rangeStops(metric, 0, percentileRange(climbs)[1], colors.slice(middle)).slice(1)
-			: [];
-		return [...below, { value: 0, color: colors[middle]! }, ...above];
+	if (metric === 'density') {
+		const [low, high] = densityPercentileRange(sorted);
+		return low === high
+			? [{ value: low, color: colors[middle]! }]
+			: rangeStops(metric, low, high, colors);
 	}
-	const [low, high] = percentileRange(sorted);
-	if (low === high) return [{ value: low, color: colors[middle]! }];
+
+	// Use observed percentile thresholds and avoid trimming very small samples.
+	const last = sorted.length - 1;
+	const trim = sorted.length >= 10 ? Math.ceil(last * 0.02) : 0;
+	let low = sorted[trim]!;
+	let high = sorted[last - trim]!;
+	const range = minimumRange[metric];
+
+	if (sorted[0] === sorted[last]) return [{ value: low, color: colors[middle]! }];
+	if (high - low < range) {
+		const midpoint = (low + high) / 2;
+		if (metric === 'gradient' && high <= 0) {
+			high = Math.min(0, Math.ceil(midpoint + range / 2));
+			low = high - range;
+		} else {
+			const lowerBound =
+				metric === 'elevation' || (metric === 'gradient' && low < 0) ? -Infinity : 0;
+			low = Math.max(lowerBound, Math.floor(midpoint - range / 2));
+			high = low + range;
+		}
+	}
+
+	if (metric === 'gradient') {
+		// Keep the neutral color at zero and use the corresponding half of
+		// the palette when the visible grades are all on one side of zero.
+		if (low >= 0) return rangeStops(metric, low, high, colors.slice(middle));
+		if (high <= 0) return rangeStops(metric, low, high, colors.slice(0, middle + 1));
+		return [
+			...rangeStops(metric, low, 0, colors.slice(0, middle + 1)),
+			...rangeStops(metric, 0, high, colors.slice(middle)).slice(1)
+		];
+	}
+
 	return rangeStops(metric, low, high, colors);
+}
+
+type ScreenPoint = { x: number; y: number };
+
+export function visibleHeatmapFeatures(
+	features: Feature[],
+	viewport: {
+		west: number;
+		east: number;
+		south: number;
+		north: number;
+		width: number;
+		height: number;
+		axisAligned: boolean;
+		project: (position: [number, number]) => ScreenPoint;
+	}
+): Feature[] {
+	const { west, east, south, north, width, height, axisAligned, project } = viewport;
+	return features.filter(({ geometry }) => {
+		if (geometry.type !== 'LineString') return false;
+		// The performance endpoint returns a two-point line for each road bin.
+		const [a, b] = geometry.coordinates;
+		if (!a || !b) return false;
+		const [ax, ay] = a as [number, number];
+		const [bx, by] = b as [number, number];
+		if (Math.max(ay, by) < south || Math.min(ay, by) > north) return false;
+		const firstCopy = Math.ceil((west - Math.max(ax, bx)) / 360);
+		const lastCopy = Math.floor((east - Math.min(ax, bx)) / 360);
+		for (let copy = firstCopy; copy <= lastCopy; copy++) {
+			const offset = copy * 360;
+			if (
+				axisAligned &&
+				((ay >= south && ay <= north && ax + offset >= west && ax + offset <= east) ||
+					(by >= south && by <= north && bx + offset >= west && bx + offset <= east))
+			)
+				return true;
+			if (
+				segmentIntersectsViewport(
+					project([ax + offset, ay]),
+					project([bx + offset, by]),
+					width,
+					height
+				)
+			) {
+				return true;
+			}
+		}
+		return false;
+	});
+}
+
+function segmentIntersectsViewport(a: ScreenPoint, b: ScreenPoint, width: number, height: number) {
+	// Clip the projected segment against each viewport axis. This also catches
+	// lines that cross the viewport with both endpoints outside it.
+	let enter = 0;
+	let exit = 1;
+	for (const [start, end, limit] of [
+		[a.x, b.x, width],
+		[a.y, b.y, height]
+	] as const) {
+		const delta = end - start;
+		if (delta === 0) {
+			if (start < 0 || start > limit) return false;
+			continue;
+		}
+		const near = -start / delta;
+		const far = (limit - start) / delta;
+		enter = Math.max(enter, Math.min(near, far));
+		exit = Math.min(exit, Math.max(near, far));
+		if (enter > exit) return false;
+	}
+	return true;
 }
 
 export function heatmapColor(

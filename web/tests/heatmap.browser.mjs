@@ -39,6 +39,7 @@ try {
 	const errors = [];
 	let cold = true;
 	let stall = false;
+	let regionalFixture = false;
 	page.on('pageerror', (error) => errors.push(error.message));
 	await page.route('**/*', async (route) => {
 		const url = new URL(route.request().url());
@@ -57,6 +58,42 @@ try {
 			calls.push({ member, viewport, from, query: url.search, status });
 			if (status === 202) {
 				return route.fulfill({ status, json: { matched: count, with_track: 24, pending: 1 } });
+			}
+			if (regionalFixture) {
+				const regions =
+					member !== 'mira'
+						? [
+								[-4, 0],
+								[16, 1000]
+							]
+						: [[-4, 100]];
+				const features = regions.flatMap(([longitude, altitude]) =>
+					Array.from({ length: 31 }, (_, i) => ({
+						type: 'Feature',
+						geometry: {
+							type: 'LineString',
+							coordinates: [
+								[longitude, 47 + i * 0.00015],
+								[longitude + 0.01, 47 + i * 0.00015]
+							]
+						},
+						properties: {
+							cell: '2:0:10:10',
+							density: count,
+							speed: 20 + i,
+							elevation: altitude + (from ? 100 : 0) + i * (altitude === 1000 ? 25 : 1),
+							cadence: 60 + i
+						}
+					}))
+				);
+				return route.fulfill({
+					json: {
+						matched: count,
+						with_track: count,
+						facets: { types: [], years: [], disciplines: [] },
+						geojson: { type: 'FeatureCollection', features }
+					}
+				});
 			}
 			const lon = all || member === 'mira' ? 8 : 4;
 			return route.fulfill({
@@ -292,8 +329,11 @@ try {
 	assert.equal(await layer.inputValue(), 'gradient');
 
 	const scale = page.locator('select').filter({ has: page.locator('option[value="fixed"]') });
+	assert.equal(await scale.count(), 0);
+	await layer.selectOption('density');
 	await scale.selectOption('fixed');
 	assert.equal(await scale.inputValue(), 'fixed');
+	await scale.selectOption('auto');
 	await page.getByRole('button', { name: 'Light', exact: true }).click();
 	assert.equal(
 		await page.getByRole('button', { name: 'Light', exact: true }).getAttribute('aria-pressed'),
@@ -445,6 +485,65 @@ try {
 	assert.equal(await legend.count(), 0);
 	await filterButton.waitFor();
 	await page.setViewportSize({ width: 1280, height: 900 });
+
+	regionalFixture = true;
+	await page.goto(origin + '/heatmap');
+	await riderFilter.selectOption('*');
+	await tracks(3).waitFor();
+	await layer.selectOption('elevation');
+	const numericalLegend = page.getByRole('group', { name: 'Heatmap legend' });
+	const elevation = (value) => numericalLegend.getByText(value + ' m', { exact: true });
+	await elevation('1,700').waitFor();
+	const wideCalls = calls.length;
+	const box = await canvas.boundingBox();
+	assert.ok(box);
+	const mapY = box.y + box.height / 2;
+	await page.mouse.dblclick(box.x + 41, mapY);
+	await elevation('29').waitFor();
+	assert.equal(await elevation('1,700').count(), 0);
+	assert.equal(calls.length, wideCalls, 'zoom within the overview should reuse geometry');
+
+	await page.mouse.move(box.x + box.width / 2, mapY);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 4, mapY, { steps: 12 });
+	await page.mouse.up();
+	await page.getByText('No tracks in this view', { exact: false }).waitFor();
+	await numericalLegend.getByText('Insufficient data').waitFor();
+	assert.equal(await elevation('29').count(), 0);
+
+	await fit.click();
+	await elevation('1,700').waitFor();
+	await page.mouse.dblclick(box.x + box.width - 43, mapY);
+	await elevation('1,025').waitFor();
+	assert.equal(await elevation('29').count(), 0);
+	const detailed = nextViewport();
+	for (let zoom = 0; zoom < 4 && calls.length === wideCalls; zoom++) {
+		await page.mouse.dblclick(box.x + box.width - 43, mapY);
+		await Promise.race([detailed, delay(600)]);
+	}
+	await detailed;
+	await elevation('1,725').waitFor();
+
+	await page.getByLabel('From date').fill('2020-03-03');
+	await elevation('1,125').waitFor();
+	await riderFilter.selectOption('mira');
+	await tracks(24).waitFor();
+	await fit.click();
+	await elevation('229').waitFor();
+	await layer.selectOption('cadence');
+	await numericalLegend.getByText('89 rpm', { exact: true }).waitFor();
+
+	await page.setViewportSize({ width: 390, height: 760 });
+	await fullscreen.click();
+	await page.getByRole('button', { name: 'Exit fullscreen' }).waitFor();
+	const cadence = numericalLegend.getByText('89 rpm', { exact: true });
+	await cadence.waitFor();
+	assert.ok(await cadence.evaluate((tick) => tick.closest('.fixed.inset-0')));
+	await page.keyboard.press('Escape');
+	await fullscreen.waitFor();
+	await cadence.waitFor();
+	await page.setViewportSize({ width: 1280, height: 900 });
+	regionalFixture = false;
 
 	stall = true;
 	await page.addInitScript(() => {
