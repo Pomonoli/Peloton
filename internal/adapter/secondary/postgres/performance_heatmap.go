@@ -24,7 +24,7 @@ func NewPerformanceHeatmapRepo(pool *pgxpool.Pool) *PerformanceHeatmapRepo {
 }
 
 // Bump the prefix when the bin format or aggregation changes.
-const heatmapSignatureSQL = `md5('v2:' || p.id::text || ':' ||
+const heatmapSignatureSQL = `md5('v3:' || p.id::text || ':' ||
 	string_agg(src.id::text || ':' || src.heatmap_revision::text || ':' ||
 		COALESCE(src.parsed->>'power_recorded', ''), ',' ORDER BY src.id))`
 
@@ -177,7 +177,7 @@ func (r *PerformanceHeatmapRepo) HeatmapSamples(ctx context.Context, source doma
 		fields = "st.latitude, st.longitude, st.altitude_m, st.distance_m, st.speed_mps, st.grade"
 	}
 	rows, err := dbtx(ctx, r.pool).Query(ctx, `SELECT st.ts, COALESCE(st.recording_index, 0), `+fields+`, st.heart_rate_bpm,
-		CASE WHEN `+measuredPowerSQL+` THEN st.power_w END
+		CASE WHEN `+measuredPowerSQL+` THEN st.power_w END, st.cadence
 		FROM activity_sources src JOIN activity_streams st ON st.activity_source_id=src.id
 		WHERE src.id=$1 AND src.status <> 'detached' ORDER BY st.ts`, source.UUID())
 	if err != nil {
@@ -186,7 +186,7 @@ func (r *PerformanceHeatmapRepo) HeatmapSamples(ctx context.Context, source doma
 	return pgCollectRows(rows, func(row rowScanner) (domain.StreamSample, error) {
 		var sample domain.StreamSample
 		err := row.Scan(&sample.Timestamp, &sample.RecordingIndex, &sample.Latitude, &sample.Longitude, &sample.AltitudeM, &sample.DistanceM, &sample.SpeedMps, &sample.Grade,
-			&sample.HeartRateBpm, &sample.PowerW)
+			&sample.HeartRateBpm, &sample.PowerW, &sample.Cadence)
 		return sample, err
 	}, "scan heatmap sample", "iterate heatmap samples")
 }

@@ -283,6 +283,9 @@ func fillHeatmapSensors(primary, extra []domain.StreamSample) {
 		if p.PowerW == nil && match.PowerW != nil && *match.PowerW >= 0 && *match.PowerW <= 3000 {
 			p.PowerW = match.PowerW
 		}
+		if p.Cadence == nil && match.Cadence != nil && *match.Cadence >= 0 && *match.Cadence <= 255 {
+			p.Cadence = match.Cadence
+		}
 	}
 }
 

@@ -37,6 +37,25 @@ func TestPassageWeightsAcrossRides(t *testing.T) {
 	}
 }
 
+func TestCadenceUsesMovingTimeAndPreservesRecordedZero(t *testing.T) {
+	ride := func(seconds float64, rpm *int16) Bin {
+		samples := []domain.StreamSample{sample(3, 3, 0, nil, nil), sample(30, 3, seconds, nil, nil)}
+		samples[0].Cadence, samples[1].Cadence = rpm, rpm
+		return Aggregate(samples)[Detail][0]
+	}
+	missing := ride(3, nil)
+	if missing.Cadence.Value() != nil || ride(3, new(int16(300))).Cadence.Weight != 0 {
+		t.Fatal("missing or invalid cadence became a value")
+	}
+	coasting := ride(3, new(int16(0)))
+	if rpm := coasting.Cadence.Value(); rpm == nil || *rpm != 0 {
+		t.Fatalf("coasting cadence = %v", rpm)
+	}
+	coasting.Merge(ride(9, new(int16(100))))
+	coasting.Merge(missing)
+	assertNear(t, "time-weighted cadence", *coasting.Cadence.Value(), 75, 0.01)
+}
+
 func TestRepeatedTraversalAndParallelRoad(t *testing.T) {
 	route := []domain.StreamSample{sample(3, 3, 0, nil, nil), sample(32, 3, 4, nil, nil), sample(65, 3, 8, nil, nil),
 		sample(32, 3, 12, nil, nil), sample(3, 3, 16, nil, nil)}

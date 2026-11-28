@@ -236,6 +236,7 @@ type performanceFeature struct {
 		Elevation *float64 `json:"elevation"`
 		Gradient  *float64 `json:"gradient"`
 		Power     *float64 `json:"power"`
+		Cadence   *float64 `json:"cadence"`
 	} `json:"properties"`
 }
 
@@ -250,6 +251,7 @@ func performanceFeatureOf(bin heatmap.Bin, level heatmap.Level) performanceFeatu
 	feature.Properties.Speed = domain.Round1(bin.Distance / bin.Moving * 3.6)
 	feature.Properties.HeartRate = roundedMapValue(bin.HeartRate)
 	feature.Properties.Power = roundedMapValue(bin.Power)
+	feature.Properties.Cadence = roundedMapValue(bin.Cadence)
 	feature.Properties.Elevation = roundedMapValue(bin.Elevation)
 	feature.Properties.Gradient = roundedMapValue(bin.Gradient)
 	return feature
